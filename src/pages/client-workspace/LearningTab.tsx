@@ -7,9 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Check, Save, BookOpen, Upload, Trash2, Plus } from 'lucide-react';
+import { Check, Save, Upload, Trash2, Plus, X, Building2, MapPin, Heart, Users, Star, Target, Palette, FileUp, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { Badge } from '@/components/ui/badge';
+import StatusBadge, { type FieldStatus } from '@/components/learning/StatusBadge';
+import WebsiteAnalysisPanel from '@/components/learning/WebsiteAnalysisPanel';
 
 interface Props {
   clientId: string;
@@ -38,64 +41,80 @@ interface ClientInfo {
   description: string;
 }
 
-const emptyCareTypes = ['thuiszorg', 'revalidatie', 'verpleeghuis', 'flexpool', 'intramuraal', 'PG', 'somatiek'];
+type FieldStatuses = Record<string, FieldStatus>;
+
+const allCareTypes = [
+  'thuiszorg', 'revalidatie', 'verpleeghuis', 'intramuraal', 'extramuraal',
+  'PG', 'somatiek', 'flexpool', 'wijkzorg', 'dementiezorg',
+  'gehandicaptenzorg', 'jeugdzorg', 'GGZ', 'hospice', 'geriatrische revalidatiezorg',
+];
 
 const emptyProfile: LearningProfile = {
-  tone_of_voice: '',
-  communication_guidelines: '',
-  employer_branding: '',
-  why_work_here: '',
-  strategic_recruitment_goals: '',
-  care_types: [],
-  words_to_use: [],
-  words_to_avoid: [],
-  creative_dos: [],
-  creative_donts: [],
-  visual_style_notes: '',
-  internal_notes: '',
+  tone_of_voice: '', communication_guidelines: '', employer_branding: '',
+  why_work_here: '', strategic_recruitment_goals: '', care_types: [],
+  words_to_use: [], words_to_avoid: [], creative_dos: [], creative_donts: [],
+  visual_style_notes: '', internal_notes: '',
 };
 
-function calculateScore(client: ClientInfo, profile: LearningProfile, locationCount: number, roleCount: number, audienceCount: number, uspCount: number, assetCount: number): number {
+interface LocationItem { id?: string; name: string; city: string; region: string; recruitment_region: string; notes: string; }
+interface RoleItem { id?: string; role_title: string; care_domain: string; description: string; qualifications: string[]; audience_triggers: string[]; audience_objections: string[]; }
+interface AudienceItem { id?: string; segment_name: string; description: string; triggers: string[]; objections: string[]; }
+
+const sectionIcons: Record<string, typeof Building2> = {
+  org: Building2, locations: MapPin, care: Heart, roles: Users, usps: Star,
+  strategy: Target, creative: Palette, uploads: FileUp, internal: MessageSquare,
+};
+
+function calculateScore(
+  client: ClientInfo, profile: LearningProfile, fieldStatuses: FieldStatuses,
+  locations: LocationItem[], roles: RoleItem[], audiences: AudienceItem[],
+  usps: { usp_text: string }[], assetCount: number
+): number {
   let score = 0;
-  let total = 0;
+  const total = 100;
 
-  // Identity (15%)
-  const identityFields = [client.website_url, client.mission, client.vision, client.description];
-  const identityFilled = identityFields.filter(f => f && f.trim()).length;
-  score += (identityFilled >= 3 ? 15 : identityFilled >= 1 ? 7 : 0);
-  total += 15;
+  // 1. Organisation (15) - confirmed fields count more
+  const orgFields = ['description', 'mission', 'vision', 'website_url'];
+  const orgConfirmed = orgFields.filter(f => fieldStatuses[f] === 'confirmed' && (client as any)[f === 'website_url' ? 'website_url' : f]).length;
+  const orgFilled = orgFields.filter(f => (client as any)[f === 'website_url' ? 'website_url' : f]?.trim()).length;
+  score += orgConfirmed >= 3 ? 15 : orgFilled >= 3 ? 10 : orgFilled >= 1 ? 5 : 0;
 
-  // Brand (15%)
-  const brandFields = [profile.tone_of_voice, profile.communication_guidelines, profile.employer_branding];
-  const brandFilled = brandFields.filter(f => f && f.trim()).length;
-  score += (brandFilled >= 2 ? 15 : brandFilled >= 1 ? 7 : 0);
-  total += 15;
+  // 2. Locations (10)
+  const locsConfirmed = fieldStatuses['locations'] === 'confirmed';
+  score += locations.length >= 1 ? (locsConfirmed ? 10 : 7) : 0;
 
-  // Locations (10%)
-  score += (locationCount >= 1 ? 10 : 0);
-  total += 10;
+  // 3. Care types (10)
+  const careConfirmed = fieldStatuses['care_types'] === 'confirmed';
+  score += profile.care_types.length >= 1 ? (careConfirmed ? 10 : 7) : 0;
 
-  // Roles (15%)
-  score += (roleCount >= 1 ? 15 : 0);
-  total += 15;
+  // 4. Roles (15)
+  const rolesConfirmed = fieldStatuses['roles'] === 'confirmed';
+  score += roles.length >= 1 ? (rolesConfirmed ? 15 : 10) : 0;
 
-  // Audience (15%)
-  score += (audienceCount >= 1 ? 15 : 0);
-  total += 15;
+  // 5. USPs (10)
+  const uspsConfirmed = fieldStatuses['usps'] === 'confirmed';
+  score += usps.filter(u => u.usp_text.trim()).length >= 2 ? (uspsConfirmed ? 10 : 7) : usps.length >= 1 ? 4 : 0;
 
-  // USPs (10%)
-  score += (uspCount >= 2 ? 10 : uspCount >= 1 ? 5 : 0);
-  total += 10;
+  // 6. Strategy (15)
+  const stratFields = [profile.strategic_recruitment_goals, profile.employer_branding, profile.why_work_here];
+  const stratFilled = stratFields.filter(f => f?.trim()).length;
+  const stratConfirmed = fieldStatuses['strategy'] === 'confirmed';
+  score += stratFilled >= 2 ? (stratConfirmed ? 15 : 10) : stratFilled >= 1 ? 5 : 0;
 
-  // Care types (10%)
-  score += (profile.care_types.length >= 1 ? 10 : 0);
-  total += 10;
+  // 7. Brand / Tone (10)
+  const brandFields = [profile.tone_of_voice, profile.communication_guidelines];
+  const brandFilled = brandFields.filter(f => f?.trim()).length;
+  const brandConfirmed = fieldStatuses['brand'] === 'confirmed';
+  score += brandFilled >= 1 ? (brandConfirmed ? 10 : 7) : 0;
 
-  // Assets (10%)
-  score += (assetCount >= 1 ? 10 : 0);
-  total += 10;
+  // 8. Creative guidelines (10)
+  const creativeFilled = profile.words_to_use.length + profile.words_to_avoid.length + profile.creative_dos.length + profile.creative_donts.length;
+  score += creativeFilled >= 2 ? 10 : creativeFilled >= 1 ? 5 : 0;
 
-  return Math.round((score / total) * 100);
+  // 9. Assets (5)
+  score += assetCount >= 1 ? 5 : 0;
+
+  return Math.min(Math.round(score), 100);
 }
 
 export default function LearningTab({ clientId, onScoreChange }: Props) {
@@ -105,23 +124,29 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
   const [clientInfo, setClientInfo] = useState<ClientInfo>({ website_url: '', mission: '', vision: '', description: '' });
   const [profile, setProfile] = useState<LearningProfile>(emptyProfile);
   const [profileExists, setProfileExists] = useState(false);
+  const [fieldStatuses, setFieldStatuses] = useState<FieldStatuses>({});
+  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [analyzedAt, setAnalyzedAt] = useState<string | null>(null);
+
   const [usps, setUsps] = useState<{ id?: string; usp_text: string }[]>([]);
-  const [locationCount, setLocationCount] = useState(0);
-  const [roleCount, setRoleCount] = useState(0);
-  const [audienceCount, setAudienceCount] = useState(0);
-  const [assetCount, setAssetCount] = useState(0);
-  const [assets, setAssets] = useState<{ id: string; file_name: string; asset_category: string; created_at: string }[]>([]);
+  const [locations, setLocations] = useState<LocationItem[]>([]);
+  const [roles, setRoles] = useState<RoleItem[]>([]);
+  const [audiences, setAudiences] = useState<AudienceItem[]>([]);
+  const [assets, setAssets] = useState<{ id: string; file_name: string; asset_category: string; created_at: string; file_path: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+
+  // Custom care type input
+  const [careInput, setCareInput] = useState('');
 
   const loadData = useCallback(async () => {
     const [clientRes, profileRes, uspsRes, locRes, roleRes, audRes, assetRes] = await Promise.all([
       supabase.from('clients').select('website_url, mission, vision, description').eq('id', clientId).single(),
       supabase.from('client_learning_profiles').select('*').eq('client_id', clientId).single(),
       supabase.from('client_usps').select('*').eq('client_id', clientId).order('sort_order'),
-      supabase.from('client_locations').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-      supabase.from('client_roles').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-      supabase.from('client_audience_insights').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-      supabase.from('client_learning_assets').select('id, file_name, asset_category, created_at').eq('client_id', clientId).order('created_at', { ascending: false }),
+      supabase.from('client_locations').select('*').eq('client_id', clientId),
+      supabase.from('client_roles').select('*').eq('client_id', clientId),
+      supabase.from('client_audience_insights').select('*').eq('client_id', clientId),
+      supabase.from('client_learning_assets').select('id, file_name, asset_category, created_at, file_path').eq('client_id', clientId).order('created_at', { ascending: false }),
     ]);
 
     if (clientRes.data) {
@@ -149,23 +174,48 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         visual_style_notes: profileRes.data.visual_style_notes || '',
         internal_notes: profileRes.data.internal_notes || '',
       });
+      const rawStatuses = profileRes.data.field_statuses;
+      setFieldStatuses(
+        rawStatuses && typeof rawStatuses === 'object' && !Array.isArray(rawStatuses)
+          ? rawStatuses as FieldStatuses
+          : {}
+      );
+      const rawAnalysis = profileRes.data.website_analysis_data;
+      setAnalysisData(
+        rawAnalysis && typeof rawAnalysis === 'object' && !Array.isArray(rawAnalysis) && Object.keys(rawAnalysis).length > 0
+          ? rawAnalysis
+          : null
+      );
+      setAnalyzedAt(profileRes.data.website_analyzed_at || null);
     }
 
     setUsps((uspsRes.data || []).map(u => ({ id: u.id, usp_text: u.usp_text })));
-    setLocationCount(locRes.count || 0);
-    setRoleCount(roleRes.count || 0);
-    setAudienceCount(audRes.count || 0);
+    setLocations((locRes.data || []).map(l => ({
+      id: l.id, name: l.name, city: l.city || '', region: l.region || '',
+      recruitment_region: l.recruitment_region || '', notes: l.notes || '',
+    })));
+    setRoles((roleRes.data || []).map(r => ({
+      id: r.id, role_title: r.role_title, care_domain: r.care_domain || '',
+      description: r.description || '', qualifications: r.qualifications || [],
+      audience_triggers: r.audience_triggers || [], audience_objections: r.audience_objections || [],
+    })));
+    setAudiences((audRes.data || []).map(a => ({
+      id: a.id, segment_name: a.segment_name, description: a.description || '',
+      triggers: a.triggers || [], objections: a.objections || [],
+    })));
     setAssets(assetRes.data || []);
-    setAssetCount(assetRes.data?.length || 0);
   }, [clientId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Update score whenever data changes
   useEffect(() => {
-    const score = calculateScore(clientInfo, profile, locationCount, roleCount, audienceCount, usps.length, assetCount);
+    const score = calculateScore(clientInfo, profile, fieldStatuses, locations, roles, audiences, usps, assets.length);
     onScoreChange(score);
-  }, [clientInfo, profile, locationCount, roleCount, audienceCount, usps, assetCount, onScoreChange]);
+  }, [clientInfo, profile, fieldStatuses, locations, roles, audiences, usps, assets, onScoreChange]);
+
+  const setStatus = (field: string, status: FieldStatus) => {
+    setFieldStatuses(prev => ({ ...prev, [field]: status }));
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -193,6 +243,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
       creative_donts: profile.creative_donts,
       visual_style_notes: profile.visual_style_notes || null,
       internal_notes: profile.internal_notes || null,
+      field_statuses: fieldStatuses,
     };
 
     if (profileExists) {
@@ -202,18 +253,39 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
       setProfileExists(true);
     }
 
-    // Save USPs: delete all, re-insert
+    // Save USPs
     await supabase.from('client_usps').delete().eq('client_id', clientId);
     const uspInserts = usps.filter(u => u.usp_text.trim()).map((u, i) => ({
-      client_id: clientId,
-      usp_text: u.usp_text.trim(),
-      sort_order: i,
+      client_id: clientId, usp_text: u.usp_text.trim(), sort_order: i,
     }));
-    if (uspInserts.length > 0) {
-      await supabase.from('client_usps').insert(uspInserts);
-    }
+    if (uspInserts.length) await supabase.from('client_usps').insert(uspInserts);
 
-    toast({ title: 'Opgeslagen', description: 'Learning data is bijgewerkt.' });
+    // Save locations
+    await supabase.from('client_locations').delete().eq('client_id', clientId);
+    const locInserts = locations.filter(l => l.name.trim()).map(l => ({
+      client_id: clientId, name: l.name.trim(), city: l.city || null,
+      region: l.region || null, recruitment_region: l.recruitment_region || null, notes: l.notes || null,
+    }));
+    if (locInserts.length) await supabase.from('client_locations').insert(locInserts);
+
+    // Save roles
+    await supabase.from('client_roles').delete().eq('client_id', clientId);
+    const roleInserts = roles.filter(r => r.role_title.trim()).map(r => ({
+      client_id: clientId, role_title: r.role_title.trim(), care_domain: r.care_domain || null,
+      description: r.description || null, qualifications: r.qualifications,
+      audience_triggers: r.audience_triggers, audience_objections: r.audience_objections,
+    }));
+    if (roleInserts.length) await supabase.from('client_roles').insert(roleInserts);
+
+    // Save audiences
+    await supabase.from('client_audience_insights').delete().eq('client_id', clientId);
+    const audInserts = audiences.filter(a => a.segment_name.trim()).map(a => ({
+      client_id: clientId, segment_name: a.segment_name.trim(), description: a.description || null,
+      triggers: a.triggers, objections: a.objections,
+    }));
+    if (audInserts.length) await supabase.from('client_audience_insights').insert(audInserts);
+
+    toast({ title: 'Opgeslagen', description: 'Alle learning data is bijgewerkt.' });
     setSaving(false);
   };
 
@@ -221,7 +293,6 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-
     const filePath = `${clientId}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from('learning-assets').upload(filePath, file);
     if (uploadError) {
@@ -229,16 +300,10 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
       setUploading(false);
       return;
     }
-
     await supabase.from('client_learning_assets').insert({
-      client_id: clientId,
-      file_name: file.name,
-      file_path: filePath,
-      file_type: file.type,
-      asset_category: category,
-      uploaded_by: user?.id,
+      client_id: clientId, file_name: file.name, file_path: filePath,
+      file_type: file.type, asset_category: category, uploaded_by: user?.id,
     });
-
     toast({ title: 'Geüpload', description: file.name });
     setUploading(false);
     loadData();
@@ -253,10 +318,16 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
   const toggleCareType = (ct: string) => {
     setProfile(p => ({
       ...p,
-      care_types: p.care_types.includes(ct)
-        ? p.care_types.filter(c => c !== ct)
-        : [...p.care_types, ct],
+      care_types: p.care_types.includes(ct) ? p.care_types.filter(c => c !== ct) : [...p.care_types, ct],
     }));
+  };
+
+  const addCustomCareType = () => {
+    const trimmed = careInput.trim();
+    if (trimmed && !profile.care_types.includes(trimmed)) {
+      setProfile(p => ({ ...p, care_types: [...p.care_types, trimmed] }));
+      setCareInput('');
+    }
   };
 
   const updateTagList = (field: keyof LearningProfile, value: string) => {
@@ -264,7 +335,45 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
     setProfile(p => ({ ...p, [field]: items }));
   };
 
-  const score = calculateScore(clientInfo, profile, locationCount, roleCount, audienceCount, usps.length, assetCount);
+  const handleApplyField = (field: string, value: any) => {
+    switch (field) {
+      case 'description': setClientInfo(p => ({ ...p, description: value })); break;
+      case 'mission': setClientInfo(p => ({ ...p, mission: value })); break;
+      case 'vision': setClientInfo(p => ({ ...p, vision: value })); break;
+      case 'tone_of_voice': setProfile(p => ({ ...p, tone_of_voice: value })); break;
+      case 'employer_branding': setProfile(p => ({ ...p, employer_branding: value })); break;
+      case 'why_work_here': setProfile(p => ({ ...p, why_work_here: value })); break;
+      case 'care_types':
+        setProfile(p => ({ ...p, care_types: [...new Set([...p.care_types, ...(value as string[])])] }));
+        break;
+      case 'usps':
+        setUsps(prev => [...prev, ...(value as string[]).filter(v => !prev.some(u => u.usp_text === v)).map(v => ({ usp_text: v }))]);
+        break;
+      case 'locations':
+        setLocations(prev => [...prev, ...(value as any[]).filter(v => !prev.some(l => l.name === v.name)).map(v => ({
+          name: v.name, city: v.city || '', region: v.region || '', recruitment_region: '', notes: '',
+        }))]);
+        break;
+      case 'roles':
+        setRoles(prev => [...prev, ...(value as any[]).filter(v => !prev.some(r => r.role_title === v.role_title)).map(v => ({
+          role_title: v.role_title, care_domain: v.care_domain || '', description: v.description || '',
+          qualifications: [], audience_triggers: [], audience_objections: [],
+        }))]);
+        break;
+    }
+    setStatus(field, 'suggested');
+    toast({ title: 'Overgenomen', description: `${field} is ingevuld met AI-suggestie. Controleer en bevestig.` });
+  };
+
+  const score = calculateScore(clientInfo, profile, fieldStatuses, locations, roles, audiences, usps, assets.length);
+
+  const SectionHeader = ({ field, label }: { field: string; label: string }) => (
+    <div className="flex items-center gap-2">
+      {label}
+      {fieldStatuses[field] && <StatusBadge status={fieldStatuses[field]} onStatusChange={s => setStatus(field, s)} compact />}
+      {!fieldStatuses[field] && score > 0 && null}
+    </div>
+  );
 
   return (
     <div className="p-6 max-w-4xl mx-auto animate-fade-in">
@@ -282,230 +391,351 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
           <div>
             <h2 className="text-lg font-bold text-foreground">AI Training Book</h2>
             <p className="text-xs text-muted-foreground">
-              {score >= 80 ? 'De AI heeft voldoende context — klaar om te genereren.' :
-               score >= 40 ? 'Vul meer secties in voor betere AI-resultaten.' :
-               'Begin met het invullen van de client kennis.'}
+              {score >= 80 ? 'Getraind — voldoende context voor AI generatie.' :
+               score >= 40 ? 'In opbouw — bevestig en vul meer secties in.' :
+               'Begin met website analyse of vul handmatig in.'}
             </p>
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving}>
           {saving ? <Save className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          Opslaan
+          Alles opslaan
         </Button>
       </div>
 
-      <Accordion type="multiple" defaultValue={['identity', 'brand']} className="space-y-3">
-        {/* Identity */}
-        <AccordionItem value="identity" className="border rounded-lg px-4">
+      {/* Status legend */}
+      <div className="flex items-center gap-4 mb-4 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1">Klik op status om te bevestigen:</span>
+        <StatusBadge status="suggested" compact />
+        <StatusBadge status="needs_review" compact />
+        <StatusBadge status="confirmed" compact />
+      </div>
+
+      {/* Website analysis panel */}
+      <div className="mb-4">
+        <WebsiteAnalysisPanel
+          clientId={clientId}
+          websiteUrl={clientInfo.website_url}
+          analysisData={analysisData}
+          analyzedAt={analyzedAt}
+          onAnalysisComplete={loadData}
+          onApplyField={handleApplyField}
+        />
+      </div>
+
+      <Accordion type="multiple" defaultValue={['org', 'care']} className="space-y-3">
+        {/* 1. Organisatie */}
+        <AccordionItem value="org" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
-              Identiteit & Basis
-              {(clientInfo.website_url || clientInfo.mission || clientInfo.vision) && <Check className="h-3.5 w-3.5 text-success" />}
+              <Building2 className="h-4 w-4 text-primary/60" />
+              <SectionHeader field="org" label="Algemene Organisatiegegevens" />
+              {(clientInfo.website_url && clientInfo.description) && <Check className="h-3.5 w-3.5 text-success" />}
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pb-4">
-            <div className="space-y-2">
-              <Label>Website URL</Label>
-              <Input value={clientInfo.website_url} onChange={e => setClientInfo(p => ({ ...p, website_url: e.target.value }))} placeholder="https://..." />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Website URL</Label>
+                <Input value={clientInfo.website_url} onChange={e => setClientInfo(p => ({ ...p, website_url: e.target.value }))} placeholder="https://..." className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Organisatienaam</Label>
+                <Input disabled value="" placeholder="Wordt overgenomen uit client" className="h-9 text-sm bg-muted/50" />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Omschrijving</Label>
-              <Textarea value={clientInfo.description} onChange={e => setClientInfo(p => ({ ...p, description: e.target.value }))} placeholder="Korte beschrijving van de organisatie" rows={2} />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Omschrijving</Label>
+                {fieldStatuses['description'] && <StatusBadge status={fieldStatuses['description']} onStatusChange={s => setStatus('description', s)} />}
+              </div>
+              <Textarea value={clientInfo.description} onChange={e => setClientInfo(p => ({ ...p, description: e.target.value }))} placeholder="Korte beschrijving van de organisatie" rows={2} className="text-sm" />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Missie</Label>
-                <Textarea value={clientInfo.mission} onChange={e => setClientInfo(p => ({ ...p, mission: e.target.value }))} placeholder="Missie van de organisatie" rows={3} />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Missie</Label>
+                  {fieldStatuses['mission'] && <StatusBadge status={fieldStatuses['mission']} onStatusChange={s => setStatus('mission', s)} />}
+                </div>
+                <Textarea value={clientInfo.mission} onChange={e => setClientInfo(p => ({ ...p, mission: e.target.value }))} placeholder="Missie" rows={3} className="text-sm" />
               </div>
-              <div className="space-y-2">
-                <Label>Visie</Label>
-                <Textarea value={clientInfo.vision} onChange={e => setClientInfo(p => ({ ...p, vision: e.target.value }))} placeholder="Visie van de organisatie" rows={3} />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Visie</Label>
+                  {fieldStatuses['vision'] && <StatusBadge status={fieldStatuses['vision']} onStatusChange={s => setStatus('vision', s)} />}
+                </div>
+                <Textarea value={clientInfo.vision} onChange={e => setClientInfo(p => ({ ...p, vision: e.target.value }))} placeholder="Visie" rows={3} className="text-sm" />
               </div>
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Brand & Tone */}
-        <AccordionItem value="brand" className="border rounded-lg px-4">
+        {/* 2. Locaties */}
+        <AccordionItem value="locations" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
-              Merk & Tone of Voice
-              {(profile.tone_of_voice || profile.employer_branding) && <Check className="h-3.5 w-3.5 text-success" />}
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-4 pb-4">
-            <div className="space-y-2">
-              <Label>Tone of Voice</Label>
-              <Textarea value={profile.tone_of_voice} onChange={e => setProfile(p => ({ ...p, tone_of_voice: e.target.value }))} placeholder="Warm, persoonlijk, informeel..." rows={2} />
-            </div>
-            <div className="space-y-2">
-              <Label>Communicatierichtlijnen</Label>
-              <Textarea value={profile.communication_guidelines} onChange={e => setProfile(p => ({ ...p, communication_guidelines: e.target.value }))} placeholder="Richtlijnen voor communicatie" rows={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Employer Branding</Label>
-              <Textarea value={profile.employer_branding} onChange={e => setProfile(p => ({ ...p, employer_branding: e.target.value }))} placeholder="Kernboodschap werkgeversmerk" rows={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Waarom hier werken?</Label>
-              <Textarea value={profile.why_work_here} onChange={e => setProfile(p => ({ ...p, why_work_here: e.target.value }))} placeholder="Redenen waarom kandidaten hier willen werken" rows={3} />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* USPs */}
-        <AccordionItem value="usps" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-sm font-medium">
-            <div className="flex items-center gap-2">
-              USPs
-              {usps.length > 0 && <Check className="h-3.5 w-3.5 text-success" />}
+              <MapPin className="h-4 w-4 text-primary/60" />
+              <SectionHeader field="locations" label="Locaties & Regio's" />
+              {locations.length > 0 && <Badge variant="secondary" className="text-[10px] ml-1">{locations.length}</Badge>}
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-3 pb-4">
-            {usps.map((usp, i) => (
-              <div key={i} className="flex gap-2">
-                <Input value={usp.usp_text} onChange={e => {
-                  const next = [...usps];
-                  next[i] = { ...next[i], usp_text: e.target.value };
-                  setUsps(next);
-                }} placeholder={`USP ${i + 1}`} />
-                <Button variant="ghost" size="icon" onClick={() => setUsps(usps.filter((_, j) => j !== i))}>
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+            {locations.map((loc, i) => (
+              <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start">
+                <Input value={loc.name} onChange={e => { const n = [...locations]; n[i] = { ...n[i], name: e.target.value }; setLocations(n); }} placeholder="Naam" className="h-8 text-xs" />
+                <Input value={loc.city} onChange={e => { const n = [...locations]; n[i] = { ...n[i], city: e.target.value }; setLocations(n); }} placeholder="Stad" className="h-8 text-xs" />
+                <Input value={loc.recruitment_region} onChange={e => { const n = [...locations]; n[i] = { ...n[i], recruitment_region: e.target.value }; setLocations(n); }} placeholder="Wervingsregio" className="h-8 text-xs" />
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setLocations(locations.filter((_, j) => j !== i))}>
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
               </div>
             ))}
-            <Button variant="outline" size="sm" onClick={() => setUsps([...usps, { usp_text: '' }])}>
-              <Plus className="mr-1 h-3 w-3" /> USP toevoegen
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setLocations([...locations, { name: '', city: '', region: '', recruitment_region: '', notes: '' }])}>
+              <Plus className="mr-1 h-3 w-3" /> Locatie toevoegen
             </Button>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Care types */}
+        {/* 3. Zorgtypen */}
         <AccordionItem value="care" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
-              Zorgtypen
-              {profile.care_types.length > 0 && <Check className="h-3.5 w-3.5 text-success" />}
+              <Heart className="h-4 w-4 text-primary/60" />
+              <SectionHeader field="care_types" label="Zorgtypen" />
+              {profile.care_types.length > 0 && <Badge variant="secondary" className="text-[10px] ml-1">{profile.care_types.length}</Badge>}
             </div>
           </AccordionTrigger>
-          <AccordionContent className="pb-4">
+          <AccordionContent className="pb-4 space-y-3">
             <div className="flex flex-wrap gap-2">
-              {emptyCareTypes.map(ct => (
-                <button
-                  key={ct}
-                  type="button"
-                  onClick={() => toggleCareType(ct)}
+              {allCareTypes.map(ct => (
+                <button key={ct} type="button" onClick={() => toggleCareType(ct)}
                   className={cn(
                     'rounded-full px-3 py-1.5 text-xs font-medium border transition-colors',
                     profile.care_types.includes(ct)
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                  )}
-                >
+                  )}>
                   {ct}
                 </button>
               ))}
+              {profile.care_types.filter(ct => !allCareTypes.includes(ct)).map(ct => (
+                <button key={ct} type="button" onClick={() => toggleCareType(ct)}
+                  className="rounded-full px-3 py-1.5 text-xs font-medium border bg-primary text-primary-foreground border-primary flex items-center gap-1">
+                  {ct} <X className="h-3 w-3" />
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input value={careInput} onChange={e => setCareInput(e.target.value)} placeholder="Ander zorgtype toevoegen" className="h-8 text-xs max-w-[220px]"
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomCareType())} />
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomCareType}>Toevoegen</Button>
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Recruitment strategy */}
-        <AccordionItem value="strategy" className="border rounded-lg px-4">
+        {/* 4. Functies en Doelgroepen */}
+        <AccordionItem value="roles" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
-              Recruitmentstrategie
-              {profile.strategic_recruitment_goals && <Check className="h-3.5 w-3.5 text-success" />}
+              <Users className="h-4 w-4 text-primary/60" />
+              <SectionHeader field="roles" label="Functies & Doelgroepen" />
+              {roles.length > 0 && <Badge variant="secondary" className="text-[10px] ml-1">{roles.length}</Badge>}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4 pb-4">
+            {roles.map((role, i) => (
+              <Card key={i} className="border-border/50">
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="grid grid-cols-2 gap-2 flex-1">
+                      <Input value={role.role_title} onChange={e => { const n = [...roles]; n[i] = { ...n[i], role_title: e.target.value }; setRoles(n); }} placeholder="Functietitel" className="h-8 text-xs font-medium" />
+                      <Input value={role.care_domain} onChange={e => { const n = [...roles]; n[i] = { ...n[i], care_domain: e.target.value }; setRoles(n); }} placeholder="Zorgdomein" className="h-8 text-xs" />
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 ml-2" onClick={() => setRoles(roles.filter((_, j) => j !== i))}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  </div>
+                  <Textarea value={role.description} onChange={e => { const n = [...roles]; n[i] = { ...n[i], description: e.target.value }; setRoles(n); }} placeholder="Beschrijving, kwalificaties, doelgroep..." rows={2} className="text-xs" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Triggers (komma-gescheiden)</Label>
+                      <Input value={role.audience_triggers.join(', ')} onChange={e => { const n = [...roles]; n[i] = { ...n[i], audience_triggers: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }; setRoles(n); }} placeholder="Wat motiveert deze doelgroep?" className="h-7 text-[11px]" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Bezwaren (komma-gescheiden)</Label>
+                      <Input value={role.audience_objections.join(', ')} onChange={e => { const n = [...roles]; n[i] = { ...n[i], audience_objections: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }; setRoles(n); }} placeholder="Wat houdt kandidaten tegen?" className="h-7 text-[11px]" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setRoles([...roles, { role_title: '', care_domain: '', description: '', qualifications: [], audience_triggers: [], audience_objections: [] }])}>
+              <Plus className="mr-1 h-3 w-3" /> Functie toevoegen
+            </Button>
+
+            {/* Audiences */}
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs font-medium text-foreground mb-2">Doelgroepsegmenten</p>
+              {audiences.map((aud, i) => (
+                <div key={i} className="flex items-start gap-2 mb-2">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <Input value={aud.segment_name} onChange={e => { const n = [...audiences]; n[i] = { ...n[i], segment_name: e.target.value }; setAudiences(n); }} placeholder="Segment naam" className="h-8 text-xs" />
+                    <Input value={aud.description} onChange={e => { const n = [...audiences]; n[i] = { ...n[i], description: e.target.value }; setAudiences(n); }} placeholder="Beschrijving" className="h-8 text-xs" />
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAudiences(audiences.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="text-xs" onClick={() => setAudiences([...audiences, { segment_name: '', description: '', triggers: [], objections: [] }])}>
+                <Plus className="mr-1 h-3 w-3" /> Doelgroep toevoegen
+              </Button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* 5. USPs */}
+        <AccordionItem value="usps" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 text-primary/60" />
+              <SectionHeader field="usps" label="USP's & Werkgeversverhaal" />
+              {usps.length > 0 && <Badge variant="secondary" className="text-[10px] ml-1">{usps.length}</Badge>}
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pb-4">
             <div className="space-y-2">
-              <Label>Strategische recruitmentdoelen</Label>
-              <Textarea value={profile.strategic_recruitment_goals} onChange={e => setProfile(p => ({ ...p, strategic_recruitment_goals: e.target.value }))} placeholder="Wat zijn de belangrijkste wervingsdoelen?" rows={3} />
+              <Label className="text-xs">Belangrijkste USP's</Label>
+              {usps.map((usp, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input value={usp.usp_text} onChange={e => { const n = [...usps]; n[i] = { ...n[i], usp_text: e.target.value }; setUsps(n); }} placeholder={`USP ${i + 1}`} className="h-8 text-sm" />
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setUsps(usps.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="text-xs" onClick={() => setUsps([...usps, { usp_text: '' }])}>
+                <Plus className="mr-1 h-3 w-3" /> USP toevoegen
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Waarom hier werken?</Label>
+                {fieldStatuses['why_work_here'] && <StatusBadge status={fieldStatuses['why_work_here']} onStatusChange={s => setStatus('why_work_here', s)} />}
+              </div>
+              <Textarea value={profile.why_work_here} onChange={e => setProfile(p => ({ ...p, why_work_here: e.target.value }))} placeholder="Redenen waarom kandidaten hier willen werken" rows={3} className="text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Employer Branding</Label>
+                {fieldStatuses['employer_branding'] && <StatusBadge status={fieldStatuses['employer_branding']} onStatusChange={s => setStatus('employer_branding', s)} />}
+              </div>
+              <Textarea value={profile.employer_branding} onChange={e => setProfile(p => ({ ...p, employer_branding: e.target.value }))} placeholder="Kernboodschap werkgeversmerk" rows={3} className="text-sm" />
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Creative guidelines */}
+        {/* 6. Recruitmentstrategie */}
+        <AccordionItem value="strategy" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary/60" />
+              <SectionHeader field="strategy" label="Recruitmentstrategie" />
+              {profile.strategic_recruitment_goals && <Check className="h-3.5 w-3.5 text-success" />}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4 pb-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Strategische recruitmentdoelen</Label>
+              <Textarea value={profile.strategic_recruitment_goals} onChange={e => setProfile(p => ({ ...p, strategic_recruitment_goals: e.target.value }))} placeholder="Wat zijn de belangrijkste wervingsdoelen?" rows={3} className="text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Tone of Voice</Label>
+                {fieldStatuses['tone_of_voice'] && <StatusBadge status={fieldStatuses['tone_of_voice']} onStatusChange={s => setStatus('tone_of_voice', s)} />}
+              </div>
+              <Textarea value={profile.tone_of_voice} onChange={e => setProfile(p => ({ ...p, tone_of_voice: e.target.value }))} placeholder="Warm, professioneel, direct..." rows={2} className="text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Communicatierichtlijnen</Label>
+              <Textarea value={profile.communication_guidelines} onChange={e => setProfile(p => ({ ...p, communication_guidelines: e.target.value }))} placeholder="Richtlijnen voor communicatie" rows={3} className="text-sm" />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* 7. Creative richtlijnen */}
         <AccordionItem value="creative" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
-              Creative Richtlijnen
+              <Palette className="h-4 w-4 text-primary/60" />
+              Creatieve Richtlijnen
               {(profile.words_to_use.length > 0 || profile.creative_dos.length > 0) && <Check className="h-3.5 w-3.5 text-success" />}
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pb-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Woorden om te gebruiken</Label>
-                <Textarea value={profile.words_to_use.join(', ')} onChange={e => updateTagList('words_to_use', e.target.value)} placeholder="woord1, woord2, woord3" rows={2} />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Woorden om te gebruiken</Label>
+                <Textarea value={profile.words_to_use.join(', ')} onChange={e => updateTagList('words_to_use', e.target.value)} placeholder="woord1, woord2, woord3" rows={2} className="text-xs" />
                 <p className="text-[10px] text-muted-foreground">Komma-gescheiden</p>
               </div>
-              <div className="space-y-2">
-                <Label>Woorden om te vermijden</Label>
-                <Textarea value={profile.words_to_avoid.join(', ')} onChange={e => updateTagList('words_to_avoid', e.target.value)} placeholder="woord1, woord2, woord3" rows={2} />
-                <p className="text-[10px] text-muted-foreground">Komma-gescheiden</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Woorden om te vermijden</Label>
+                <Textarea value={profile.words_to_avoid.join(', ')} onChange={e => updateTagList('words_to_avoid', e.target.value)} placeholder="woord1, woord2, woord3" rows={2} className="text-xs" />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Do's voor creative</Label>
-                <Textarea value={profile.creative_dos.join(', ')} onChange={e => updateTagList('creative_dos', e.target.value)} placeholder="do1, do2, do3" rows={2} />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Do's voor creative</Label>
+                <Textarea value={profile.creative_dos.join(', ')} onChange={e => updateTagList('creative_dos', e.target.value)} placeholder="do1, do2, do3" rows={2} className="text-xs" />
               </div>
-              <div className="space-y-2">
-                <Label>Don'ts voor creative</Label>
-                <Textarea value={profile.creative_donts.join(', ')} onChange={e => updateTagList('creative_donts', e.target.value)} placeholder="dont1, dont2, dont3" rows={2} />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Don'ts voor creative</Label>
+                <Textarea value={profile.creative_donts.join(', ')} onChange={e => updateTagList('creative_donts', e.target.value)} placeholder="dont1, dont2, dont3" rows={2} className="text-xs" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Visuele stijlnotities</Label>
-              <Textarea value={profile.visual_style_notes} onChange={e => setProfile(p => ({ ...p, visual_style_notes: e.target.value }))} placeholder="Kleurgebruik, fotostijl, etc." rows={2} />
+            <div className="space-y-1.5">
+              <Label className="text-xs">Visuele stijlnotities</Label>
+              <Textarea value={profile.visual_style_notes} onChange={e => setProfile(p => ({ ...p, visual_style_notes: e.target.value }))} placeholder="Kleurgebruik, fotostijl, etc." rows={2} className="text-xs" />
             </div>
           </AccordionContent>
         </AccordionItem>
 
-        {/* Internal notes */}
-        <AccordionItem value="notes" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-sm font-medium">Interne notities</AccordionTrigger>
-          <AccordionContent className="pb-4">
-            <Textarea value={profile.internal_notes} onChange={e => setProfile(p => ({ ...p, internal_notes: e.target.value }))} placeholder="Interne opmerkingen van Eva Zorg" rows={4} />
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Assets */}
-        <AccordionItem value="assets" className="border rounded-lg px-4">
+        {/* 8. Uploads */}
+        <AccordionItem value="uploads" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
-              Documenten & Uploads
-              {assetCount > 0 && <Check className="h-3.5 w-3.5 text-success" />}
+              <FileUp className="h-4 w-4 text-primary/60" />
+              Uploads & Bronmateriaal
+              {assets.length > 0 && <Badge variant="secondary" className="text-[10px] ml-1">{assets.length}</Badge>}
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pb-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {['brandbook', 'vacatures', 'statics', 'campagne_assets', 'overig'].map(cat => (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {['brandbook', 'vacatures', 'statics', 'campagne_assets', 'documenten', 'overig'].map(cat => (
                 <div key={cat}>
-                  <Label className="text-xs capitalize mb-1 block">{cat.replace('_', ' ')}</Label>
+                  <Label className="text-[10px] capitalize mb-1 block">{cat.replace('_', ' ')}</Label>
                   <label className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-lg border-2 border-dashed p-3 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors',
+                    'flex cursor-pointer items-center gap-2 rounded-lg border-2 border-dashed p-2.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors',
                     uploading && 'opacity-50 pointer-events-none'
                   )}>
-                    <Upload className="h-4 w-4" />
-                    Upload bestand
+                    <Upload className="h-3.5 w-3.5" />
+                    Upload
                     <input type="file" className="hidden" onChange={e => handleFileUpload(e, cat)} />
                   </label>
                 </div>
               ))}
             </div>
-
             {assets.length > 0 && (
-              <div className="space-y-1.5 mt-4">
+              <div className="space-y-1.5 mt-3">
                 <p className="text-xs font-medium text-muted-foreground">Geüploade bestanden</p>
                 {assets.map(a => (
                   <div key={a.id} className="flex items-center justify-between rounded border px-3 py-2">
                     <div>
-                      <p className="text-sm text-foreground">{a.file_name}</p>
+                      <p className="text-xs text-foreground">{a.file_name}</p>
                       <p className="text-[10px] text-muted-foreground">{a.asset_category} · {new Date(a.created_at).toLocaleDateString('nl-NL')}</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteAsset(a.id, '')}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteAsset(a.id, a.file_path)}>
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                     </Button>
                   </div>
@@ -514,19 +744,27 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
             )}
           </AccordionContent>
         </AccordionItem>
-      </Accordion>
 
-      {/* Existing data counts */}
-      <Card className="mt-6">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Data uit andere tabbladen</CardTitle>
-        </CardHeader>
-        <CardContent className="text-xs text-muted-foreground space-y-1">
-          <p>Locaties: <span className="font-medium text-foreground">{locationCount}</span> — beheer via het oude Locations tabblad (wordt binnenkort samengevoegd)</p>
-          <p>Rollen: <span className="font-medium text-foreground">{roleCount}</span></p>
-          <p>Doelgroepen: <span className="font-medium text-foreground">{audienceCount}</span></p>
-        </CardContent>
-      </Card>
+        {/* 9. Interne Eva Zorg inzichten */}
+        <AccordionItem value="internal" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary/60" />
+              Interne Eva Zorg Inzichten
+              {profile.internal_notes && <Check className="h-3.5 w-3.5 text-success" />}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="pb-4">
+            <Textarea
+              value={profile.internal_notes}
+              onChange={e => setProfile(p => ({ ...p, internal_notes: e.target.value }))}
+              placeholder="Waarom is deze klant interessant? Commerciële kansen? Echte USP's die niet op de website staan? Wat recruiters/accountmanagers hebben gehoord? Belangrijke inzichten uit intakes?"
+              rows={6}
+              className="text-sm"
+            />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
