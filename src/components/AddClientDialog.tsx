@@ -63,8 +63,8 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
             <Input id="client-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="bijv. Martha Flora" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="care-type">Type zorg</Label>
-            <Input id="care-type" value={careType} onChange={(e) => setCareType(e.target.value)} placeholder="bijv. Ouderenzorg, Thuiszorg" />
+            <Label htmlFor="website-url">Website URL</Label>
+            <Input id="website-url" type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="bijv. https://www.marthaflora.nl" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
