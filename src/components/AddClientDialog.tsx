@@ -21,7 +21,7 @@ function generateSlug(name: string) {
 
 export default function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   const [name, setName] = useState('');
-  const [careType, setCareType] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -33,7 +33,7 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
     const slug = generateSlug(name);
     const { data, error } = await supabase
       .from('clients')
-      .insert({ name: name.trim(), care_type: careType.trim() || null, slug })
+      .insert({ name: name.trim(), website_url: websiteUrl.trim() || null, slug })
       .select('id, slug')
       .single();
 
@@ -45,7 +45,7 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
 
     toast({ title: 'Client aangemaakt', description: `${name} is toegevoegd.` });
     setName('');
-    setCareType('');
+    setWebsiteUrl('');
     setSaving(false);
     onOpenChange(false);
     onCreated(data);
@@ -63,8 +63,8 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
             <Input id="client-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="bijv. Martha Flora" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="care-type">Type zorg</Label>
-            <Input id="care-type" value={careType} onChange={(e) => setCareType(e.target.value)} placeholder="bijv. Ouderenzorg, Thuiszorg" />
+            <Label htmlFor="website-url">Website URL</Label>
+            <Input id="website-url" type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="bijv. https://www.marthaflora.nl" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
