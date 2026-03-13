@@ -80,9 +80,9 @@ export default function ClientWorkspace() {
   return (
     <div className="flex flex-col h-full">
       {/* Client header */}
-      <div className="border-b bg-card px-6 pt-5 pb-0">
+      <div className="border-b bg-card px-6 pt-5 pb-0 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">
             {client.name.charAt(0)}
           </div>
           <div>
@@ -91,10 +91,10 @@ export default function ClientWorkspace() {
           </div>
           {/* Learning status badge */}
           <div className={cn(
-            'ml-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
-            learningScore >= 80 ? 'bg-success/10 text-success' :
-            learningScore >= 40 ? 'bg-warning/10 text-warning' :
-            'bg-muted text-muted-foreground'
+            'ml-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border',
+            learningScore >= 80 ? 'bg-success/10 text-success border-success/20' :
+            learningScore >= 40 ? 'bg-warning/10 text-warning border-warning/20' :
+            'bg-muted text-muted-foreground border-border'
           )}>
             <BookOpen className="h-3 w-3" />
             {learningScore >= 80 ? 'Getraind' : learningScore >= 40 ? 'In opbouw' : 'Incompleet'}
@@ -108,10 +108,10 @@ export default function ClientWorkspace() {
               key={key}
               onClick={() => setTab(key)}
               className={cn(
-                'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap',
                 activeTab === key
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-primary/30'
               )}
             >
               <Icon className="h-3.5 w-3.5" />
