@@ -231,7 +231,7 @@ export default function NewBriefingDialog({ open, onOpenChange, clientId, client
                 <Select value={careType} onValueChange={setCareType}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Niet gespecificeerd</SelectItem>
+                    <SelectItem value="none">Niet gespecificeerd</SelectItem>
                     {careTypes.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
