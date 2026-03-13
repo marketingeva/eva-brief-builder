@@ -392,17 +392,23 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         <StatusBadge status="confirmed" compact />
       </div>
 
-      {/* Website analysis panel */}
-      <div className="mb-4">
-        <WebsiteAnalysisPanel
-          clientId={clientId}
-          websiteUrl={clientInfo.website_url}
-          analysisData={analysisData}
-          analyzedAt={analyzedAt}
-          onAnalysisComplete={loadData}
-          onApplyField={handleApplyField}
-        />
-      </div>
+      {/* Website scan status */}
+      {(analyzedAt || clientInfo.website_url) && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Globe className="h-3.5 w-3.5" />
+            {analyzedAt ? (
+              <span>Website geanalyseerd op {new Date(analyzedAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} — velden zijn automatisch ingevuld</span>
+            ) : (
+              <span>Nog niet geanalyseerd</span>
+            )}
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleRescan} disabled={rescanning || !clientInfo.website_url}>
+            <RefreshCw className={cn("mr-1 h-3 w-3", rescanning && "animate-spin")} />
+            {rescanning ? 'Bezig...' : 'Opnieuw scannen'}
+          </Button>
+        </div>
+      )}
 
       <Accordion type="multiple" defaultValue={['org', 'care']} className="space-y-3">
         {/* 1. Organisatie */}
