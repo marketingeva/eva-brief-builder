@@ -33,7 +33,7 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
     const slug = generateSlug(name);
     const { data, error } = await supabase
       .from('clients')
-      .insert({ name: name.trim(), care_type: careType.trim() || null, slug })
+      .insert({ name: name.trim(), website_url: websiteUrl.trim() || null, slug })
       .select('id, slug')
       .single();
 
