@@ -44,6 +44,20 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
     }
 
     toast({ title: 'Client aangemaakt', description: `${name} is toegevoegd.` });
+
+    // Trigger background website analysis if URL provided
+    if (websiteUrl.trim() && data) {
+      supabase.functions.invoke('analyze-website', {
+        body: { client_id: data.id, website_url: websiteUrl.trim() },
+      }).then(({ error: fnErr }) => {
+        if (fnErr) {
+          console.error('Background analysis failed:', fnErr);
+        } else {
+          toast({ title: 'Website analyse gestart', description: 'De AI analyseert de website en vult het Learning profiel automatisch in.' });
+        }
+      });
+    }
+
     setName('');
     setWebsiteUrl('');
     setSaving(false);
@@ -65,6 +79,7 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
           <div className="space-y-2">
             <Label htmlFor="website-url">Website URL</Label>
             <Input id="website-url" type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="bijv. https://www.marthaflora.nl" />
+            <p className="text-[11px] text-muted-foreground">De AI analyseert de website automatisch en vult het Learning profiel in.</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
