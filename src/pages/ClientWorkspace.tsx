@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { BookOpen, FileText, Upload, MessageSquare, Radio, LayoutDashboard } from 'lucide-react';
+import { BookOpen, FileText, Palette, Radio, LayoutDashboard } from 'lucide-react';
 import OverviewTab from '@/pages/client-workspace/OverviewTab';
 import LearningTab from '@/pages/client-workspace/LearningTab';
 import BriefingsTab from '@/pages/client-workspace/BriefingsTab';
-import UploadsTab from '@/pages/client-workspace/UploadsTab';
-import CopySuggestionsTab from '@/pages/client-workspace/CopySuggestionsTab';
+import CreativesCopyTab from '@/pages/client-workspace/CreativesCopyTab';
 import LiveAdsTab from '@/pages/client-workspace/LiveAdsTab';
 
 interface Client {
@@ -25,8 +24,7 @@ const tabs = [
   { key: 'overview', label: 'Overzicht', icon: LayoutDashboard },
   { key: 'learning', label: 'Learning', icon: BookOpen },
   { key: 'briefings', label: 'Briefings', icon: FileText },
-  { key: 'uploads', label: 'Uploads', icon: Upload },
-  { key: 'copy', label: 'Copy Suggesties', icon: MessageSquare },
+  { key: 'creatives', label: 'Creatives & Copy', icon: Palette },
   { key: 'live-ads', label: 'Live Ads', icon: Radio },
 ] as const;
 
@@ -128,8 +126,7 @@ export default function ClientWorkspace() {
         {activeTab === 'overview' && <OverviewTab client={client} learningScore={learningScore} />}
         {activeTab === 'learning' && <LearningTab clientId={client.id} onScoreChange={setLearningScore} />}
         {activeTab === 'briefings' && <BriefingsTab clientId={client.id} clientName={client.name} />}
-        {activeTab === 'uploads' && <UploadsTab clientId={client.id} />}
-        {activeTab === 'copy' && <CopySuggestionsTab clientId={client.id} />}
+        {activeTab === 'creatives' && <CreativesCopyTab clientId={client.id} />}
         {activeTab === 'live-ads' && <LiveAdsTab />}
       </div>
     </div>

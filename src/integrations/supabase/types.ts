@@ -685,6 +685,92 @@ export type Database = {
           },
         ]
       }
+      creative_copy_feedback: {
+        Row: {
+          created_at: string
+          generation_id: string
+          id: string
+          notes: string | null
+          rating: string
+        }
+        Insert: {
+          created_at?: string
+          generation_id: string
+          id?: string
+          notes?: string | null
+          rating: string
+        }
+        Update: {
+          created_at?: string
+          generation_id?: string
+          id?: string
+          notes?: string | null
+          rating?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_copy_feedback_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "creative_copy_generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_copy_generations: {
+        Row: {
+          alt_headline: string | null
+          analysis_notes: string | null
+          client_id: string
+          created_at: string
+          creative_upload_id: string
+          cta_suggestion: string | null
+          headline: string | null
+          id: string
+          primary_text: string | null
+          status: string | null
+        }
+        Insert: {
+          alt_headline?: string | null
+          analysis_notes?: string | null
+          client_id: string
+          created_at?: string
+          creative_upload_id: string
+          cta_suggestion?: string | null
+          headline?: string | null
+          id?: string
+          primary_text?: string | null
+          status?: string | null
+        }
+        Update: {
+          alt_headline?: string | null
+          analysis_notes?: string | null
+          client_id?: string
+          created_at?: string
+          creative_upload_id?: string
+          cta_suggestion?: string | null
+          headline?: string | null
+          id?: string
+          primary_text?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_copy_generations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_copy_generations_creative_upload_id_fkey"
+            columns: ["creative_upload_id"]
+            isOneToOne: false
+            referencedRelation: "creative_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creative_uploads: {
         Row: {
           briefing_id: string | null

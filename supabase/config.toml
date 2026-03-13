@@ -2,3 +2,6 @@ project_id = "bbbotutmkmcrzcomiany"
 
 [functions.generate-briefing]
 verify_jwt = false
+
+[functions.analyze-creative]
+verify_jwt = false
