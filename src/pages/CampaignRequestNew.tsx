@@ -80,11 +80,21 @@ export default function CampaignRequestNew() {
 
     const { data, error } = await supabase
       .from('campaign_requests')
-      .insert({
-        ...values,
+      .insert([{
+        client_id: values.client_id,
+        role_title: values.role_title,
+        region: values.region || null,
+        channel: values.channel || null,
+        objective: values.objective || null,
+        creative_type: values.creative_type || null,
+        priority_audience: values.priority_audience || null,
+        campaign_focus: values.campaign_focus || null,
+        angle_preference: values.angle_preference || null,
+        urgency: values.urgency || null,
+        internal_notes: values.internal_notes || null,
         created_by: user.id,
         status: 'pending',
-      })
+      }])
       .select('id')
       .single();
 
