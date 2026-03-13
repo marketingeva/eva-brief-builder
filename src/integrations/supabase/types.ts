@@ -14,6 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
+      briefing_requests: {
+        Row: {
+          care_type: string | null
+          client_id: string
+          created_at: string
+          created_by: string
+          creative_type: string | null
+          cta: string | null
+          employment_type: string | null
+          extra_notes: string | null
+          functions: string[] | null
+          hard_requirements: string | null
+          hours_type: string | null
+          id: string
+          is_new_concept: boolean | null
+          location: string | null
+          num_variations: number | null
+          priority: string | null
+          reference_file_path: string | null
+          request_type: string | null
+          status: string | null
+          style: string | null
+          target_audience: string | null
+          usps: string | null
+          week_number: number | null
+          words_to_avoid: string | null
+        }
+        Insert: {
+          care_type?: string | null
+          client_id: string
+          created_at?: string
+          created_by: string
+          creative_type?: string | null
+          cta?: string | null
+          employment_type?: string | null
+          extra_notes?: string | null
+          functions?: string[] | null
+          hard_requirements?: string | null
+          hours_type?: string | null
+          id?: string
+          is_new_concept?: boolean | null
+          location?: string | null
+          num_variations?: number | null
+          priority?: string | null
+          reference_file_path?: string | null
+          request_type?: string | null
+          status?: string | null
+          style?: string | null
+          target_audience?: string | null
+          usps?: string | null
+          week_number?: number | null
+          words_to_avoid?: string | null
+        }
+        Update: {
+          care_type?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          creative_type?: string | null
+          cta?: string | null
+          employment_type?: string | null
+          extra_notes?: string | null
+          functions?: string[] | null
+          hard_requirements?: string | null
+          hours_type?: string | null
+          id?: string
+          is_new_concept?: boolean | null
+          location?: string | null
+          num_variations?: number | null
+          priority?: string | null
+          reference_file_path?: string | null
+          request_type?: string | null
+          status?: string | null
+          style?: string | null
+          target_audience?: string | null
+          usps?: string | null
+          week_number?: number | null
+          words_to_avoid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefing_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      briefing_rows: {
+        Row: {
+          briefing_id: string
+          client_id: string
+          created_at: string
+          creative_inspiratie: string | null
+          functie: string | null
+          hook: string | null
+          id: string
+          is_new: boolean | null
+          locatie: string | null
+          omschrijving: string | null
+          sort_order: number | null
+          usps: string | null
+        }
+        Insert: {
+          briefing_id: string
+          client_id: string
+          created_at?: string
+          creative_inspiratie?: string | null
+          functie?: string | null
+          hook?: string | null
+          id?: string
+          is_new?: boolean | null
+          locatie?: string | null
+          omschrijving?: string | null
+          sort_order?: number | null
+          usps?: string | null
+        }
+        Update: {
+          briefing_id?: string
+          client_id?: string
+          created_at?: string
+          creative_inspiratie?: string | null
+          functie?: string | null
+          hook?: string | null
+          id?: string
+          is_new?: boolean | null
+          locatie?: string | null
+          omschrijving?: string | null
+          sort_order?: number | null
+          usps?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefing_rows_briefing_id_fkey"
+            columns: ["briefing_id"]
+            isOneToOne: false
+            referencedRelation: "generated_briefings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_rows_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_requests: {
         Row: {
           angle_preference: string | null
@@ -158,6 +307,112 @@ export type Database = {
           },
         ]
       }
+      client_learning_assets: {
+        Row: {
+          asset_category: string
+          client_id: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_type: string | null
+          id: string
+          notes: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          asset_category?: string
+          client_id: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          asset_category?: string
+          client_id?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_learning_assets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_learning_profiles: {
+        Row: {
+          care_types: string[] | null
+          client_id: string
+          communication_guidelines: string | null
+          creative_donts: string[] | null
+          creative_dos: string[] | null
+          employer_branding: string | null
+          id: string
+          internal_notes: string | null
+          strategic_recruitment_goals: string | null
+          tone_of_voice: string | null
+          updated_at: string
+          visual_style_notes: string | null
+          why_work_here: string | null
+          words_to_avoid: string[] | null
+          words_to_use: string[] | null
+        }
+        Insert: {
+          care_types?: string[] | null
+          client_id: string
+          communication_guidelines?: string | null
+          creative_donts?: string[] | null
+          creative_dos?: string[] | null
+          employer_branding?: string | null
+          id?: string
+          internal_notes?: string | null
+          strategic_recruitment_goals?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          visual_style_notes?: string | null
+          why_work_here?: string | null
+          words_to_avoid?: string[] | null
+          words_to_use?: string[] | null
+        }
+        Update: {
+          care_types?: string[] | null
+          client_id?: string
+          communication_guidelines?: string | null
+          creative_donts?: string[] | null
+          creative_dos?: string[] | null
+          employer_branding?: string | null
+          id?: string
+          internal_notes?: string | null
+          strategic_recruitment_goals?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          visual_style_notes?: string | null
+          why_work_here?: string | null
+          words_to_avoid?: string[] | null
+          words_to_use?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_learning_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_learnings: {
         Row: {
           audience_resonance: string | null
@@ -228,6 +483,7 @@ export type Database = {
           is_commute_friendly: boolean
           name: string
           notes: string | null
+          recruitment_region: string | null
           region: string | null
         }
         Insert: {
@@ -237,6 +493,7 @@ export type Database = {
           is_commute_friendly?: boolean
           name: string
           notes?: string | null
+          recruitment_region?: string | null
           region?: string | null
         }
         Update: {
@@ -246,6 +503,7 @@ export type Database = {
           is_commute_friendly?: boolean
           name?: string
           notes?: string | null
+          recruitment_region?: string | null
           region?: string | null
         }
         Relationships: [
@@ -265,6 +523,8 @@ export type Database = {
           care_domain: string | null
           client_id: string
           description: string | null
+          employment_type: string | null
+          hours_type: string | null
           id: string
           qualifications: string[] | null
           role_title: string
@@ -275,6 +535,8 @@ export type Database = {
           care_domain?: string | null
           client_id: string
           description?: string | null
+          employment_type?: string | null
+          hours_type?: string | null
           id?: string
           qualifications?: string[] | null
           role_title: string
@@ -285,6 +547,8 @@ export type Database = {
           care_domain?: string | null
           client_id?: string
           description?: string | null
+          employment_type?: string | null
+          hours_type?: string | null
           id?: string
           qualifications?: string[] | null
           role_title?: string
@@ -299,6 +563,35 @@ export type Database = {
           },
         ]
       }
+      client_usps: {
+        Row: {
+          client_id: string
+          id: string
+          sort_order: number | null
+          usp_text: string
+        }
+        Insert: {
+          client_id: string
+          id?: string
+          sort_order?: number | null
+          usp_text: string
+        }
+        Update: {
+          client_id?: string
+          id?: string
+          sort_order?: number | null
+          usp_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_usps_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           care_type: string | null
@@ -306,9 +599,12 @@ export type Database = {
           description: string | null
           id: string
           logo_url: string | null
+          mission: string | null
           name: string
           slug: string | null
           updated_at: string
+          vision: string | null
+          website_url: string | null
         }
         Insert: {
           care_type?: string | null
@@ -316,9 +612,12 @@ export type Database = {
           description?: string | null
           id?: string
           logo_url?: string | null
+          mission?: string | null
           name: string
           slug?: string | null
           updated_at?: string
+          vision?: string | null
+          website_url?: string | null
         }
         Update: {
           care_type?: string | null
@@ -326,11 +625,122 @@ export type Database = {
           description?: string | null
           id?: string
           logo_url?: string | null
+          mission?: string | null
           name?: string
           slug?: string | null
           updated_at?: string
+          vision?: string | null
+          website_url?: string | null
         }
         Relationships: []
+      }
+      copy_suggestions: {
+        Row: {
+          analysis_notes: string | null
+          client_id: string
+          created_at: string
+          creative_upload_id: string
+          cta_suggestions: string[] | null
+          headlines: string[] | null
+          id: string
+          primary_text: string[] | null
+          status: string | null
+        }
+        Insert: {
+          analysis_notes?: string | null
+          client_id: string
+          created_at?: string
+          creative_upload_id: string
+          cta_suggestions?: string[] | null
+          headlines?: string[] | null
+          id?: string
+          primary_text?: string[] | null
+          status?: string | null
+        }
+        Update: {
+          analysis_notes?: string | null
+          client_id?: string
+          created_at?: string
+          creative_upload_id?: string
+          cta_suggestions?: string[] | null
+          headlines?: string[] | null
+          id?: string
+          primary_text?: string[] | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_suggestions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copy_suggestions_creative_upload_id_fkey"
+            columns: ["creative_upload_id"]
+            isOneToOne: false
+            referencedRelation: "creative_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_uploads: {
+        Row: {
+          briefing_id: string | null
+          client_id: string
+          created_at: string
+          creative_type: string | null
+          file_name: string
+          file_path: string
+          file_type: string | null
+          id: string
+          notes: string | null
+          status: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          briefing_id?: string | null
+          client_id: string
+          created_at?: string
+          creative_type?: string | null
+          file_name: string
+          file_path: string
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          status?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          briefing_id?: string | null
+          client_id?: string
+          created_at?: string
+          creative_type?: string | null
+          file_name?: string
+          file_path?: string
+          file_type?: string | null
+          id?: string
+          notes?: string | null
+          status?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_uploads_briefing_id_fkey"
+            columns: ["briefing_id"]
+            isOneToOne: false
+            referencedRelation: "generated_briefings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_uploads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       generated_briefings: {
         Row: {
@@ -341,8 +751,10 @@ export type Database = {
           content: Json
           created_at: string
           id: string
+          requested_by: string | null
           status: string | null
           version: number
+          week_number: number | null
         }
         Insert: {
           approved_at?: string | null
@@ -352,8 +764,10 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          requested_by?: string | null
           status?: string | null
           version?: number
+          week_number?: number | null
         }
         Update: {
           approved_at?: string | null
@@ -363,8 +777,10 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          requested_by?: string | null
           status?: string | null
           version?: number
+          week_number?: number | null
         }
         Relationships: [
           {
