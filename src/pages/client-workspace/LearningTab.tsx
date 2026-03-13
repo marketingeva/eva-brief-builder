@@ -124,8 +124,8 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
   const [profile, setProfile] = useState<LearningProfile>(emptyProfile);
   const [profileExists, setProfileExists] = useState(false);
   const [fieldStatuses, setFieldStatuses] = useState<FieldStatuses>({});
-  const [analysisData, setAnalysisData] = useState<any>(null);
   const [analyzedAt, setAnalyzedAt] = useState<string | null>(null);
+  const [rescanning, setRescanning] = useState(false);
 
   const [usps, setUsps] = useState<{ id?: string; usp_text: string }[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
