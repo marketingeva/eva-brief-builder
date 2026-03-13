@@ -11,6 +11,8 @@ import Clients from "@/pages/Clients";
 import ClientNew from "@/pages/ClientNew";
 import ClientDetail from "@/pages/ClientDetail";
 import Briefings from "@/pages/Briefings";
+import CampaignRequestNew from "@/pages/CampaignRequestNew";
+import BriefingGenerate from "@/pages/BriefingGenerate";
 import Learnings from "@/pages/Learnings";
 import NotFound from "@/pages/NotFound";
 
@@ -45,6 +47,8 @@ const App = () => (
               <Route path="/clients/new" element={<ClientNew />} />
               <Route path="/clients/:id" element={<ClientDetail />} />
               <Route path="/briefings" element={<Briefings />} />
+              <Route path="/campaigns/new" element={<CampaignRequestNew />} />
+              <Route path="/briefings/generate/:requestId" element={<BriefingGenerate />} />
               <Route path="/learnings" element={<Learnings />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -82,6 +82,9 @@ export default function Dashboard() {
           <Button asChild>
             <Link to="/clients/new"><Plus className="mr-2 h-4 w-4" />Add client</Link>
           </Button>
+          <Button variant="outline" asChild>
+            <Link to="/campaigns/new"><FileText className="mr-2 h-4 w-4" />New campaign request</Link>
+          </Button>
         </div>
       </div>
 

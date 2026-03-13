@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/clients', icon: Building2, label: 'Clients' },
+  { to: '/campaigns/new', icon: PlusCircle, label: 'New Campaign' },
   { to: '/briefings', icon: FileText, label: 'Briefings' },
   { to: '/learnings', icon: BookOpen, label: 'Learnings' },
 ];
