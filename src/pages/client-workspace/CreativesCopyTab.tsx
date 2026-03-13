@@ -275,12 +275,12 @@ export default function CreativesCopyTab({ clientId }: Props) {
               <Card key={u.id} className="overflow-hidden">
                 <div className="flex flex-col md:flex-row">
                   {/* LEFT: Image preview */}
-                  <div className="md:w-72 shrink-0 bg-muted relative group">
+                  <div className="md:w-64 shrink-0 bg-muted relative group">
                     {isImage && imageUrls[u.id] ? (
                       <img
                         src={imageUrls[u.id]}
                         alt={u.file_name}
-                        className="w-full h-full object-cover min-h-[12rem]"
+                        className="w-full h-full object-contain max-h-[20rem]"
                       />
                     ) : (
                       <div className="flex items-center justify-center h-48 md:h-full">
