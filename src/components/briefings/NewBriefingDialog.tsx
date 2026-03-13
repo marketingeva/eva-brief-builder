@@ -93,8 +93,8 @@ export default function NewBriefingDialog({ open, onOpenChange, clientId, client
           hours_type: hoursType,
           employment_type: employmentType,
           target_audience: targetAudience || null,
-          care_type: careType || null,
-          cta: cta || null,
+          care_type: careType === 'none' ? null : careType || null,
+          cta: cta === 'none' ? null : cta || null,
           usps: usps || null,
           num_variations: numVariations,
           style: style || null,
@@ -231,7 +231,7 @@ export default function NewBriefingDialog({ open, onOpenChange, clientId, client
                 <Select value={careType} onValueChange={setCareType}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Niet gespecificeerd</SelectItem>
+                    <SelectItem value="none">Niet gespecificeerd</SelectItem>
                     {careTypes.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -265,7 +265,7 @@ export default function NewBriefingDialog({ open, onOpenChange, clientId, client
                 <Select value={cta} onValueChange={setCta}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Niet gespecificeerd</SelectItem>
+                    <SelectItem value="none">Niet gespecificeerd</SelectItem>
                     {ctaOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
