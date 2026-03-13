@@ -142,17 +142,20 @@ VERBODEN:
 
     userContent.push({
       type: "text",
-      text: `Analyseer dit recruitment creative voor ${client?.name || "deze client"}.
+      text: `Analyseer dit recruitment creative voor ${client?.name || "deze client"} en genereer high-performing Meta ad copy.
 
 Bestandsnaam: ${upload.file_name}
 
-Analyseer eerst:
-1. Welke functie/doelgroep spreekt dit creative aan?
-2. Is de sfeer warm, urgent, praktisch, premium, of employer-brand gericht?
-3. Staat er al tekst op het beeld? Zo ja, welke?
-4. Is dit een campagne-creative of awareness-creative?
+STAP 1 — STRATEGISCHE ANALYSE (schrijf dit in analysis_notes):
+- Welke functie/doelgroep spreekt dit creative aan?
+- Welke sfeer straalt het uit? (warm, urgent, praktisch, premium, employer-brand)
+- Staat er tekst op het beeld? Zo ja, welke? → Herhaal dit NIET in de copy.
+- Is dit een campagne-creative of awareness-creative?
+- Wat is de sterkste emotionele of praktische trigger voor de doelgroep?
+- Welke copystijl past het beste bij dit specifieke creative?
 
-Genereer dan passende Meta ad copy.`,
+STAP 2 — GENEREER COPY:
+Schrijf copy die het beeld AANVULT, niet herhaalt. Denk als een ervaren Meta-advertentiestrateeg die weet hoe je zorgprofessionals stopt in hun scroll.`,
     });
 
     // Call AI with tool calling for structured output
@@ -173,29 +176,29 @@ Genereer dan passende Meta ad copy.`,
             type: "function",
             function: {
               name: "create_ad_copy",
-              description: "Generate structured ad copy for a recruitment creative",
+              description: "Genereer gestructureerde, high-performing Meta ad copy voor een recruitment creative in de zorg",
               parameters: {
                 type: "object",
                 properties: {
                   analysis_notes: {
                     type: "string",
-                    description: "Korte analyse van het creative: doelgroep, sfeer, eventuele tekst op beeld",
+                    description: "Strategische analyse: doelgroep, sfeer creative, tekst op beeld, sterkste trigger, gekozen copystijl en waarom",
                   },
                   primary_text: {
                     type: "string",
-                    description: "De primary text / ad copy voor de Meta advertentie (max 125 woorden)",
+                    description: "De primary text voor de Meta ad. Max 125 woorden. Gebruik korte alinea's gescheiden door dubbele newlines. Start met een scroll-stopping opener. Gebruik 0-3 subtiele emoticons alleen als ze warmte of leesbaarheid verbeteren. Eindig met een natuurlijke CTA. Moet scanbaar zijn op mobiel.",
                   },
                   headline: {
                     type: "string",
-                    description: "De headline voor de advertentie (max 40 tekens)",
+                    description: "Krachtige headline, max 40 tekens. Geen emoticons. Concreet en relevant voor de doelgroep.",
                   },
                   alt_headline: {
                     type: "string",
-                    description: "Een alternatieve kortere headline (max 30 tekens)",
+                    description: "Alternatieve headline vanuit een andere hoek, max 30 tekens. Geen emoticons.",
                   },
                   cta_suggestion: {
                     type: "string",
-                    description: "Voorgestelde CTA richting, bijv 'Solliciteer direct', 'Bel voor een kennismaking'",
+                    description: "Natuurlijke, passende CTA. Bijv. 'Bekijk de vacature', 'Plan een kennismaking', 'Ontdek meer'. Moet laagdrempelig aanvoelen.",
                   },
                 },
                 required: ["analysis_notes", "primary_text", "headline", "alt_headline", "cta_suggestion"],
