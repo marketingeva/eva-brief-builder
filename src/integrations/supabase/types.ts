@@ -359,12 +359,15 @@ export type Database = {
           creative_donts: string[] | null
           creative_dos: string[] | null
           employer_branding: string | null
+          field_statuses: Json | null
           id: string
           internal_notes: string | null
           strategic_recruitment_goals: string | null
           tone_of_voice: string | null
           updated_at: string
           visual_style_notes: string | null
+          website_analysis_data: Json | null
+          website_analyzed_at: string | null
           why_work_here: string | null
           words_to_avoid: string[] | null
           words_to_use: string[] | null
@@ -376,12 +379,15 @@ export type Database = {
           creative_donts?: string[] | null
           creative_dos?: string[] | null
           employer_branding?: string | null
+          field_statuses?: Json | null
           id?: string
           internal_notes?: string | null
           strategic_recruitment_goals?: string | null
           tone_of_voice?: string | null
           updated_at?: string
           visual_style_notes?: string | null
+          website_analysis_data?: Json | null
+          website_analyzed_at?: string | null
           why_work_here?: string | null
           words_to_avoid?: string[] | null
           words_to_use?: string[] | null
@@ -393,12 +399,15 @@ export type Database = {
           creative_donts?: string[] | null
           creative_dos?: string[] | null
           employer_branding?: string | null
+          field_statuses?: Json | null
           id?: string
           internal_notes?: string | null
           strategic_recruitment_goals?: string | null
           tone_of_voice?: string | null
           updated_at?: string
           visual_style_notes?: string | null
+          website_analysis_data?: Json | null
+          website_analyzed_at?: string | null
           why_work_here?: string | null
           words_to_avoid?: string[] | null
           words_to_use?: string[] | null
