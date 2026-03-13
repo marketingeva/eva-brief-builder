@@ -24,8 +24,7 @@ const tabs = [
   { key: 'overview', label: 'Overzicht', icon: LayoutDashboard },
   { key: 'learning', label: 'Learning', icon: BookOpen },
   { key: 'briefings', label: 'Briefings', icon: FileText },
-  { key: 'uploads', label: 'Uploads', icon: Upload },
-  { key: 'copy', label: 'Copy Suggesties', icon: MessageSquare },
+  { key: 'creatives', label: 'Creatives & Copy', icon: Palette },
   { key: 'live-ads', label: 'Live Ads', icon: Radio },
 ] as const;
 
