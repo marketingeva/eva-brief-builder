@@ -328,34 +328,22 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
     setProfile(p => ({ ...p, [field]: items }));
   };
 
-  const handleApplyField = (field: string, value: any) => {
-    switch (field) {
-      case 'description': setClientInfo(p => ({ ...p, description: value })); break;
-      case 'mission': setClientInfo(p => ({ ...p, mission: value })); break;
-      case 'vision': setClientInfo(p => ({ ...p, vision: value })); break;
-      case 'tone_of_voice': setProfile(p => ({ ...p, tone_of_voice: value })); break;
-      case 'employer_branding': setProfile(p => ({ ...p, employer_branding: value })); break;
-      case 'why_work_here': setProfile(p => ({ ...p, why_work_here: value })); break;
-      case 'care_types':
-        setProfile(p => ({ ...p, care_types: [...new Set([...p.care_types, ...(value as string[])])] }));
-        break;
-      case 'usps':
-        setUsps(prev => [...prev, ...(value as string[]).filter(v => !prev.some(u => u.usp_text === v)).map(v => ({ usp_text: v }))]);
-        break;
-      case 'locations':
-        setLocations(prev => [...prev, ...(value as any[]).filter(v => !prev.some(l => l.name === v.name)).map(v => ({
-          name: v.name, city: v.city || '', region: v.region || '', recruitment_region: '', notes: '',
-        }))]);
-        break;
-      case 'roles':
-        setRoles(prev => [...prev, ...(value as any[]).filter(v => !prev.some(r => r.role_title === v.role_title)).map(v => ({
-          role_title: v.role_title, care_domain: v.care_domain || '', description: v.description || '',
-          qualifications: [], audience_triggers: [], audience_objections: [],
-        }))]);
-        break;
+  const handleRescan = async () => {
+    if (!clientInfo.website_url) {
+      toast({ title: 'Geen website URL', description: 'Vul eerst een website URL in.', variant: 'destructive' });
+      return;
     }
-    setStatus(field, 'suggested');
-    toast({ title: 'Overgenomen', description: `${field} is ingevuld met AI-suggestie. Controleer en bevestig.` });
+    setRescanning(true);
+    const { error } = await supabase.functions.invoke('analyze-website', {
+      body: { client_id: clientId, website_url: clientInfo.website_url },
+    });
+    if (error) {
+      toast({ title: 'Analyse mislukt', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Website opnieuw geanalyseerd', description: 'Learning velden zijn bijgewerkt.' });
+      loadData();
+    }
+    setRescanning(false);
   };
 
   const score = calculateScore(clientInfo, profile, fieldStatuses, locations, roles, audiences, usps, assets.length);
