@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Plus, Sparkles } from 'lucide-react';
+import { FileText, Sparkles, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import NewBriefingDialog from '@/components/briefings/NewBriefingDialog';
+import BriefingDetailView from '@/components/briefings/BriefingDetailView';
+import type { Json } from '@/integrations/supabase/types';
 
 interface Props {
   clientId: string;
@@ -21,41 +24,88 @@ interface BriefingRequest {
   created_at: string;
   care_type: string | null;
   creative_type: string | null;
+  style: string | null;
+}
+
+interface GeneratedBriefing {
+  id: string;
+  campaign_request_id: string;
+  content: Json;
+  status: string | null;
+  version: number;
+  week_number: number | null;
+  created_at: string;
+}
+
+interface BriefingRow {
+  id: string;
+  briefing_id: string;
+  is_new: boolean | null;
+  functie: string | null;
+  locatie: string | null;
+  hook: string | null;
+  usps: string | null;
+  omschrijving: string | null;
+  creative_inspiratie: string | null;
+  sort_order: number | null;
 }
 
 const statusColors: Record<string, string> = {
   concept: 'bg-muted text-muted-foreground',
+  generating: 'bg-primary/10 text-primary animate-pulse',
   generated: 'bg-primary/10 text-primary',
   approved: 'bg-success/10 text-success',
   sent_to_designer: 'bg-warning/10 text-warning',
   delivered: 'bg-success/10 text-success',
+  error: 'bg-destructive/10 text-destructive',
 };
 
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}
+const statusLabels: Record<string, string> = {
+  concept: 'Concept',
+  generating: 'Genereert...',
+  generated: 'Gegenereerd',
+  approved: 'Goedgekeurd',
+  sent_to_designer: 'Naar designer',
+  delivered: 'Opgeleverd',
+  error: 'Fout',
+};
 
 export default function BriefingsTab({ clientId, clientName }: Props) {
   const [requests, setRequests] = useState<BriefingRequest[]>([]);
+  const [briefings, setBriefings] = useState<GeneratedBriefing[]>([]);
+  const [briefingRows, setBriefingRows] = useState<BriefingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekFilter, setWeekFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase
-      .from('briefing_requests')
-      .select('id, functions, location, status, week_number, created_at, care_type, creative_type')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setRequests(data || []);
-        setLoading(false);
-      });
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [reqRes, briefRes, rowRes] = await Promise.all([
+      supabase
+        .from('briefing_requests')
+        .select('id, functions, location, status, week_number, created_at, care_type, creative_type, style')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('generated_briefings')
+        .select('id, campaign_request_id, content, status, version, week_number, created_at')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('briefing_rows')
+        .select('id, briefing_id, is_new, functie, locatie, hook, usps, omschrijving, creative_inspiratie, sort_order')
+        .eq('client_id', clientId)
+        .order('sort_order', { ascending: true }),
+    ]);
+    setRequests(reqRes.data || []);
+    setBriefings(briefRes.data || []);
+    setBriefingRows(rowRes.data || []);
+    setLoading(false);
   }, [clientId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const weeks = [...new Set(requests.map(r => r.week_number).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
 
@@ -65,13 +115,25 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
     return true;
   });
 
-  // Group by week
   const grouped = filtered.reduce<Record<string, BriefingRequest[]>>((acc, r) => {
     const key = r.week_number ? `Week ${r.week_number}` : 'Geen week';
     if (!acc[key]) acc[key] = [];
     acc[key].push(r);
     return acc;
   }, {});
+
+  // Detail view
+  if (selectedRequestId) {
+    const briefing = briefings.find(b => b.campaign_request_id === selectedRequestId);
+    if (briefing) {
+      const rows = briefingRows.filter(r => r.briefing_id === briefing.id);
+      return (
+        <div className="p-6 max-w-6xl mx-auto">
+          <BriefingDetailView briefing={briefing} rows={rows} onBack={() => setSelectedRequestId(null)} />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto animate-fade-in">
@@ -80,7 +142,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
           <h2 className="text-lg font-bold text-foreground">Briefings</h2>
           <p className="text-xs text-muted-foreground">{requests.length} briefing{requests.length !== 1 ? 's' : ''} voor {clientName}</p>
         </div>
-        <Button>
+        <Button onClick={() => setDialogOpen(true)}>
           <Sparkles className="mr-2 h-4 w-4" />
           Nieuw briefing
         </Button>
@@ -106,10 +168,11 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
           <SelectContent>
             <SelectItem value="all">Alle statussen</SelectItem>
             <SelectItem value="concept">Concept</SelectItem>
-            <SelectItem value="generated">Generated</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="generating">Genereert</SelectItem>
+            <SelectItem value="generated">Gegenereerd</SelectItem>
+            <SelectItem value="approved">Goedgekeurd</SelectItem>
             <SelectItem value="sent_to_designer">Naar designer</SelectItem>
-            <SelectItem value="delivered">Delivered</SelectItem>
+            <SelectItem value="delivered">Opgeleverd</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -122,7 +185,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
             <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
             <p className="text-sm font-medium text-muted-foreground">Nog geen briefings</p>
             <p className="text-xs text-muted-foreground/70 mt-1">Maak je eerste content briefing aan</p>
-            <Button className="mt-4" size="sm">
+            <Button className="mt-4" size="sm" onClick={() => setDialogOpen(true)}>
               <Sparkles className="mr-2 h-3.5 w-3.5" />
               Eerste briefing genereren
             </Button>
@@ -134,29 +197,50 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
             <div key={week}>
               <h3 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">{week}</h3>
               <div className="space-y-1.5">
-                {items.map(r => (
-                  <div key={r.id} className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/30 transition-colors cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-4 w-4 text-primary/60" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {r.functions?.join(', ') || 'Geen functie'} {r.location ? `— ${r.location}` : ''}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(r.created_at).toLocaleDateString('nl-NL')} · {r.care_type || ''} · {r.creative_type || 'static'}
-                        </p>
+                {items.map(r => {
+                  const hasBriefing = briefings.some(b => b.campaign_request_id === r.id);
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={() => hasBriefing && setSelectedRequestId(r.id)}
+                      className={cn(
+                        'flex items-center justify-between rounded-lg border p-3 transition-colors',
+                        hasBriefing ? 'hover:bg-muted/30 cursor-pointer' : 'opacity-70'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-4 w-4 text-primary/60" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {r.functions?.join(', ') || 'Geen functie'} {r.location ? `— ${r.location}` : ''}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(r.created_at).toLocaleDateString('nl-NL')} · {r.care_type || ''} · {r.creative_type || 'static'} {r.style ? `· ${r.style}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn('text-[10px]', statusColors[r.status || 'concept'])}>
+                          {statusLabels[r.status || 'concept'] || r.status}
+                        </Badge>
+                        {hasBriefing && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                       </div>
                     </div>
-                    <Badge variant="outline" className={cn('text-[10px]', statusColors[r.status || ''])}>
-                      {r.status || 'concept'}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <NewBriefingDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        clientId={clientId}
+        clientName={clientName}
+        onGenerated={loadData}
+      />
     </div>
   );
 }

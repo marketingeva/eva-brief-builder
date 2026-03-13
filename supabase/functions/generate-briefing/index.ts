@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,134 +11,107 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { campaign_request_id } = await req.json();
-    if (!campaign_request_id) throw new Error("campaign_request_id is required");
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const { briefing_request_id } = await req.json();
+    if (!briefing_request_id) throw new Error("briefing_request_id is required");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const sb = createClient(supabaseUrl, serviceKey);
 
-    // 1. Fetch campaign request
-    const { data: request, error: reqErr } = await supabase
-      .from("campaign_requests")
+    // 1. Fetch briefing request
+    const { data: request, error: reqErr } = await sb
+      .from("briefing_requests")
       .select("*")
-      .eq("id", campaign_request_id)
+      .eq("id", briefing_request_id)
       .single();
-    if (reqErr || !request) throw new Error("Campaign request not found");
+    if (reqErr || !request) throw new Error("Briefing request not found");
 
     const clientId = request.client_id;
 
     // 2. Fetch all client context in parallel
-    const [clientRes, brandRes, locationsRes, rolesRes, audienceRes, learningsRes] = await Promise.all([
-      supabase.from("clients").select("*").eq("id", clientId).single(),
-      supabase.from("client_brand_profiles").select("*").eq("client_id", clientId).single(),
-      supabase.from("client_locations").select("*").eq("client_id", clientId),
-      supabase.from("client_roles").select("*").eq("client_id", clientId),
-      supabase.from("client_audience_insights").select("*").eq("client_id", clientId),
-      supabase.from("client_learnings").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(10),
+    const [clientRes, learningRes, uspsRes, rolesRes, locationsRes, audienceRes, learningsRes] = await Promise.all([
+      sb.from("clients").select("*").eq("id", clientId).single(),
+      sb.from("client_learning_profiles").select("*").eq("client_id", clientId).single(),
+      sb.from("client_usps").select("usp_text").eq("client_id", clientId),
+      sb.from("client_roles").select("*").eq("client_id", clientId),
+      sb.from("client_locations").select("*").eq("client_id", clientId),
+      sb.from("client_audience_insights").select("*").eq("client_id", clientId),
+      sb.from("client_learnings").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(10),
     ]);
 
     const client = clientRes.data;
     if (!client) throw new Error("Client not found");
-
-    const brand = brandRes.data;
-    const locations = locationsRes.data || [];
+    const learning = learningRes.data;
+    const usps = uspsRes.data?.map((u: any) => u.usp_text) || [];
     const roles = rolesRes.data || [];
+    const locations = locationsRes.data || [];
     const audience = audienceRes.data || [];
     const learnings = learningsRes.data || [];
 
-    // 3. Build context prompt
-    const contextSections: string[] = [];
+    // 3. Build context
+    const ctx: string[] = [];
+    ctx.push(`## Client: ${client.name}\nZorgtype: ${client.care_type || "-"}\nMissie: ${client.mission || "-"}\nVisie: ${client.vision || "-"}`);
 
-    contextSections.push(`## Client: ${client.name}\nCare type: ${client.care_type || "Not specified"}\nDescription: ${client.description || "Not specified"}`);
-
-    if (brand) {
-      contextSections.push(`## Employer Branding\nTone of voice: ${brand.tone_of_voice || "Not specified"}\nEmployer branding: ${brand.employer_branding || "Not specified"}\nWhy work here: ${brand.why_work_here || "Not specified"}\nVisual style: ${brand.visual_style_notes || "Not specified"}\nWords to use: ${(brand.words_to_use || []).join(", ") || "Not specified"}\nWords to avoid: ${(brand.words_to_avoid || []).join(", ") || "Not specified"}`);
+    if (learning) {
+      ctx.push(`## Merk & Communicatie\nTone of voice: ${learning.tone_of_voice || "-"}\nCommunicatierichtlijnen: ${learning.communication_guidelines || "-"}\nEmployer branding: ${learning.employer_branding || "-"}\nWaarom hier werken: ${learning.why_work_here || "-"}\nStrategische wervingsdoelen: ${learning.strategic_recruitment_goals || "-"}\nWoorden te gebruiken: ${(learning.words_to_use || []).join(", ") || "-"}\nWoorden te vermijden: ${(learning.words_to_avoid || []).join(", ") || "-"}\nCreatieve do's: ${(learning.creative_dos || []).join(", ") || "-"}\nCreatieve don'ts: ${(learning.creative_donts || []).join(", ") || "-"}`);
     }
 
-    if (locations.length > 0) {
-      const locList = locations.map((l: any) => `- ${l.name} (${l.city || ""}, ${l.region || ""}) ${l.is_commute_friendly ? "[commute-friendly]" : ""} ${l.notes || ""}`).join("\n");
-      contextSections.push(`## Locations\n${locList}`);
-    }
+    if (usps.length > 0) ctx.push(`## USP's\n${usps.map((u: string) => `- ${u}`).join("\n")}`);
+    if (locations.length > 0) ctx.push(`## Locaties\n${locations.map((l: any) => `- ${l.name} (${l.city || ""}, ${l.region || ""}) ${l.recruitment_region ? `[regio: ${l.recruitment_region}]` : ""}`).join("\n")}`);
+    if (roles.length > 0) ctx.push(`## Rollen\n${roles.map((r: any) => `- ${r.role_title} (${r.care_domain || ""}): ${r.description || ""}\n  Kwalificaties: ${(r.qualifications || []).join(", ")}\n  Triggers: ${(r.audience_triggers || []).join(", ")}\n  Bezwaren: ${(r.audience_objections || []).join(", ")}`).join("\n")}`);
+    if (audience.length > 0) ctx.push(`## Doelgroepen\n${audience.map((a: any) => `- ${a.segment_name}: ${a.description || ""}\n  Triggers: ${(a.triggers || []).join(", ")}\n  Bezwaren: ${(a.objections || []).join(", ")}`).join("\n")}`);
+    if (learnings.length > 0) ctx.push(`## Recente learnings\n${learnings.slice(0, 5).map((l: any) => `- ${l.concept || "?"}: Wat werkte: ${l.what_worked || "?"} | Wat niet: ${l.what_failed || "?"}`).join("\n")}`);
 
-    if (roles.length > 0) {
-      const roleList = roles.map((r: any) => `- ${r.role_title} (${r.care_domain || ""}): ${r.description || ""}\n  Qualifications: ${(r.qualifications || []).join(", ")}\n  Audience triggers: ${(r.audience_triggers || []).join(", ")}\n  Audience objections: ${(r.audience_objections || []).join(", ")}`).join("\n");
-      contextSections.push(`## Roles\n${roleList}`);
-    }
+    const clientContext = ctx.join("\n\n");
 
-    if (audience.length > 0) {
-      const audList = audience.map((a: any) => `- ${a.segment_name}: ${a.description || ""}\n  Triggers: ${(a.triggers || []).join(", ")}\n  Objections: ${(a.objections || []).join(", ")}\n  Platform notes: ${a.platform_notes || ""}`).join("\n");
-      contextSections.push(`## Audience Insights\n${audList}`);
-    }
-
-    if (learnings.length > 0) {
-      const learnList = learnings.map((l: any) => `- Concept: ${l.concept || "?"} | Hook: ${l.hook_used || "?"} | Result: ${l.result || "?"}\n  What worked: ${l.what_worked || "?"}\n  What failed: ${l.what_failed || "?"}\n  Audience resonance: ${l.audience_resonance || "?"}`).join("\n");
-      contextSections.push(`## Recent Campaign Learnings\n${learnList}`);
-    }
-
-    const clientContext = contextSections.join("\n\n");
-
-    const campaignDetails = `
-## Campaign Request
-- Role/vacancy: ${request.role_title || "Not specified"}
-- Region: ${request.region || "Not specified"}
-- Channel: ${request.channel || "Meta"}
-- Objective: ${request.objective || "Generate applications"}
-- Creative type: ${request.creative_type || "Static image"}
-- Priority audience: ${request.priority_audience || "Not specified"}
-- Campaign focus: ${request.campaign_focus || "Not specified"}
-- Angle preference: ${request.angle_preference || "Mix of both"}
-- Urgency: ${request.urgency || "Normal"}
-- Internal notes: ${request.internal_notes || "None"}
+    // 4. Build request details
+    const numVariations = request.num_variations || 1;
+    const requestDetails = `
+## Briefing Request
+- Functie(s): ${(request.functions || []).join(", ")}
+- Locatie: ${request.location || "Niet gespecificeerd"}
+- Uren: ${request.hours_type || "flexible"}
+- Dienstverband: ${request.employment_type || "loondienst"}
+- Doelgroep: ${request.target_audience || "Niet gespecificeerd"}
+- Zorgtype: ${request.care_type || "Niet gespecificeerd"}
+- CTA: ${request.cta || "Niet gespecificeerd"}
+- USP's: ${request.usps || "Gebruik client USP's"}
+- Stijl: ${request.style || "warm"}
+- Nieuw concept: ${request.is_new_concept ? "Ja" : "Nee, remake"}
+- Creative type: ${request.creative_type || "static"}
+- Prioriteit: ${request.priority || "balanced"}
+- Harde eisen: ${request.hard_requirements || "Geen"}
+- Woorden te vermijden: ${request.words_to_avoid || "Geen"}
+- Extra notities: ${request.extra_notes || "Geen"}
+- Aantal variaties: ${numVariations}
     `.trim();
 
-    const systemPrompt = `You are a senior recruitment marketing strategist specialized in Dutch healthcare recruitment campaigns on Meta (Facebook/Instagram).
+    const systemPrompt = `Je bent een senior recruitment marketing strateeg gespecialiseerd in Nederlandse zorgwervingscampagnes op Meta (Facebook/Instagram).
 
-You understand latent job-seeking candidates — people not actively searching but open to the right opportunity. You think in terms of recruitment psychology, employer branding, campaign hooks, audience objections and triggers, and practical creative direction.
+Je begrijpt latente werkzoekenden — mensen die niet actief zoeken maar openstaan voor de juiste kans. Je denkt in termen van wervingspsychologie, employer branding, campagne hooks, bezwaren en triggers.
 
-Your output must be concrete, specific, usable, and grounded in the client context provided. Never produce generic marketing fluff. Always think about what would make a healthcare professional stop scrolling on their phone.
+Je output moet concreet, specifiek, bruikbaar en gefundeerd zijn op de verstrekte clientcontext. Produceer nooit generiek marketingtaal. Denk altijd na over wat een zorgprofessional zou laten stoppen met scrollen.
 
-CRITICAL: Only use information from the client context below. Never mix or invent information from other organizations.
+KRITISCH: Gebruik alleen informatie uit de clientcontext. Verzin nooit informatie van andere organisaties.
 
 ${clientContext}`;
 
-    const userPrompt = `Based on the client context and the campaign request below, generate a structured creative briefing.
+    const userPrompt = `Op basis van de clientcontext en het briefing request hieronder, genereer een gestructureerd creatief briefing.
 
-${campaignDetails}
+${requestDetails}
 
-Return a JSON object with EXACTLY these keys:
-- client (string): client name
-- role (string): the specific role
-- region (string): target region
-- target_audience (string): description of the target audience
-- campaign_objective (string): what we want to achieve
-- key_recruitment_challenge (string): main challenge in recruiting for this role
-- main_hook (string): the primary hook to stop scrolling
-- audience_tension (string): the emotional tension or trigger we're leveraging
-- core_message (string): the central message of the campaign
-- proof_points_usps (array of strings): 3-5 concrete proof points / USPs
-- creative_direction (string): overall creative approach
-- visual_concept (string): what the visual should look like
-- suggested_scenes (string): specific scene or static concept description
-- onscreen_copy_ideas (array of strings): 3-4 on-screen text suggestions
-- ad_copy_starter (string): a draft ad copy paragraph
-- hook_variants (array of strings): 3-4 alternative hooks
-- cta_direction (string): call-to-action direction
-- what_to_avoid (array of strings): 3-5 things to avoid
-- notes_for_designer (string): practical notes for the designer
-- notes_for_recruiter (string): practical notes for the recruiter
-- internal_comments (string): any strategic observations
+Genereer ${numVariations} briefing variatie(s).
 
-Write all content in Dutch unless the field name is English-only. The ad copy and hooks MUST be in Dutch.`;
+Gebruik de functie create_briefing_rows om de output te structureren. Elke variatie wordt een rij met: is_new, functie, locatie, hook, usps, omschrijving, en creative_inspiratie.
 
-    // 4. Call Lovable AI with tool calling for structured output
+Genereer daarnaast een overkoepelend briefing document met strategische context.`;
+
+    // 5. Call AI
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${lovableKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -152,7 +125,7 @@ Write all content in Dutch unless the field name is English-only. The ad copy an
             type: "function",
             function: {
               name: "create_briefing",
-              description: "Create a structured creative briefing for a recruitment campaign",
+              description: "Create a structured creative briefing with rows for the designer",
               parameters: {
                 type: "object",
                 properties: {
@@ -177,6 +150,23 @@ Write all content in Dutch unless the field name is English-only. The ad copy an
                   notes_for_designer: { type: "string" },
                   notes_for_recruiter: { type: "string" },
                   internal_comments: { type: "string" },
+                  rows: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        is_new: { type: "boolean" },
+                        functie: { type: "string" },
+                        locatie: { type: "string" },
+                        hook: { type: "string" },
+                        usps: { type: "string" },
+                        omschrijving: { type: "string" },
+                        creative_inspiratie: { type: "string" },
+                      },
+                      required: ["functie", "hook", "omschrijving"],
+                    },
+                    description: "Briefing rows for the designer spreadsheet, one per variation",
+                  },
                 },
                 required: [
                   "client", "role", "region", "target_audience", "campaign_objective",
@@ -184,6 +174,7 @@ Write all content in Dutch unless the field name is English-only. The ad copy an
                   "proof_points_usps", "creative_direction", "visual_concept", "suggested_scenes",
                   "onscreen_copy_ideas", "ad_copy_starter", "hook_variants", "cta_direction",
                   "what_to_avoid", "notes_for_designer", "notes_for_recruiter", "internal_comments",
+                  "rows",
                 ],
                 additionalProperties: false,
               },
@@ -196,57 +187,77 @@ Write all content in Dutch unless the field name is English-only. The ad copy an
 
     if (!aiResponse.ok) {
       const status = aiResponse.status;
+      const errText = await aiResponse.text();
+      console.error("AI error:", status, errText);
+
+      await sb.from("briefing_requests").update({ status: "error" }).eq("id", briefing_request_id);
+
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "AI rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "Rate limit bereikt, probeer het later opnieuw." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "Tegoed op, voeg credits toe." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errText = await aiResponse.text();
-      console.error("AI gateway error:", status, errText);
-      throw new Error("AI generation failed");
+      throw new Error(`AI gateway error: ${status}`);
     }
 
     const aiData = await aiResponse.json();
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("AI did not return structured output");
+    if (!toolCall) {
+      await sb.from("briefing_requests").update({ status: "error" }).eq("id", briefing_request_id);
+      throw new Error("AI did not return structured output");
+    }
 
-    const briefingContent = JSON.parse(toolCall.function.arguments);
+    const result = JSON.parse(toolCall.function.arguments);
+    const { rows: briefingRows, ...briefingContent } = result;
 
-    // 5. Save to database
-    const { data: savedBriefing, error: saveErr } = await supabase
+    // 6. Save generated briefing
+    const { data: savedBriefing, error: saveErr } = await sb
       .from("generated_briefings")
       .insert({
-        campaign_request_id: campaign_request_id,
+        campaign_request_id: briefing_request_id,
         client_id: clientId,
         content: briefingContent,
         status: "draft",
         version: 1,
+        week_number: request.week_number,
       })
       .select("id")
       .single();
 
     if (saveErr) {
-      console.error("Save error:", saveErr);
-      // Still return the briefing even if save fails
+      console.error("Save briefing error:", saveErr);
+      throw saveErr;
     }
 
-    // Update campaign request status
-    await supabase
-      .from("campaign_requests")
-      .update({ status: "generated" })
-      .eq("id", campaign_request_id);
+    // 7. Save briefing rows
+    if (Array.isArray(briefingRows) && briefingRows.length > 0 && savedBriefing) {
+      const rowInserts = briefingRows.map((row: any, idx: number) => ({
+        briefing_id: savedBriefing.id,
+        client_id: clientId,
+        is_new: row.is_new ?? request.is_new_concept ?? true,
+        functie: row.functie || (request.functions || [])[0] || null,
+        locatie: row.locatie || request.location || null,
+        hook: row.hook || null,
+        usps: row.usps || request.usps || null,
+        omschrijving: row.omschrijving || null,
+        creative_inspiratie: row.creative_inspiratie || null,
+        sort_order: idx,
+      }));
+
+      const { error: rowErr } = await sb.from("briefing_rows").insert(rowInserts);
+      if (rowErr) console.error("Save rows error:", rowErr);
+    }
 
     return new Response(
       JSON.stringify({
+        briefing_id: savedBriefing.id,
         briefing: briefingContent,
-        briefing_id: savedBriefing?.id || null,
+        rows: briefingRows || [],
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
