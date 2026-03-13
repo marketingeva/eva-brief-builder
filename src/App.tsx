@@ -6,14 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
-import Clients from "@/pages/Clients";
-import ClientNew from "@/pages/ClientNew";
-import ClientDetail from "@/pages/ClientDetail";
-import Briefings from "@/pages/Briefings";
-import CampaignRequestNew from "@/pages/CampaignRequestNew";
-import BriefingGenerate from "@/pages/BriefingGenerate";
-import Learnings from "@/pages/Learnings";
+import ClientWorkspace from "@/pages/ClientWorkspace";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,14 +35,9 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/clients" element={<Clients />} />
-              <Route path="/clients/new" element={<ClientNew />} />
-              <Route path="/clients/:id" element={<ClientDetail />} />
-              <Route path="/briefings" element={<Briefings />} />
-              <Route path="/campaigns/new" element={<CampaignRequestNew />} />
-              <Route path="/briefings/generate/:requestId" element={<BriefingGenerate />} />
-              <Route path="/learnings" element={<Learnings />} />
+              <Route path="/" element={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Select a client from the sidebar to get started</div>} />
+              <Route path="/client/:slug" element={<ClientWorkspace />} />
+              <Route path="/client/:slug/:tab" element={<ClientWorkspace />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
