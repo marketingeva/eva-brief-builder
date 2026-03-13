@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { BookOpen, FileText, Upload, MessageSquare, Radio, LayoutDashboard } from 'lucide-react';
+import { BookOpen, FileText, Palette, Radio, LayoutDashboard } from 'lucide-react';
 import OverviewTab from '@/pages/client-workspace/OverviewTab';
 import LearningTab from '@/pages/client-workspace/LearningTab';
 import BriefingsTab from '@/pages/client-workspace/BriefingsTab';
-import UploadsTab from '@/pages/client-workspace/UploadsTab';
-import CopySuggestionsTab from '@/pages/client-workspace/CopySuggestionsTab';
+import CreativesCopyTab from '@/pages/client-workspace/CreativesCopyTab';
 import LiveAdsTab from '@/pages/client-workspace/LiveAdsTab';
 
 interface Client {
