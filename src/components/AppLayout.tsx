@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import AddClientDialog from '@/components/AddClientDialog';
+import evaLogo from '@/assets/eva-logo.png';
+import evaIcon from '@/assets/eva-icon.png';
 
 interface ClientListItem {
   id: string;
@@ -61,7 +63,7 @@ export default function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-foreground/20 lg:hidden" onClick={() => setMobileOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* Sidebar */}
@@ -71,13 +73,14 @@ export default function AppLayout() {
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
-        {/* Header */}
-        <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-              <span className="text-sm font-bold text-sidebar-primary-foreground">E</span>
+        {/* Header with Eva logo */}
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+          <div className="flex items-center gap-3">
+            <img src={evaIcon} alt="Eva" className="h-8 w-8 rounded-lg" />
+            <div className="flex flex-col">
+              <span className="font-bold text-sm text-sidebar-foreground">Eva AI</span>
+              <span className="text-[10px] text-sidebar-foreground/50 font-medium">Marketeer</span>
             </div>
-            <span className="font-semibold text-sm">Eva AI</span>
           </div>
           <button onClick={() => setMobileOpen(false)} className="lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground">
             <X className="h-5 w-5" />
@@ -103,7 +106,7 @@ export default function AppLayout() {
             <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-medium">Clients</span>
             <button
               onClick={() => setAddOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+              className="flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/40 hover:text-sidebar-primary hover:bg-sidebar-accent/50 transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -136,14 +139,14 @@ export default function AppLayout() {
                     key={client.id}
                     onClick={() => handleClientClick(client)}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                      'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-all',
                       isActive
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
                         : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                     )}
                   >
                     <div className={cn(
-                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors',
                       isActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'bg-sidebar-accent text-sidebar-foreground/60'
                     )}>
                       {client.name.charAt(0)}
@@ -168,7 +171,7 @@ export default function AppLayout() {
           </div>
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
           >
             <LogOut className="h-4 w-4 shrink-0" />
             <span>Uitloggen</span>
@@ -179,10 +182,11 @@ export default function AppLayout() {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="flex h-14 items-center gap-3 border-b px-4 lg:hidden">
+        <header className="flex h-14 items-center gap-3 border-b px-4 lg:hidden bg-card">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
+          <img src={evaIcon} alt="Eva" className="h-6 w-6 rounded" />
           <span className="font-semibold text-sm">Eva AI Marketeer</span>
         </header>
 
