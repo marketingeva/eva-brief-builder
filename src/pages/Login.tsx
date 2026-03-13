@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import evaLogo from '@/assets/eva-logo.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -44,18 +45,16 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <span className="text-xl font-bold text-primary-foreground">E</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Eva AI Marketeer</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Internal marketing workspace</p>
+          <img src={evaLogo} alt="Eva" className="mx-auto mb-4 h-14 w-auto" />
+          <h1 className="text-2xl font-bold text-foreground">AI Marketeer</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Interne marketing workspace</p>
         </div>
 
-        <Card>
+        <Card className="shadow-lg border-border/60">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg">{isSignUp ? 'Create account' : 'Sign in'}</CardTitle>
+            <CardTitle className="text-lg">{isSignUp ? 'Account aanmaken' : 'Inloggen'}</CardTitle>
             <CardDescription>
-              {isSignUp ? 'Create your internal account' : 'Sign in to your workspace'}
+              {isSignUp ? 'Maak je interne account aan' : 'Log in op je workspace'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -65,14 +64,14 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@evazorg.nl"
+                  placeholder="jou@evazorg.nl"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Wachtwoord</Label>
                 <Input
                   id="password"
                   type="password"
@@ -84,16 +83,16 @@ export default function Login() {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Loading...' : isSignUp ? 'Create account' : 'Sign in'}
+                {loading ? 'Laden...' : isSignUp ? 'Account aanmaken' : 'Inloggen'}
               </Button>
             </form>
             <div className="mt-4 text-center">
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
               >
-                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+                {isSignUp ? 'Al een account? Log in' : 'Nog geen account? Registreer'}
               </button>
             </div>
           </CardContent>
