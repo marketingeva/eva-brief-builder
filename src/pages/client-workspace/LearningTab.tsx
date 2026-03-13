@@ -179,12 +179,6 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
           ? rawStatuses as FieldStatuses
           : {}
       );
-      const rawAnalysis = profileRes.data.website_analysis_data;
-      setAnalysisData(
-        rawAnalysis && typeof rawAnalysis === 'object' && !Array.isArray(rawAnalysis) && Object.keys(rawAnalysis).length > 0
-          ? rawAnalysis
-          : null
-      );
       setAnalyzedAt(profileRes.data.website_analyzed_at || null);
     }
 
