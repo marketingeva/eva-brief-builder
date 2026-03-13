@@ -14,7 +14,396 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      campaign_requests: {
+        Row: {
+          angle_preference: string | null
+          campaign_focus: string | null
+          channel: string | null
+          client_id: string
+          created_at: string
+          created_by: string
+          creative_type: string | null
+          id: string
+          internal_notes: string | null
+          objective: string | null
+          priority_audience: string | null
+          region: string | null
+          role_title: string | null
+          status: string | null
+          urgency: string | null
+        }
+        Insert: {
+          angle_preference?: string | null
+          campaign_focus?: string | null
+          channel?: string | null
+          client_id: string
+          created_at?: string
+          created_by: string
+          creative_type?: string | null
+          id?: string
+          internal_notes?: string | null
+          objective?: string | null
+          priority_audience?: string | null
+          region?: string | null
+          role_title?: string | null
+          status?: string | null
+          urgency?: string | null
+        }
+        Update: {
+          angle_preference?: string | null
+          campaign_focus?: string | null
+          channel?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          creative_type?: string | null
+          id?: string
+          internal_notes?: string | null
+          objective?: string | null
+          priority_audience?: string | null
+          region?: string | null
+          role_title?: string | null
+          status?: string | null
+          urgency?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_audience_insights: {
+        Row: {
+          client_id: string
+          description: string | null
+          id: string
+          objections: string[] | null
+          platform_notes: string | null
+          segment_name: string
+          triggers: string[] | null
+        }
+        Insert: {
+          client_id: string
+          description?: string | null
+          id?: string
+          objections?: string[] | null
+          platform_notes?: string | null
+          segment_name: string
+          triggers?: string[] | null
+        }
+        Update: {
+          client_id?: string
+          description?: string | null
+          id?: string
+          objections?: string[] | null
+          platform_notes?: string | null
+          segment_name?: string
+          triggers?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_audience_insights_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_brand_profiles: {
+        Row: {
+          client_id: string
+          employer_branding: string | null
+          id: string
+          tone_of_voice: string | null
+          updated_at: string
+          visual_style_notes: string | null
+          why_work_here: string | null
+          words_to_avoid: string[] | null
+          words_to_use: string[] | null
+        }
+        Insert: {
+          client_id: string
+          employer_branding?: string | null
+          id?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+          visual_style_notes?: string | null
+          why_work_here?: string | null
+          words_to_avoid?: string[] | null
+          words_to_use?: string[] | null
+        }
+        Update: {
+          client_id?: string
+          employer_branding?: string | null
+          id?: string
+          tone_of_voice?: string | null
+          updated_at?: string
+          visual_style_notes?: string | null
+          why_work_here?: string | null
+          words_to_avoid?: string[] | null
+          words_to_use?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_brand_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_learnings: {
+        Row: {
+          audience_resonance: string | null
+          campaign_date: string | null
+          client_feedback: string | null
+          client_id: string
+          concept: string | null
+          created_at: string
+          created_by: string | null
+          hook_used: string | null
+          id: string
+          recruiter_feedback: string | null
+          result: string | null
+          tags: string[] | null
+          visual_notes: string | null
+          what_failed: string | null
+          what_worked: string | null
+        }
+        Insert: {
+          audience_resonance?: string | null
+          campaign_date?: string | null
+          client_feedback?: string | null
+          client_id: string
+          concept?: string | null
+          created_at?: string
+          created_by?: string | null
+          hook_used?: string | null
+          id?: string
+          recruiter_feedback?: string | null
+          result?: string | null
+          tags?: string[] | null
+          visual_notes?: string | null
+          what_failed?: string | null
+          what_worked?: string | null
+        }
+        Update: {
+          audience_resonance?: string | null
+          campaign_date?: string | null
+          client_feedback?: string | null
+          client_id?: string
+          concept?: string | null
+          created_at?: string
+          created_by?: string | null
+          hook_used?: string | null
+          id?: string
+          recruiter_feedback?: string | null
+          result?: string | null
+          tags?: string[] | null
+          visual_notes?: string | null
+          what_failed?: string | null
+          what_worked?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_learnings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_locations: {
+        Row: {
+          city: string | null
+          client_id: string
+          id: string
+          is_commute_friendly: boolean
+          name: string
+          notes: string | null
+          region: string | null
+        }
+        Insert: {
+          city?: string | null
+          client_id: string
+          id?: string
+          is_commute_friendly?: boolean
+          name: string
+          notes?: string | null
+          region?: string | null
+        }
+        Update: {
+          city?: string | null
+          client_id?: string
+          id?: string
+          is_commute_friendly?: boolean
+          name?: string
+          notes?: string | null
+          region?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_locations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_roles: {
+        Row: {
+          audience_objections: string[] | null
+          audience_triggers: string[] | null
+          care_domain: string | null
+          client_id: string
+          description: string | null
+          id: string
+          qualifications: string[] | null
+          role_title: string
+        }
+        Insert: {
+          audience_objections?: string[] | null
+          audience_triggers?: string[] | null
+          care_domain?: string | null
+          client_id: string
+          description?: string | null
+          id?: string
+          qualifications?: string[] | null
+          role_title: string
+        }
+        Update: {
+          audience_objections?: string[] | null
+          audience_triggers?: string[] | null
+          care_domain?: string | null
+          client_id?: string
+          description?: string | null
+          id?: string
+          qualifications?: string[] | null
+          role_title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_roles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          care_type: string | null
+          created_at: string
+          description: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          care_type?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          care_type?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      generated_briefings: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          campaign_request_id: string
+          client_id: string
+          content: Json
+          created_at: string
+          id: string
+          status: string | null
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          campaign_request_id: string
+          client_id: string
+          content?: Json
+          created_at?: string
+          id?: string
+          status?: string | null
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          campaign_request_id?: string
+          client_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          status?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_briefings_campaign_request_id_fkey"
+            columns: ["campaign_request_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_briefings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
