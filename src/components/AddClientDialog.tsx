@@ -21,7 +21,7 @@ function generateSlug(name: string) {
 
 export default function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   const [name, setName] = useState('');
-  const [careType, setCareType] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
