@@ -45,7 +45,7 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
 
     toast({ title: 'Client aangemaakt', description: `${name} is toegevoegd.` });
     setName('');
-    setCareType('');
+    setWebsiteUrl('');
     setSaving(false);
     onOpenChange(false);
     onCreated(data);
