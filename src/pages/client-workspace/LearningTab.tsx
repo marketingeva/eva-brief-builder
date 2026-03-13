@@ -7,12 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Check, Save, Upload, Trash2, Plus, X, Building2, MapPin, Heart, Users, Star, Target, Palette, FileUp, MessageSquare } from 'lucide-react';
+import { Check, Save, Upload, Trash2, Plus, X, Building2, MapPin, Heart, Users, Star, Target, Palette, FileUp, MessageSquare, RefreshCw, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import StatusBadge, { type FieldStatus } from '@/components/learning/StatusBadge';
-import WebsiteAnalysisPanel from '@/components/learning/WebsiteAnalysisPanel';
 
 interface Props {
   clientId: string;
