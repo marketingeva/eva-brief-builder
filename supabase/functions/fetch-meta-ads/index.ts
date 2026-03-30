@@ -145,7 +145,7 @@ serve(async (req) => {
           id: adData.id,
           name: adData.name,
           status: adData.effective_status || adData.status,
-          image_url: imageUrl,
+          image_url: finalImageUrl,
           primary_text: primaryText,
           headline,
           description,

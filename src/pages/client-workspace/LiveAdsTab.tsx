@@ -543,6 +543,9 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
               <Eye className="h-4 w-4 text-primary" />
               Advertentie Preview
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Bekijk de details van deze advertentie
+            </DialogDescription>
           </DialogHeader>
 
           {adDetailLoading ? (
