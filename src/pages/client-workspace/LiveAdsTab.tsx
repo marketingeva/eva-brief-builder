@@ -661,14 +661,14 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
                   <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-medium text-muted-foreground">Destination</span>
                 </div>
-                {adDetail.link_url ? (
+                {adDetail.link_url && !/^https?:\/\/(www\.)?fb\.me\/?$/i.test(adDetail.link_url) ? (
                   <a href={adDetail.link_url} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-sm text-primary hover:underline break-all">
                     {adDetail.link_url}
                     <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                   </a>
                 ) : (
-                  <p className="text-xs text-muted-foreground italic">Geen bestemming ingesteld</p>
+                  <p className="text-xs text-muted-foreground italic">Geen bestemming beschikbaar</p>
                 )}
               </div>
 
