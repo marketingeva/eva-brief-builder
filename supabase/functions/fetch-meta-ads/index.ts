@@ -69,7 +69,7 @@ serve(async (req) => {
     if (adDetailId) {
       // Fetch ad with creative details and lead gen form
       const adRes = await fetch(
-        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url},lead_gen_form_id&access_token=${accessToken}`
+        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url}&access_token=${accessToken}`
       );
 
       if (!adRes.ok) {
@@ -124,7 +124,10 @@ serve(async (req) => {
 
       // Fetch lead gen form details if available
       let leadFormData = null;
-      const formId = adData.lead_gen_form_id || linkData.lead_gen_form_id;
+      const formId = linkData.call_to_action?.value?.lead_gen_form_id
+        || videoData.call_to_action?.value?.lead_gen_form_id
+        || objectStorySpec.template_data?.call_to_action?.value?.lead_gen_form_id
+        || null;
       if (formId) {
         try {
           const formRes = await fetch(
