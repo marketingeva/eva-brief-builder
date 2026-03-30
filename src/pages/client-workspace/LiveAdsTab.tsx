@@ -195,6 +195,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
   };
 
   const fetchAdDetail = async (adId: string) => {
+    setAdDetail(null);
     setAdDetailLoading(true);
     setShowAdDetail(true);
     try {
