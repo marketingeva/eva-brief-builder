@@ -151,7 +151,7 @@ serve(async (req) => {
           description,
           cta_type: ctaType,
           link_url: linkUrl,
-          creative_id: creative.id || null,
+          creative_id: c.id || null,
           lead_form: leadFormData ? {
             id: leadFormData.id,
             name: leadFormData.name,
