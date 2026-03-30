@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -10,8 +12,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Radio, RefreshCw, TrendingUp, DollarSign, Users, AlertTriangle, Activity,
-  ChevronRight, ChevronDown, ArrowLeft,
+  ChevronRight, ArrowLeft, CalendarDays,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -36,13 +41,19 @@ interface Props {
   clientName: string;
 }
 
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+function daysAgo(n: number) {
+  return new Date(Date.now() - n * 86400000).toISOString().split('T')[0];
+}
+
 export default function LiveAdsTab({ clientName }: Props) {
   const [campaigns, setCampaigns] = useState<MetricRow[]>([]);
   const [filteredCampaigns, setFilteredCampaigns] = useState<MetricRow[]>([]);
   const [adsets, setAdsets] = useState<MetricRow[]>([]);
   const [ads, setAds] = useState<MetricRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('last_7d');
   const [refreshing, setRefreshing] = useState(false);
   const [fetchedAt, setFetchedAt] = useState('');
   const [drillLevel, setDrillLevel] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
@@ -50,7 +61,12 @@ export default function LiveAdsTab({ clientName }: Props) {
   const [selectedAdset, setSelectedAdset] = useState<MetricRow | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
 
-  // Filter campaigns by client name (case-insensitive partial match)
+  // Date range state
+  const [dateMode, setDateMode] = useState<'preset' | 'custom'>('preset');
+  const [preset, setPreset] = useState('last_7d');
+  const [customSince, setCustomSince] = useState(daysAgo(7));
+  const [customUntil, setCustomUntil] = useState(todayStr());
+
   const filterByClient = useCallback((allCampaigns: MetricRow[]) => {
     const needle = clientName.toLowerCase().replace(/\s+/g, '');
     return allCampaigns.filter((c) => {
@@ -59,11 +75,18 @@ export default function LiveAdsTab({ clientName }: Props) {
     });
   }, [clientName]);
 
+  const buildBody = useCallback((extra: Record<string, any> = {}) => {
+    if (dateMode === 'custom') {
+      return { since: customSince, until: customUntil, ...extra };
+    }
+    return { dateRange: preset, ...extra };
+  }, [dateMode, preset, customSince, customUntil]);
+
   const fetchCampaigns = useCallback(async (showToast = false) => {
     try {
       setRefreshing(true);
       const { data: result, error } = await supabase.functions.invoke('fetch-meta-ads', {
-        body: { dateRange },
+        body: buildBody(),
       });
       if (error) throw error;
       const all = (result as any).campaigns || [];
@@ -81,7 +104,7 @@ export default function LiveAdsTab({ clientName }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateRange, filterByClient]);
+  }, [buildBody, filterByClient]);
 
   useEffect(() => {
     setLoading(true);
@@ -93,7 +116,7 @@ export default function LiveAdsTab({ clientName }: Props) {
     setSelectedCampaign(campaign);
     try {
       const { data: result, error } = await supabase.functions.invoke('fetch-meta-ads', {
-        body: { dateRange, campaignId: campaign.id },
+        body: buildBody({ campaignId: campaign.id }),
       });
       if (error) throw error;
       setAdsets((result as any).data || []);
@@ -111,7 +134,7 @@ export default function LiveAdsTab({ clientName }: Props) {
     setSelectedAdset(adset);
     try {
       const { data: result, error } = await supabase.functions.invoke('fetch-meta-ads', {
-        body: { dateRange, adsetId: adset.id },
+        body: buildBody({ adsetId: adset.id }),
       });
       if (error) throw error;
       setAds((result as any).data || []);
@@ -143,7 +166,6 @@ export default function LiveAdsTab({ clientName }: Props) {
   const totalSpend = currentData.reduce((s, c) => s + c.spend, 0);
   const totalLeads = currentData.reduce((s, c) => s + c.leads, 0);
   const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
-  const totalImpressions = currentData.reduce((s, c) => s + c.impressions, 0);
 
   const cplBadge = (cpl: number) => {
     if (cpl === 0) return <span className="text-xs text-muted-foreground">—</span>;
@@ -176,18 +198,29 @@ export default function LiveAdsTab({ clientName }: Props) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
             Live Ads — {clientName}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Alleen actieve campagnes met "{clientName}" in de naam
+            Actieve campagnes (on/off = on) met "{clientName}" in de naam
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Select value={dateRange} onValueChange={setDateRange}>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date range controls */}
+          <Select
+            value={dateMode === 'preset' ? preset : 'custom'}
+            onValueChange={(v) => {
+              if (v === 'custom') {
+                setDateMode('custom');
+              } else {
+                setDateMode('preset');
+                setPreset(v);
+              }
+            }}
+          >
             <SelectTrigger className="w-[160px] h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
@@ -195,8 +228,48 @@ export default function LiveAdsTab({ clientName }: Props) {
               <SelectItem value="today">Vandaag</SelectItem>
               <SelectItem value="last_7d">Laatste 7 dagen</SelectItem>
               <SelectItem value="last_30d">Laatste 30 dagen</SelectItem>
+              <SelectItem value="custom">Aangepaste periode</SelectItem>
             </SelectContent>
           </Select>
+
+          {dateMode === 'custom' && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {customSince} — {customUntil}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-4 space-y-3" align="end">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Van</Label>
+                  <Input
+                    type="date"
+                    value={customSince}
+                    onChange={(e) => setCustomSince(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tot</Label>
+                  <Input
+                    type="date"
+                    value={customUntil}
+                    onChange={(e) => setCustomUntil(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full h-8 text-xs"
+                  onClick={() => fetchCampaigns(true)}
+                >
+                  Toepassen
+                </Button>
+              </PopoverContent>
+            </Popover>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -210,7 +283,7 @@ export default function LiveAdsTab({ clientName }: Props) {
         </div>
       </div>
 
-      {/* Summary cards — always based on current view */}
+      {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5">
@@ -257,7 +330,7 @@ export default function LiveAdsTab({ clientName }: Props) {
         </Card>
       </div>
 
-      {/* Breadcrumb + back */}
+      {/* Breadcrumb */}
       {drillLevel !== 'campaigns' && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Button variant="ghost" size="sm" onClick={goBack} className="h-7 text-xs gap-1 px-2">
@@ -274,7 +347,7 @@ export default function LiveAdsTab({ clientName }: Props) {
             <>
               <ChevronRight className="h-3 w-3" />
               <span
-                className={`${drillLevel === 'ads' ? 'cursor-pointer hover:text-foreground transition-colors' : 'text-foreground font-medium'}`}
+                className={drillLevel === 'ads' ? 'cursor-pointer hover:text-foreground transition-colors' : 'text-foreground font-medium'}
                 onClick={() => { if (drillLevel === 'ads') { setDrillLevel('adsets'); setSelectedAdset(null); } }}
               >
                 {selectedCampaign.name}
@@ -290,7 +363,7 @@ export default function LiveAdsTab({ clientName }: Props) {
         </div>
       )}
 
-      {/* Data table */}
+      {/* Table */}
       {drillLoading ? (
         <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
       ) : currentData.length > 0 ? (
@@ -348,6 +421,9 @@ export default function LiveAdsTab({ clientName }: Props) {
             <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
             <p className="text-sm font-medium text-muted-foreground">
               Geen {drillLevel === 'campaigns' ? `actieve campagnes met "${clientName}"` : drillLevel === 'adsets' ? 'actieve advertentiesets' : 'actieve advertenties'} gevonden
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Alleen items waarvan de on/off-schakelaar op "on" staat worden getoond.
             </p>
           </CardContent>
         </Card>
