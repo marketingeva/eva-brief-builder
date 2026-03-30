@@ -44,6 +44,7 @@ serve(async (req) => {
     const customUntil = body.until || null;
     const campaignId = body.campaignId || null;
     const adsetId = body.adsetId || null;
+    const adDetailId = body.adDetailId || null;
 
     let since: string;
     let until: string;
@@ -64,7 +65,106 @@ serve(async (req) => {
     const actId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
     const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
 
-    // Drill-down: ads under an adset
+    // ── Ad detail: fetch creative info (image, text, CTA, lead form) ──
+    if (adDetailId) {
+      // Fetch ad with creative details and lead gen form
+      const adRes = await fetch(
+        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url},lead_gen_form_id&access_token=${accessToken}`
+      );
+
+      if (!adRes.ok) {
+        const err = await adRes.text();
+        console.error("Meta ad detail error:", err);
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch ad detail", detail: err }),
+          { status: adRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const adData = await adRes.json();
+      const creative = adData.creative || {};
+      const objectStorySpec = creative.object_story_spec || {};
+      const linkData = objectStorySpec.link_data || {};
+      const videoData = objectStorySpec.video_data || {};
+
+      // Extract the image - try multiple sources
+      const imageUrl = creative.image_url
+        || creative.thumbnail_url
+        || linkData.picture
+        || linkData.image_hash
+        || videoData.image_url
+        || null;
+
+      // Extract text
+      const primaryText = creative.body
+        || linkData.message
+        || videoData.message
+        || null;
+
+      // Extract headline
+      const headline = creative.title
+        || linkData.name
+        || videoData.title
+        || null;
+
+      // Extract description
+      const description = linkData.description || videoData.link_description || null;
+
+      // Extract CTA
+      const ctaType = creative.call_to_action_type
+        || linkData.call_to_action?.type
+        || videoData.call_to_action?.type
+        || null;
+
+      // Extract link URL
+      const linkUrl = creative.link_url
+        || linkData.link
+        || videoData.call_to_action?.value?.link
+        || null;
+
+      // Fetch lead gen form details if available
+      let leadFormData = null;
+      const formId = adData.lead_gen_form_id || linkData.lead_gen_form_id;
+      if (formId) {
+        try {
+          const formRes = await fetch(
+            `${META_BASE}/${formId}?fields=id,name,status,questions,privacy_policy_url,thank_you_page&access_token=${accessToken}`
+          );
+          if (formRes.ok) {
+            leadFormData = await formRes.json();
+          }
+        } catch (e) {
+          console.error("Error fetching lead form:", e);
+        }
+      }
+
+      return new Response(JSON.stringify({
+        type: "ad_detail",
+        data: {
+          id: adData.id,
+          name: adData.name,
+          status: adData.effective_status || adData.status,
+          image_url: imageUrl,
+          primary_text: primaryText,
+          headline,
+          description,
+          cta_type: ctaType,
+          link_url: linkUrl,
+          creative_id: creative.id || null,
+          lead_form: leadFormData ? {
+            id: leadFormData.id,
+            name: leadFormData.name,
+            status: leadFormData.status,
+            questions: leadFormData.questions || [],
+          } : null,
+        },
+        fetched_at: new Date().toISOString(),
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Drill-down: ads under an adset ──
     if (adsetId) {
       const [adsRes, insightsRes] = await Promise.all([
         fetch(`${META_BASE}/${adsetId}/ads?fields=id,name,status,effective_status,configured_status&limit=100&access_token=${accessToken}`),
@@ -76,7 +176,6 @@ serve(async (req) => {
       const insMap = new Map();
       for (const i of (insData.data || [])) insMap.set(i.ad_id, i);
 
-      // Only include ads where configured_status or effective_status is ACTIVE (on/off toggle = on)
       const ads = (adsData.data || [])
         .filter((a: any) => a.configured_status === "ACTIVE" || a.effective_status === "ACTIVE")
         .map((a: any) => {
@@ -89,7 +188,7 @@ serve(async (req) => {
       });
     }
 
-    // Drill-down: adsets under a campaign
+    // ── Drill-down: adsets under a campaign ──
     if (campaignId) {
       const [adsetsRes, insightsRes] = await Promise.all([
         fetch(`${META_BASE}/${campaignId}/adsets?fields=id,name,status,effective_status,configured_status,daily_budget,lifetime_budget&limit=100&access_token=${accessToken}`),
@@ -117,7 +216,7 @@ serve(async (req) => {
       });
     }
 
-    // Default: campaigns - only where configured_status (on/off toggle) is ACTIVE
+    // ── Default: campaigns ──
     const [campaignsRes, insightsRes] = await Promise.all([
       fetch(`${META_BASE}/${actId}/campaigns?fields=id,name,status,effective_status,configured_status,objective,daily_budget,lifetime_budget&limit=100&access_token=${accessToken}`),
       fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,actions,cost_per_action_type&time_range=${timeRange}&level=campaign&limit=100&access_token=${accessToken}`),
@@ -138,7 +237,6 @@ serve(async (req) => {
     const insightsMap = new Map();
     for (const ins of (insightsData.data || [])) insightsMap.set(ins.campaign_id, ins);
 
-    // Filter: only campaigns where the on/off toggle is ON (configured_status === ACTIVE)
     const campaigns = (campaignsData.data || [])
       .filter((c: any) => c.configured_status === "ACTIVE")
       .map((c: any) => {
