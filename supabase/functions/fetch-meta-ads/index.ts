@@ -124,7 +124,10 @@ serve(async (req) => {
 
       // Fetch lead gen form details if available
       let leadFormData = null;
-      const formId = adData.lead_gen_form_id || linkData.lead_gen_form_id;
+      const formId = linkData.call_to_action?.value?.lead_gen_form_id
+        || videoData.call_to_action?.value?.lead_gen_form_id
+        || objectStorySpec.template_data?.call_to_action?.value?.lead_gen_form_id
+        || null;
       if (formId) {
         try {
           const formRes = await fetch(
