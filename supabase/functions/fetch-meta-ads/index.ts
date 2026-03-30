@@ -83,7 +83,6 @@ serve(async (req) => {
 
       const adData = await adRes.json();
       const c = adData.creative ?? {};
-      // Check both creative-level and adcreatives-level object_story_spec
       const ac0 = adData.adcreatives?.data?.[0] ?? {};
       const s = c.object_story_spec ?? ac0.object_story_spec ?? {};
       const l = s.link_data ?? {};
@@ -98,19 +97,20 @@ serve(async (req) => {
         ac0.image_url,
       ].filter(Boolean);
       const hiRes = candidates.find((u: string) => !/p\d+x\d+/.test(u));
-      const imageUrl = hiRes ?? candidates[0] ?? null;
+      let finalImageUrl = hiRes ?? candidates[0] ?? null;
 
-      // If image_url is still low-res and we have an image_hash, try resolving it
-      let finalImageUrl = imageUrl;
-      if (finalImageUrl && /p\d+x\d+/.test(finalImageUrl) && l.image_hash) {
+      // If no image URL found but we have image hashes (from asset_feed_spec or link_data), resolve via adimages API
+      const imageHash = l.image_hash ?? afs.images?.[0]?.hash ?? null;
+      if ((!finalImageUrl || /p\d+x\d+/.test(finalImageUrl)) && imageHash) {
         try {
           const hashRes = await fetch(
-            `${META_BASE}/${actId}/adimages?hashes=["${l.image_hash}"]&fields=url_128,url&access_token=${accessToken}`
+            `${META_BASE}/${actId}/adimages?hashes=["${imageHash}"]&fields=url_128,url&access_token=${accessToken}`
           );
           if (hashRes.ok) {
             const hashData = await hashRes.json();
             const imgEntry = hashData.data?.[0] || Object.values(hashData.images || {})[0];
             if (imgEntry?.url) finalImageUrl = imgEntry.url;
+            else if (imgEntry?.url_128) finalImageUrl = imgEntry.url_128;
           } else {
             await hashRes.text();
           }
@@ -133,11 +133,12 @@ serve(async (req) => {
         ?? afs.link_urls?.[0]?.website_url ?? ac0.link_url ?? null;
       const linkUrl = rawLinkUrl && /^https?:\/\/(www\.)?fb\.me\/?$/i.test(rawLinkUrl) ? null : rawLinkUrl;
 
-      // Lead form ID from CTA value
+      // Lead form ID from CTA value — check object_story_spec AND asset_feed_spec
       let leadFormData = null;
       const formId = l.call_to_action?.value?.lead_gen_form_id
         ?? v.call_to_action?.value?.lead_gen_form_id
         ?? t.call_to_action?.value?.lead_gen_form_id
+        ?? afs.call_to_actions?.[0]?.value?.lead_gen_form_id
         ?? null;
       if (formId) {
         try {
