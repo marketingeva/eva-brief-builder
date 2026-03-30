@@ -69,7 +69,7 @@ serve(async (req) => {
     if (adDetailId) {
       // Fetch ad with creative details and lead gen form
       const adRes = await fetch(
-        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url},lead_gen_form_id&access_token=${accessToken}`
+        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url}&access_token=${accessToken}`
       );
 
       if (!adRes.ok) {
