@@ -11,98 +11,154 @@ import {
 } from '@/components/ui/select';
 import {
   Radio, RefreshCw, TrendingUp, DollarSign, Users, AlertTriangle, Activity,
+  ChevronRight, ChevronDown, ArrowLeft,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const CPL_THRESHOLD = 50; // €50
+const CPL_THRESHOLD = 50;
 
-interface Campaign {
+interface MetricRow {
   id: string;
   name: string;
   status: string;
-  objective: string;
-  daily_budget: number | null;
-  lifetime_budget: number | null;
   spend: number;
   impressions: number;
   clicks: number;
-  reach: number;
   ctr: number;
   leads: number;
   cpl: number;
+  daily_budget?: number | null;
+  objective?: string;
 }
 
-interface MetaAdsData {
-  summary: {
-    active_campaigns: number;
-    total_campaigns: number;
-    total_spend: number;
-    total_leads: number;
-    avg_cpl: number;
-  };
-  campaigns: Campaign[];
-  date_range: { since: string; until: string };
-  fetched_at: string;
+interface Props {
+  clientName: string;
 }
 
-export default function LiveAdsTab() {
-  const [data, setData] = useState<MetaAdsData | null>(null);
+export default function LiveAdsTab({ clientName }: Props) {
+  const [campaigns, setCampaigns] = useState<MetricRow[]>([]);
+  const [filteredCampaigns, setFilteredCampaigns] = useState<MetricRow[]>([]);
+  const [adsets, setAdsets] = useState<MetricRow[]>([]);
+  const [ads, setAds] = useState<MetricRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('last_7d');
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchedAt, setFetchedAt] = useState('');
+  const [drillLevel, setDrillLevel] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
+  const [selectedCampaign, setSelectedCampaign] = useState<MetricRow | null>(null);
+  const [selectedAdset, setSelectedAdset] = useState<MetricRow | null>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
 
-  const fetchData = useCallback(async (showToast = false) => {
+  // Filter campaigns by client name (case-insensitive partial match)
+  const filterByClient = useCallback((allCampaigns: MetricRow[]) => {
+    const needle = clientName.toLowerCase().replace(/\s+/g, '');
+    return allCampaigns.filter((c) => {
+      const haystack = c.name.toLowerCase().replace(/\s+/g, '');
+      return haystack.includes(needle);
+    });
+  }, [clientName]);
+
+  const fetchCampaigns = useCallback(async (showToast = false) => {
     try {
       setRefreshing(true);
       const { data: result, error } = await supabase.functions.invoke('fetch-meta-ads', {
         body: { dateRange },
       });
-
       if (error) throw error;
-      setData(result as MetaAdsData);
+      const all = (result as any).campaigns || [];
+      setCampaigns(all);
+      setFilteredCampaigns(filterByClient(all));
+      setFetchedAt((result as any).fetched_at || '');
+      setDrillLevel('campaigns');
+      setSelectedCampaign(null);
+      setSelectedAdset(null);
       if (showToast) toast.success('Data vernieuwd');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching Meta ads:', err);
       toast.error('Kon Meta Ads data niet ophalen');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateRange]);
+  }, [dateRange, filterByClient]);
 
   useEffect(() => {
     setLoading(true);
-    fetchData();
-  }, [fetchData]);
+    fetchCampaigns();
+  }, [fetchCampaigns]);
+
+  const drillIntoAdsets = async (campaign: MetricRow) => {
+    setDrillLoading(true);
+    setSelectedCampaign(campaign);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('fetch-meta-ads', {
+        body: { dateRange, campaignId: campaign.id },
+      });
+      if (error) throw error;
+      setAdsets((result as any).data || []);
+      setDrillLevel('adsets');
+    } catch (err) {
+      console.error('Error fetching adsets:', err);
+      toast.error('Kon advertentiesets niet ophalen');
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
+  const drillIntoAds = async (adset: MetricRow) => {
+    setDrillLoading(true);
+    setSelectedAdset(adset);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('fetch-meta-ads', {
+        body: { dateRange, adsetId: adset.id },
+      });
+      if (error) throw error;
+      setAds((result as any).data || []);
+      setDrillLevel('ads');
+    } catch (err) {
+      console.error('Error fetching ads:', err);
+      toast.error('Kon advertenties niet ophalen');
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
+  const goBack = () => {
+    if (drillLevel === 'ads') {
+      setDrillLevel('adsets');
+      setSelectedAdset(null);
+    } else if (drillLevel === 'adsets') {
+      setDrillLevel('campaigns');
+      setSelectedCampaign(null);
+    }
+  };
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n);
-
   const fmtNum = (n: number) => new Intl.NumberFormat('nl-NL').format(n);
+  const fmtPct = (n: number) => `${n.toFixed(2)}%`;
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, { label: string; cls: string }> = {
-      ACTIVE: { label: 'Actief', cls: 'bg-green-100 text-green-800 border-green-200' },
-      PAUSED: { label: 'Gepauzeerd', cls: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-      ARCHIVED: { label: 'Gearchiveerd', cls: 'bg-muted text-muted-foreground' },
-    };
-    const s = map[status] || { label: status, cls: 'bg-muted text-muted-foreground' };
-    return <Badge className={`text-[10px] font-medium ${s.cls}`}>{s.label}</Badge>;
-  };
+  const currentData = drillLevel === 'campaigns' ? filteredCampaigns : drillLevel === 'adsets' ? adsets : ads;
+  const totalSpend = currentData.reduce((s, c) => s + c.spend, 0);
+  const totalLeads = currentData.reduce((s, c) => s + c.leads, 0);
+  const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
+  const totalImpressions = currentData.reduce((s, c) => s + c.impressions, 0);
 
   const cplBadge = (cpl: number) => {
     if (cpl === 0) return <span className="text-xs text-muted-foreground">—</span>;
     if (cpl > CPL_THRESHOLD) {
       return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive">
           <AlertTriangle className="h-3 w-3" />
           {fmt(cpl)}
         </span>
       );
     }
-    return <span className="text-xs font-medium text-green-700">{fmt(cpl)}</span>;
+    return <span className="text-xs font-medium text-success">{fmt(cpl)}</span>;
   };
+
+  const levelLabel = drillLevel === 'campaigns' ? 'Campagnes' : drillLevel === 'adsets' ? 'Advertentiesets' : 'Advertenties';
 
   if (loading) {
     return (
@@ -124,10 +180,10 @@ export default function LiveAdsTab() {
         <div>
           <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
-            Live Ads
+            Live Ads — {clientName}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Real-time campagne prestaties via Meta Ads
+            Alleen actieve campagnes met "{clientName}" in de naam
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -144,7 +200,7 @@ export default function LiveAdsTab() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchData(true)}
+            onClick={() => fetchCampaigns(true)}
             disabled={refreshing}
             className="h-8 text-xs gap-1.5"
           >
@@ -154,123 +210,152 @@ export default function LiveAdsTab() {
         </div>
       </div>
 
-      {/* Summary cards */}
-      {data && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">Actieve campagnes</p>
-                <Activity className="h-4 w-4 text-primary" />
-              </div>
-              <p className="text-2xl font-bold mt-1">{data.summary.active_campaigns}</p>
-              <p className="text-[10px] text-muted-foreground">{data.summary.total_campaigns} totaal</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">Totale spend</p>
-                <DollarSign className="h-4 w-4 text-primary" />
-              </div>
-              <p className="text-2xl font-bold mt-1">{fmt(data.summary.total_spend)}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {data.date_range.since} — {data.date_range.until}
+      {/* Summary cards — always based on current view */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Actief ({levelLabel})</p>
+              <Activity className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-2xl font-bold mt-1">{currentData.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Totale spend</p>
+              <DollarSign className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-2xl font-bold mt-1">{fmt(totalSpend)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Gemiddelde CPL</p>
+              <TrendingUp className={`h-4 w-4 ${avgCpl > CPL_THRESHOLD ? 'text-destructive' : 'text-success'}`} />
+            </div>
+            <p className={`text-2xl font-bold mt-1 ${avgCpl > CPL_THRESHOLD ? 'text-destructive' : ''}`}>
+              {avgCpl > 0 ? fmt(avgCpl) : '—'}
+            </p>
+            {avgCpl > CPL_THRESHOLD && (
+              <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
+                <AlertTriangle className="h-3 w-3" /> Boven €{CPL_THRESHOLD}
               </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">Gemiddelde CPL</p>
-                <TrendingUp className={`h-4 w-4 ${data.summary.avg_cpl > CPL_THRESHOLD ? 'text-red-500' : 'text-green-600'}`} />
-              </div>
-              <p className={`text-2xl font-bold mt-1 ${data.summary.avg_cpl > CPL_THRESHOLD ? 'text-red-600' : ''}`}>
-                {data.summary.avg_cpl > 0 ? fmt(data.summary.avg_cpl) : '—'}
-              </p>
-              {data.summary.avg_cpl > CPL_THRESHOLD && (
-                <p className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5">
-                  <AlertTriangle className="h-3 w-3" /> Boven drempelwaarde (€{CPL_THRESHOLD})
-                </p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">Totale leads</p>
-                <Users className="h-4 w-4 text-primary" />
-              </div>
-              <p className="text-2xl font-bold mt-1">{fmtNum(data.summary.total_leads)}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {data.summary.total_leads > 0
-                  ? `${fmt(data.summary.total_spend / data.summary.total_leads)} per lead`
-                  : 'Geen leads in periode'}
-              </p>
-            </CardContent>
-          </Card>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Totale leads</p>
+              <Users className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-2xl font-bold mt-1">{fmtNum(totalLeads)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Breadcrumb + back */}
+      {drillLevel !== 'campaigns' && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={goBack} className="h-7 text-xs gap-1 px-2">
+            <ArrowLeft className="h-3 w-3" /> Terug
+          </Button>
+          <span className="text-muted-foreground/50">|</span>
+          <span
+            className="cursor-pointer hover:text-foreground transition-colors"
+            onClick={() => { setDrillLevel('campaigns'); setSelectedCampaign(null); setSelectedAdset(null); }}
+          >
+            Campagnes
+          </span>
+          {selectedCampaign && (
+            <>
+              <ChevronRight className="h-3 w-3" />
+              <span
+                className={`${drillLevel === 'ads' ? 'cursor-pointer hover:text-foreground transition-colors' : 'text-foreground font-medium'}`}
+                onClick={() => { if (drillLevel === 'ads') { setDrillLevel('adsets'); setSelectedAdset(null); } }}
+              >
+                {selectedCampaign.name}
+              </span>
+            </>
+          )}
+          {selectedAdset && (
+            <>
+              <ChevronRight className="h-3 w-3" />
+              <span className="text-foreground font-medium">{selectedAdset.name}</span>
+            </>
+          )}
         </div>
       )}
 
-      {/* Campaigns table */}
-      {data && data.campaigns.length > 0 && (
+      {/* Data table */}
+      {drillLoading ? (
+        <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+      ) : currentData.length > 0 ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Campagnes</CardTitle>
+            <CardTitle className="text-sm font-semibold">{levelLabel}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs">Campagne</TableHead>
+                  <TableHead className="text-xs">Naam</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Budget</TableHead>
                   <TableHead className="text-xs text-right">Spend</TableHead>
-                  <TableHead className="text-xs text-right">Impressies</TableHead>
-                  <TableHead className="text-xs text-right">Clicks</TableHead>
                   <TableHead className="text-xs text-right">Leads</TableHead>
-                  <TableHead className="text-xs text-right">CPL</TableHead>
+                  <TableHead className="text-xs text-right">Gem. CPL</TableHead>
+                  <TableHead className="text-xs text-right">CTR</TableHead>
+                  <TableHead className="text-xs text-right">Impressies</TableHead>
+                  {drillLevel !== 'ads' && <TableHead className="text-xs w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.campaigns.map((c) => (
-                  <TableRow key={c.id} className={c.cpl > CPL_THRESHOLD ? 'bg-red-50/50' : ''}>
-                    <TableCell className="text-xs font-medium max-w-[200px] truncate">
-                      {c.name}
+                {currentData.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className={`${row.cpl > CPL_THRESHOLD ? 'bg-destructive/5' : ''} ${drillLevel !== 'ads' ? 'cursor-pointer hover:bg-muted/70' : ''}`}
+                    onClick={() => {
+                      if (drillLevel === 'campaigns') drillIntoAdsets(row);
+                      else if (drillLevel === 'adsets') drillIntoAds(row);
+                    }}
+                  >
+                    <TableCell className="text-xs font-medium max-w-[220px] truncate">{row.name}</TableCell>
+                    <TableCell>
+                      <Badge className="text-[10px] font-medium bg-success/15 text-success border-success/20">Actief</Badge>
                     </TableCell>
-                    <TableCell>{statusBadge(c.status)}</TableCell>
-                    <TableCell className="text-xs text-right text-muted-foreground">
-                      {c.daily_budget ? `${fmt(c.daily_budget)}/dag` : c.lifetime_budget ? fmt(c.lifetime_budget) : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium">{fmt(c.spend)}</TableCell>
-                    <TableCell className="text-xs text-right">{fmtNum(c.impressions)}</TableCell>
-                    <TableCell className="text-xs text-right">{fmtNum(c.clicks)}</TableCell>
-                    <TableCell className="text-xs text-right font-medium">{c.leads > 0 ? fmtNum(c.leads) : '—'}</TableCell>
-                    <TableCell className="text-right">{cplBadge(c.cpl)}</TableCell>
+                    <TableCell className="text-xs text-right font-medium">{fmt(row.spend)}</TableCell>
+                    <TableCell className="text-xs text-right font-medium">{row.leads > 0 ? fmtNum(row.leads) : '—'}</TableCell>
+                    <TableCell className="text-right">{cplBadge(row.cpl)}</TableCell>
+                    <TableCell className="text-xs text-right">{fmtPct(row.ctr)}</TableCell>
+                    <TableCell className="text-xs text-right">{fmtNum(row.impressions)}</TableCell>
+                    {drillLevel !== 'ads' && (
+                      <TableCell className="text-right">
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
-      )}
-
-      {data && data.campaigns.length === 0 && (
+      ) : (
         <Card>
           <CardContent className="p-12 text-center">
             <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
-            <p className="text-sm font-medium text-muted-foreground">Geen campagnes gevonden</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Er zijn geen campagnes gevonden in het gekoppelde Meta Ads account voor deze periode.
+            <p className="text-sm font-medium text-muted-foreground">
+              Geen {drillLevel === 'campaigns' ? `actieve campagnes met "${clientName}"` : drillLevel === 'adsets' ? 'actieve advertentiesets' : 'actieve advertenties'} gevonden
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Footer info */}
-      {data && (
+      {fetchedAt && (
         <p className="text-[10px] text-muted-foreground text-right">
-          Laatst opgehaald: {new Date(data.fetched_at).toLocaleString('nl-NL')}
+          Laatst opgehaald: {new Date(fetchedAt).toLocaleString('nl-NL')}
         </p>
       )}
     </div>
