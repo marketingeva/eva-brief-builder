@@ -69,7 +69,7 @@ serve(async (req) => {
     if (adDetailId) {
       // Fetch ad with nested creative fields via field expansion
       const adRes = await fetch(
-        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,image_url,object_story_spec{link_data{message,name,description,picture,image_hash,link,call_to_action},video_data{message,title,image_url,link_description,call_to_action},template_data{message,name,call_to_action}}}&access_token=${accessToken}`
+        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,full_picture,creative{id,image_url,asset_feed_spec,object_story_spec{link_data{message,name,description,picture,image_hash,link,call_to_action},video_data{message,title,image_url,link_description,call_to_action},template_data{message,name,call_to_action}},effective_object_story_id},adcreatives{body,image_url,link_url,object_story_spec,asset_feed_spec}&access_token=${accessToken}`
       );
 
       if (!adRes.ok) {
