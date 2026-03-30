@@ -82,6 +82,7 @@ serve(async (req) => {
       }
 
       const adData = await adRes.json();
+      console.log("RAW META AD RESPONSE:", JSON.stringify({ creative: adData.creative, adcreatives: adData.adcreatives }, null, 2));
       const c = adData.creative ?? {};
       // Check both creative-level and adcreatives-level object_story_spec
       const ac0 = adData.adcreatives?.data?.[0] ?? {};
