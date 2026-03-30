@@ -653,12 +653,22 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
                 ) : (
                   <p className="text-xs text-muted-foreground italic">Geen CTA ingesteld</p>
                 )}
-                {adDetail.link_url && (
+              </div>
+
+              {/* Destination */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">Destination</span>
+                </div>
+                {adDetail.link_url ? (
                   <a href={adDetail.link_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[10px] text-primary mt-1 hover:underline">
-                    {adDetail.link_url.length > 50 ? adDetail.link_url.substring(0, 50) + '...' : adDetail.link_url}
-                    <ExternalLink className="h-2.5 w-2.5" />
+                    className="flex items-center gap-1.5 text-sm text-primary hover:underline break-all">
+                    {adDetail.link_url}
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                   </a>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Geen bestemming ingesteld</p>
                 )}
               </div>
 
