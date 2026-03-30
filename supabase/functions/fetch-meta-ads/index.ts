@@ -67,9 +67,9 @@ serve(async (req) => {
 
     // ── Ad detail: fetch creative info (image, text, CTA, lead form) ──
     if (adDetailId) {
-      // Fetch ad with creative details
+      // Fetch ad with nested creative fields via field expansion
       const adRes = await fetch(
-        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url}&access_token=${accessToken}`
+        `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,image_url,object_story_spec{link_data{message,name,description,picture,image_hash,link,call_to_action},video_data{message,title,image_url,link_description,call_to_action},template_data{message,name,call_to_action}}}&access_token=${accessToken}`
       );
 
       if (!adRes.ok) {
@@ -82,76 +82,48 @@ serve(async (req) => {
       }
 
       const adData = await adRes.json();
-      const creative = adData.creative || {};
-      const objectStorySpec = creative.object_story_spec || {};
-      const linkData = objectStorySpec.link_data || {};
-      const videoData = objectStorySpec.video_data || {};
+      const c = adData.creative ?? {};
+      const s = c.object_story_spec ?? {};
+      const l = s.link_data ?? {};
+      const v = s.video_data ?? {};
+      const t = s.template_data ?? {};
 
-      // Try to get full-resolution image from the creative endpoint
-      let fullImageUrl: string | null = null;
-      if (creative.id) {
+      // Pick the best image - skip tiny preview URLs (p64x64 etc.)
+      const candidates = [c.image_url, l.picture, v.image_url].filter(Boolean);
+      const hiRes = candidates.find((u: string) => !/p\d+x\d+/.test(u));
+      const imageUrl = hiRes ?? candidates[0] ?? null;
+
+      // If image_url is still low-res and we have an image_hash, try resolving it
+      let finalImageUrl = imageUrl;
+      if (finalImageUrl && /p\d+x\d+/.test(finalImageUrl) && l.image_hash) {
         try {
-          const creativeRes = await fetch(
-            `${META_BASE}/${creative.id}?fields=image_url,thumbnail_url,object_story_spec&access_token=${accessToken}`
+          const hashRes = await fetch(
+            `${META_BASE}/${actId}/adimages?hashes=["${l.image_hash}"]&fields=url_128,url&access_token=${accessToken}`
           );
-          if (creativeRes.ok) {
-            const creativeData = await creativeRes.json();
-            fullImageUrl = creativeData.image_url || null;
-            // Also try full_picture from link_data
-            const cLinkData = creativeData.object_story_spec?.link_data || {};
-            if (!fullImageUrl && cLinkData.image_hash) {
-              // image_hash can't be used directly, but picture should be available
-              fullImageUrl = cLinkData.picture || null;
-            }
+          if (hashRes.ok) {
+            const hashData = await hashRes.json();
+            const imgEntry = hashData.data?.[0] || Object.values(hashData.images || {})[0];
+            if (imgEntry?.url) finalImageUrl = imgEntry.url;
           } else {
-            await creativeRes.text(); // consume body
+            await hashRes.text();
           }
         } catch (e) {
-          console.error("Error fetching creative image:", e);
+          console.error("Error resolving image_hash:", e);
         }
       }
 
-      // Extract the image - prefer full-resolution, then try multiple sources
-      const imageUrl = fullImageUrl
-        || linkData.picture
-        || creative.image_url
-        || videoData.image_url
-        || creative.thumbnail_url
-        || null;
+      const primaryText = l.message ?? v.message ?? t.message ?? null;
+      const headline = l.name ?? v.title ?? t.name ?? null;
+      const description = l.description ?? v.link_description ?? null;
+      const ctaType = l.call_to_action?.type ?? v.call_to_action?.type ?? t.call_to_action?.type ?? null;
+      const linkUrl = l.link ?? v.call_to_action?.value?.link ?? null;
 
-      // Extract text from object_story_spec (most reliable source)
-      const primaryText = linkData.message
-        || videoData.message
-        || creative.body
-        || null;
-
-      // Extract headline
-      const headline = linkData.name
-        || videoData.title
-        || creative.title
-        || null;
-
-      // Extract description
-      const description = linkData.description || videoData.link_description || null;
-
-      // Extract CTA
-      const ctaType = linkData.call_to_action?.type
-        || videoData.call_to_action?.type
-        || creative.call_to_action_type
-        || null;
-
-      // Extract link URL
-      const linkUrl = linkData.link
-        || videoData.call_to_action?.value?.link
-        || creative.link_url
-        || null;
-
-      // Fetch lead gen form details if available
+      // Lead form ID from CTA value
       let leadFormData = null;
-      const formId = linkData.call_to_action?.value?.lead_gen_form_id
-        || videoData.call_to_action?.value?.lead_gen_form_id
-        || objectStorySpec.template_data?.call_to_action?.value?.lead_gen_form_id
-        || null;
+      const formId = l.call_to_action?.value?.lead_gen_form_id
+        ?? v.call_to_action?.value?.lead_gen_form_id
+        ?? t.call_to_action?.value?.lead_gen_form_id
+        ?? null;
       if (formId) {
         try {
           const formRes = await fetch(
@@ -173,7 +145,7 @@ serve(async (req) => {
           id: adData.id,
           name: adData.name,
           status: adData.effective_status || adData.status,
-          image_url: imageUrl,
+          image_url: finalImageUrl,
           primary_text: primaryText,
           headline,
           description,

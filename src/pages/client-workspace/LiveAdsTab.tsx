@@ -16,7 +16,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Radio, RefreshCw, TrendingUp, DollarSign, Users, AlertTriangle, Activity,
@@ -195,6 +195,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
   };
 
   const fetchAdDetail = async (adId: string) => {
+    setAdDetail(null);
     setAdDetailLoading(true);
     setShowAdDetail(true);
     try {
@@ -542,6 +543,9 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
               <Eye className="h-4 w-4 text-primary" />
               Advertentie Preview
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Bekijk de details van deze advertentie
+            </DialogDescription>
           </DialogHeader>
 
           {adDetailLoading ? (
