@@ -67,7 +67,7 @@ serve(async (req) => {
 
     // ── Ad detail: fetch creative info (image, text, CTA, lead form) ──
     if (adDetailId) {
-      // Fetch ad with creative details and lead gen form
+      // Fetch ad with creative details
       const adRes = await fetch(
         `${META_BASE}/${adDetailId}?fields=id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,call_to_action_type,link_url}&access_token=${accessToken}`
       );
@@ -87,39 +87,63 @@ serve(async (req) => {
       const linkData = objectStorySpec.link_data || {};
       const videoData = objectStorySpec.video_data || {};
 
-      // Extract the image - try multiple sources
-      const imageUrl = creative.image_url
-        || creative.thumbnail_url
+      // Try to get full-resolution image from the creative endpoint
+      let fullImageUrl: string | null = null;
+      if (creative.id) {
+        try {
+          const creativeRes = await fetch(
+            `${META_BASE}/${creative.id}?fields=image_url,thumbnail_url,object_story_spec&access_token=${accessToken}`
+          );
+          if (creativeRes.ok) {
+            const creativeData = await creativeRes.json();
+            fullImageUrl = creativeData.image_url || null;
+            // Also try full_picture from link_data
+            const cLinkData = creativeData.object_story_spec?.link_data || {};
+            if (!fullImageUrl && cLinkData.image_hash) {
+              // image_hash can't be used directly, but picture should be available
+              fullImageUrl = cLinkData.picture || null;
+            }
+          } else {
+            await creativeRes.text(); // consume body
+          }
+        } catch (e) {
+          console.error("Error fetching creative image:", e);
+        }
+      }
+
+      // Extract the image - prefer full-resolution, then try multiple sources
+      const imageUrl = fullImageUrl
         || linkData.picture
-        || linkData.image_hash
+        || creative.image_url
         || videoData.image_url
+        || creative.thumbnail_url
         || null;
 
-      // Extract text
-      const primaryText = creative.body
-        || linkData.message
+      // Extract text from object_story_spec (most reliable source)
+      const primaryText = linkData.message
         || videoData.message
+        || creative.body
         || null;
 
       // Extract headline
-      const headline = creative.title
-        || linkData.name
+      const headline = linkData.name
         || videoData.title
+        || creative.title
         || null;
 
       // Extract description
       const description = linkData.description || videoData.link_description || null;
 
       // Extract CTA
-      const ctaType = creative.call_to_action_type
-        || linkData.call_to_action?.type
+      const ctaType = linkData.call_to_action?.type
         || videoData.call_to_action?.type
+        || creative.call_to_action_type
         || null;
 
       // Extract link URL
-      const linkUrl = creative.link_url
-        || linkData.link
+      const linkUrl = linkData.link
         || videoData.call_to_action?.value?.link
+        || creative.link_url
         || null;
 
       // Fetch lead gen form details if available
@@ -135,6 +159,8 @@ serve(async (req) => {
           );
           if (formRes.ok) {
             leadFormData = await formRes.json();
+          } else {
+            await formRes.text(); // consume body
           }
         } catch (e) {
           console.error("Error fetching lead form:", e);
