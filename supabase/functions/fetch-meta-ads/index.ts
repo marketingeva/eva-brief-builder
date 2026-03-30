@@ -83,22 +83,19 @@ serve(async (req) => {
 
       const adData = await adRes.json();
       const c = adData.creative ?? {};
-      const s = c.object_story_spec ?? {};
+      // Check both creative-level and adcreatives-level object_story_spec
+      const ac0 = adData.adcreatives?.data?.[0] ?? {};
+      const s = c.object_story_spec ?? ac0.object_story_spec ?? {};
       const l = s.link_data ?? {};
       const v = s.video_data ?? {};
       const t = s.template_data ?? {};
-      const afs = c.asset_feed_spec ?? {};
-      // Also check adcreatives (separate edge from creative field expansion)
-      const ac0 = adData.adcreatives?.data?.[0] ?? {};
-      const acAfs = ac0.asset_feed_spec ?? {};
+      const afs = c.asset_feed_spec ?? ac0.asset_feed_spec ?? {};
 
       // Pick the best image - skip tiny preview URLs (p64x64 etc.)
       const candidates = [
         c.image_url, l.picture, v.image_url,
         afs.images?.[0]?.url,
         ac0.image_url,
-        acAfs.images?.[0]?.url,
-        adData.full_picture,
       ].filter(Boolean);
       const hiRes = candidates.find((u: string) => !/p\d+x\d+/.test(u));
       const imageUrl = hiRes ?? candidates[0] ?? null;
@@ -123,17 +120,17 @@ serve(async (req) => {
       }
 
       const primaryText = l.message ?? v.message ?? t.message
-        ?? afs.bodies?.[0]?.text ?? ac0.body ?? acAfs.bodies?.[0]?.text ?? null;
+        ?? afs.bodies?.[0]?.text ?? ac0.body ?? null;
       const headline = l.name ?? v.title ?? t.name
-        ?? afs.titles?.[0]?.text ?? acAfs.titles?.[0]?.text ?? null;
+        ?? afs.titles?.[0]?.text ?? null;
       const description = l.description ?? v.link_description
-        ?? afs.descriptions?.[0]?.text ?? acAfs.descriptions?.[0]?.text ?? null;
+        ?? afs.descriptions?.[0]?.text ?? null;
       const ctaType = l.call_to_action?.type ?? v.call_to_action?.type ?? t.call_to_action?.type
-        ?? afs.call_to_action_types?.[0] ?? acAfs.call_to_action_types?.[0] ?? null;
+        ?? afs.call_to_action_types?.[0] ?? null;
       
       // Build link URL with fb.me filtering
-      const rawLinkUrl = l.link ?? v.call_to_action?.value?.link
-        ?? afs.link_urls?.[0]?.website_url ?? ac0.link_url ?? acAfs.link_urls?.[0]?.website_url ?? null;
+      const rawLinkUrl = l.link ?? v.call_to_action?.value?.link ?? t.call_to_action?.value?.link
+        ?? afs.link_urls?.[0]?.website_url ?? ac0.link_url ?? null;
       const linkUrl = rawLinkUrl && /^https?:\/\/(www\.)?fb\.me\/?$/i.test(rawLinkUrl) ? null : rawLinkUrl;
 
       // Lead form ID from CTA value
