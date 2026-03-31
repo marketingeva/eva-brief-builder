@@ -275,7 +275,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
                 })}
                 {/* Request-based briefings */}
                 {(grouped[week] || []).map(r => {
-                  const hasBriefing = briefings.some(b => b.campaign_request_id === r.id);
+                  const hasBriefing = !!findBriefingForRequest(r.id);
                   return (
                     <div
                       key={r.id}
