@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { BookOpen, FileText, Palette, Radio, LayoutDashboard } from 'lucide-react';
+import { BookOpen, FileText, Palette, Radio, LayoutDashboard, Bot } from 'lucide-react';
 import OverviewTab from '@/pages/client-workspace/OverviewTab';
 import LearningTab from '@/pages/client-workspace/LearningTab';
 import BriefingsTab from '@/pages/client-workspace/BriefingsTab';
