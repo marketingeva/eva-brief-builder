@@ -221,17 +221,17 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
           <Copy className="mr-1 h-3 w-3" /> Kopieer
         </Button>
 
-        {status === 'draft' && (
+        {currentStatus === 'draft' && (
           <Button size="sm" onClick={() => handleStatusChange('in_review')} className="h-8 text-xs">
             In review zetten
           </Button>
         )}
-        {status === 'in_review' && (
+        {currentStatus === 'in_review' && (
           <Button size="sm" onClick={() => handleStatusChange('approved')} className="h-8 text-xs bg-green-600 hover:bg-green-700">
             <Check className="mr-1 h-3 w-3" /> Goedkeuren
           </Button>
         )}
-        {status === 'approved' && editedRows.length > 0 && (
+        {currentStatus === 'approved' && editedRows.length > 0 && (
           <Button size="sm" onClick={exportCSV} className="h-8 text-xs">
             <Download className="mr-1 h-3 w-3" /> Exporteer als CSV
           </Button>
