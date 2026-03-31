@@ -1,66 +1,117 @@
 
 
-# Fix: Primary Text, Destination en CTA ophalen voor alle ad-types
+# AI Agent Team per Client
 
-## Probleem (uit de API responses)
+## Overzicht
 
-Er zijn twee cases:
+Drie gespecialiseerde AI agents per client workspace, elk met een eigen rol. Ze draaien automatisch op triggers (upload, data-refresh) en zijn optioneel aanspreekbaar via een chat-interface.
 
-1. **Helpende Plus ad** (`120236412314030110`): image_url werkt, cta_type=LEARN_MORE, maar `primary_text`, `headline`, `description` zijn `null`. De `link_url` is `http://fb.me/` (nutteloos).
-2. **VIG ad** (`120242921431630110`): alles is `null` — image, text, CTA, link, form. Dit zijn waarschijnlijk **dynamic creative ads** die `asset_feed_spec` gebruiken in plaats van `object_story_spec`.
+```text
+┌─────────────────────────────────────────────────┐
+│  Client Workspace Tabs                          │
+│  [Overzicht] [Learning] [Briefings] [Creatives] │
+│  [Live Ads] [AI Team] ← NIEUW                   │
+└─────────────────────────────────────────────────┘
 
-## Oorzaak
-
-De huidige Meta API query haalt alleen `object_story_spec` op via field expansion op het creative object. Maar:
-- Dynamic creative ads slaan tekst op in `asset_feed_spec.bodies`, headlines in `asset_feed_spec.titles`, links in `asset_feed_spec.link_urls`, en afbeeldingen in `asset_feed_spec.images`
-- Sommige ads hebben de data in `effective_object_story_id` (een gerenderde post) in plaats van in `object_story_spec`
-- De `link_url` "http://fb.me/" is een Facebook redirect stub — niet de echte destination
-
-## Plan
-
-### 1. Uitbreiden Meta API query in edge function
-
-Wijzig de `adDetailId` query om meer velden op te halen:
-
-```
-fields=id,name,status,effective_status,
-  creative{id,image_url,asset_feed_spec,
-    object_story_spec{link_data{...},video_data{...},template_data{...}},
-    effective_object_story_id},
-  adcreatives{body,image_url,link_url,object_story_spec,asset_feed_spec}
-```
-
-Plus haal op ad-niveau ook `full_picture` op als ultieme image fallback.
-
-### 2. Normalisatie-helper uitbreiden met asset_feed_spec fallback
-
-Voeg aan de fallback-keten toe:
-```
-primaryText: l.message ?? v.message ?? t.message 
-  ?? asset_feed_spec?.bodies?.[0]?.text ?? null
-
-headline: l.name ?? v.title ?? t.name 
-  ?? asset_feed_spec?.titles?.[0]?.text ?? null
-
-linkUrl: l.link ?? v.call_to_action?.value?.link 
-  ?? asset_feed_spec?.link_urls?.[0]?.website_url ?? null
-  (filter out "http://fb.me/" as useless)
-
-imageUrl: c.image_url ?? l.picture ?? v.image_url 
-  ?? asset_feed_spec?.images?.[0]?.url ?? ad.full_picture ?? null
-
-ctaType: l.call_to_action?.type ?? v.call_to_action?.type 
-  ?? asset_feed_spec?.call_to_action_types?.[0] ?? null
+AI Team tab:
+┌──────────────┬──────────────┬──────────────────┐
+│ 📊 Ads       │ 🔍 Trend     │ ✍️ Copywriter    │
+│ Analyst      │ Scout        │                  │
+│              │              │                  │
+│ Analyseert   │ Scrapt Ads   │ Schrijft copy    │
+│ campagne-    │ Library op   │ bij uploads van  │
+│ resultaten   │ trends voor  │ de grafisch      │
+│ en geeft     │ de zorg-     │ designer         │
+│ aanbevelin-  │ sector       │                  │
+│ gen          │              │                  │
+├──────────────┴──────────────┴──────────────────┤
+│ [Chat met agents]                               │
+│ ┌────────────────────────────────────────────┐  │
+│ │ Jij: Welke hooks werken het best bij VIG?  │  │
+│ │ Analyst: Op basis van de laatste 30 dagen..│  │
+│ └────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────┘
 ```
 
-### 3. Filter "fb.me" redirect URLs
+## De drie agents
 
-Als `link_url` gelijk is aan `http://fb.me/` of `https://fb.me/`, toon dan "Geen bestemming beschikbaar" in de UI in plaats van de nutteloze link.
+### 1. Ads Performance Analyst
+- **Trigger**: Automatisch bij openen Live Ads tab of handmatig via chat
+- **Input**: Meta API campagne-data (spend, impressions, clicks, leads, CPL) + client learnings
+- **Output**: Performance samenvatting, winnende/verliezende ads, aanbevelingen voor optimalisatie
+- **Opslaan**: Resultaten in nieuwe `agent_reports` tabel
 
-### Bestanden
+### 2. Trend Scout (Ads Library)
+- **Trigger**: Handmatig via chat ("scan trends voor VIG-zorg") of wekelijks
+- **Input**: Facebook Ads Library API — zoekt op zorgorganisaties, concurrenten, en sector-keywords
+- **Output**: Trending hooks, visuele stijlen, CTA-patronen in de zorgsector
+- **Opslaan**: Trends in `agent_reports` tabel, bruikbaar als context voor de andere agents
 
-| Bestand | Wijziging |
-|---------|-----------|
-| `supabase/functions/fetch-meta-ads/index.ts` | Uitbreiden fields query met `asset_feed_spec`, `full_picture`; uitbreiden normalisatie fallback-keten |
-| `src/pages/client-workspace/LiveAdsTab.tsx` | Filter `fb.me` URLs in destination display |
+### 3. Creative Copywriter
+- **Trigger**: Automatisch bij nieuwe creative upload (bestaat al grotendeels als `analyze-creative`)
+- **Input**: Geüploade afbeelding/video + volledige client Learning context
+- **Output**: Primary text, headlines, CTA — al bestaande functionaliteit, wordt de "agent-versie"
+- **Verbetering**: Gebruikt nu ook output van Analyst (wat werkt?) en Trend Scout (wat is trending?) als extra context
+
+## Technisch plan
+
+### Database
+
+Nieuwe tabel `agent_reports`:
+```sql
+CREATE TABLE agent_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL,
+  agent_type TEXT NOT NULL, -- 'analyst', 'trend_scout', 'copywriter'
+  report_type TEXT,         -- 'performance_summary', 'trend_scan', 'copy_generation'
+  content JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+Nieuwe tabel `agent_conversations` voor de chat:
+```sql
+CREATE TABLE agent_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  agent_type TEXT NOT NULL,
+  messages JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### Edge Functions
+
+| Functie | Doel |
+|---------|------|
+| `agent-analyst` | Haalt Meta ads data op, analyseert met Lovable AI, slaat rapport op |
+| `agent-trend-scout` | Zoekt in Facebook Ads Library API op zorg-keywords, analyseert patronen |
+| `agent-chat` | Streaming chat endpoint — routeert naar juiste agent op basis van `agent_type`, injecteert client Learning context + eerdere rapporten |
+
+De bestaande `analyze-creative` functie wordt hergebruikt/gerefactord als de Copywriter agent.
+
+### Frontend
+
+1. **Nieuwe tab "AI Team"** in `ClientWorkspace.tsx`
+2. **Agent cards**: Drie kaarten met laatste rapport + status
+3. **Chat interface**: Onderaan de pagina, agent-selectie via tabs/dropdown, streaming responses
+4. **Auto-triggers**: Creative upload → Copywriter draait automatisch (al bestaand), Live Ads refresh → Analyst rapport optioneel
+
+### Implementatievolgorde
+
+1. Database migratie (2 tabellen + RLS)
+2. `agent-analyst` edge function — performance analyse
+3. `agent-trend-scout` edge function — Ads Library scanning
+4. `agent-chat` edge function — streaming chat met context-injectie
+5. `AI Team` tab UI met agent cards + chat
+6. Koppel bestaande `analyze-creative` als Copywriter agent
+
+## Benodigdheden
+
+- **Meta Access Token**: Reeds geconfigureerd (`META_ACCESS_TOKEN` secret)
+- **Facebook Ads Library API**: Gebruikt dezelfde Meta API token, endpoint `ads_archive`
+- **Lovable AI**: Reeds beschikbaar (`LOVABLE_API_KEY`), gebruikt `google/gemini-3-flash-preview`
+- **Geen extra API keys nodig**
 
