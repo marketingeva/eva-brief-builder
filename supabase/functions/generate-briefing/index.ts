@@ -30,7 +30,7 @@ serve(async (req) => {
     const clientId = request.client_id;
 
     // 2. Fetch all client context in parallel
-    const [clientRes, learningRes, uspsRes, rolesRes, locationsRes, audienceRes, learningsRes] = await Promise.all([
+    const [clientRes, learningRes, uspsRes, rolesRes, locationsRes, audienceRes, learningsRes, reportsRes] = await Promise.all([
       sb.from("clients").select("*").eq("id", clientId).single(),
       sb.from("client_learning_profiles").select("*").eq("client_id", clientId).single(),
       sb.from("client_usps").select("usp_text").eq("client_id", clientId),
@@ -38,6 +38,7 @@ serve(async (req) => {
       sb.from("client_locations").select("*").eq("client_id", clientId),
       sb.from("client_audience_insights").select("*").eq("client_id", clientId),
       sb.from("client_learnings").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(10),
+      sb.from("agent_reports").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const client = clientRes.data;
