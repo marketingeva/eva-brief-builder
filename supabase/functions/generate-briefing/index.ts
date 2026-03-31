@@ -30,7 +30,7 @@ serve(async (req) => {
     const clientId = request.client_id;
 
     // 2. Fetch all client context in parallel
-    const [clientRes, learningRes, uspsRes, rolesRes, locationsRes, audienceRes, learningsRes] = await Promise.all([
+    const [clientRes, learningRes, uspsRes, rolesRes, locationsRes, audienceRes, learningsRes, reportsRes] = await Promise.all([
       sb.from("clients").select("*").eq("id", clientId).single(),
       sb.from("client_learning_profiles").select("*").eq("client_id", clientId).single(),
       sb.from("client_usps").select("usp_text").eq("client_id", clientId),
@@ -38,6 +38,7 @@ serve(async (req) => {
       sb.from("client_locations").select("*").eq("client_id", clientId),
       sb.from("client_audience_insights").select("*").eq("client_id", clientId),
       sb.from("client_learnings").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(10),
+      sb.from("agent_reports").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const client = clientRes.data;
@@ -48,6 +49,7 @@ serve(async (req) => {
     const locations = locationsRes.data || [];
     const audience = audienceRes.data || [];
     const learnings = learningsRes.data || [];
+    const reports = reportsRes.data || [];
 
     // 3. Build context
     const ctx: string[] = [];
@@ -62,6 +64,22 @@ serve(async (req) => {
     if (roles.length > 0) ctx.push(`## Rollen\n${roles.map((r: any) => `- ${r.role_title} (${r.care_domain || ""}): ${r.description || ""}\n  Kwalificaties: ${(r.qualifications || []).join(", ")}\n  Triggers: ${(r.audience_triggers || []).join(", ")}\n  Bezwaren: ${(r.audience_objections || []).join(", ")}`).join("\n")}`);
     if (audience.length > 0) ctx.push(`## Doelgroepen\n${audience.map((a: any) => `- ${a.segment_name}: ${a.description || ""}\n  Triggers: ${(a.triggers || []).join(", ")}\n  Bezwaren: ${(a.objections || []).join(", ")}`).join("\n")}`);
     if (learnings.length > 0) ctx.push(`## Recente learnings\n${learnings.slice(0, 5).map((l: any) => `- ${l.concept || "?"}: Wat werkte: ${l.what_worked || "?"} | Wat niet: ${l.what_failed || "?"}`).join("\n")}`);
+
+    // Add agent reports context
+    if (reports.length > 0) {
+      const trendReports = reports.filter((r: any) => r.agent_type === "trend_scout");
+      const analystReports = reports.filter((r: any) => r.agent_type === "analyst");
+      if (trendReports.length > 0) {
+        const latest = trendReports[0];
+        const content = typeof latest.content === "string" ? latest.content : JSON.stringify(latest.content);
+        ctx.push(`## Laatste Trend Analyse\n${content.slice(0, 2000)}`);
+      }
+      if (analystReports.length > 0) {
+        const latest = analystReports[0];
+        const content = typeof latest.content === "string" ? latest.content : JSON.stringify(latest.content);
+        ctx.push(`## Laatste Performance Analyse\n${content.slice(0, 2000)}`);
+      }
+    }
 
     const clientContext = ctx.join("\n\n");
 
