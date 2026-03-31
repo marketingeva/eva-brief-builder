@@ -116,9 +116,23 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
     ...briefings.map(b => b.week_number).filter(Boolean),
   ])].sort((a, b) => (b || 0) - (a || 0));
 
+  // Helper to find briefing for a request (by campaign_request_id OR content.briefing_request_id)
+  const findBriefingForRequest = (requestId: string) => {
+    return briefings.find(b => {
+      if (b.campaign_request_id === requestId) return true;
+      const content = (b.content && typeof b.content === 'object' && !Array.isArray(b.content)) ? b.content as Record<string, any> : {};
+      return content.briefing_request_id === requestId;
+    });
+  };
+
   // Auto-generated briefings (no matching request)
   const requestIds = new Set(requests.map(r => r.id));
-  const autoBriefings = briefings.filter(b => !requestIds.has(b.campaign_request_id));
+  const autoBriefings = briefings.filter(b => {
+    if (requestIds.has(b.campaign_request_id)) return false;
+    const content = (b.content && typeof b.content === 'object' && !Array.isArray(b.content)) ? b.content as Record<string, any> : {};
+    if (content.briefing_request_id && requestIds.has(content.briefing_request_id)) return false;
+    return true;
+  });
 
   const filtered = requests.filter(r => {
     if (weekFilter !== 'all' && String(r.week_number) !== weekFilter) return false;
