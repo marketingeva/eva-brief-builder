@@ -1,51 +1,62 @@
 
 
-# Waarom de Trend Scout geen echte advertenties vindt — en hoe dit op te lossen
+# Trend Scout upgraden met Firecrawl scraping
 
-## Het probleem
+## Wat verandert
 
-De huidige Trend Scout functie vindt **0 advertenties** omdat de Facebook Ads Library API verkeerd wordt aangesproken:
+De `agent-trend-scout` edge function wordt herschreven om **Firecrawl** te gebruiken in plaats van de Meta Ads Library API. Firecrawl scrapt de publieke Facebook Ads Library website direct — geen API-permissies nodig.
 
-1. **`ad_type=POLITICAL_AND_ISSUE_ADS`** — De eerste loop zoekt alleen naar politieke advertenties, niet naar recruitment/vacature-advertenties
-2. **Geen `ad_type` parameter** — De tweede loop laat dit weg, maar de API vereist dit veld expliciet
-3. **Ontbrekende API-permissie** — Om ALLE advertenties (inclusief vacatures) te doorzoeken via `ad_type=ALL`, moet de Meta App de **`ads_read`** permissie hebben en een goedgekeurd review hebben doorlopen
+## Aanpak
 
-## Wat er nodig is
+### Flow
 
-### 1. Meta App permissies controleren
-De `META_ACCESS_TOKEN` en `META_APP_ID` zijn al geconfigureerd. Maar voor de Ads Library API met `ad_type=ALL` heb je nodig:
-- **`ads_read`** permissie op je Meta App (in Meta for Developers)
-- De app moet door Meta zijn goedgekeurd voor Ads Library API toegang
+```text
+Zoektermen (bijv. "verpleegkundige vacature", "Buurtzorg")
+        │
+        ▼  (per zoekterm)
+┌──────────────────────────┐
+│  Firecrawl Scrape        │  URL: facebook.com/ads/library/?q={term}&country=NL&ad_type=all
+│  format: markdown        │
+└──────────┬───────────────┘
+           │  markdown content (advertentieteksten, paginanamen, etc.)
+           ▼
+┌──────────────────────────┐
+│  Lovable AI (Gemini)     │  Analyseert alle gescrapete content
+│  Trendrapport genereren  │
+└──────────┬───────────────┘
+           │
+           ▼
+     agent_reports tabel
+```
 
-**Alternatief als je die permissie niet hebt:** Je kunt `ad_type=POLITICAL_AND_ISSUE_ADS` gebruiken (werkt zonder review), maar dan vind je alleen politieke/issue-ads — niet de recruitment-ads die je zoekt.
+### Stap 1: Edge function herschrijven (`agent-trend-scout/index.ts`)
 
-### 2. Edge function fixen
-Ongeacht de permissie-status, de code moet verbeterd worden:
-- **`ad_type=ALL`** gebruiken in plaats van `POLITICAL_AND_ISSUE_ADS`
-- **Betere zoektermen**: specifieke concurrenten/pagina-namen zoeken (bijv. "Buurtzorg", "ASZ", "Zorggroep Charim")
-- **`search_page_ids`** parameter toevoegen om specifieke concurrenten te monitoren
-- **Error logging** toevoegen zodat we zien wat de API precies teruggeeft
+- **Meta API code verwijderen** — geen `META_ACCESS_TOKEN` meer nodig
+- **Firecrawl scraping toevoegen**: Per zoekterm de URL `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=NL&q={term}&media_type=all` scrapen via Firecrawl API (`FIRECRAWL_API_KEY`)
+- **Markdown format**: Firecrawl retourneert pagina-inhoud als markdown — bevat advertentieteksten, paginanamen, datums
+- **Rate limiting**: Max 5 zoektermen, sequentieel met korte delay om Firecrawl credits te besparen
+- **Fallback**: Als Firecrawl geen content retourneert, AI alsnog een marktanalyse laten genereren op basis van sectorkennis
+- **AI analyse**: Alle gescrapete markdown samenvoegen en naar Gemini sturen met hetzelfde analyseprompt (trending hooks, copy patronen, concurrentie-analyse, kansen, suggesties)
+- **Opslag**: Rapport opslaan in `agent_reports` met metadata over scraped content
 
-### 3. Fallback: zoeken op pagina-naam
-Als `ad_type=ALL` niet beschikbaar is, kun je ook zoeken via de **Ads Library website scraping** als alternatief, of zoeken met `EMPLOYMENT_ADS` als ad_type (indien beschikbaar met jouw token).
+### Stap 2: Zoektermen optimaliseren
 
-## Implementatieplan
+Default zoektermen worden:
+- Client-naam (eigen ads monitoren)
+- Specifieke concurrenten: "Buurtzorg", "Vivisol", "Aafje"
+- Sector-termen: "verpleegkundige vacature", "zorg medewerker gezocht", "thuiszorg", "werken in de zorg"
 
-### Stap 1: API-toegang testen
-- De edge function aanpassen om de exacte API-response te loggen (inclusief errors)
-- Testen met `ad_type=ALL` om te zien of je token voldoende rechten heeft
+### Wat er NIET verandert
 
-### Stap 2: Edge function verbeteren
-- `ad_type` parameter corrigeren naar `ALL`
-- Zoektermen verfijnen: concurrenten-namen, specifieke zorgtermen
-- Optioneel: `search_page_ids` toevoegen voor gerichte concurrent-monitoring
-- Response errors loggen zodat je direct ziet waarom het faalt
+- De AI analyse prompt blijft inhoudelijk gelijk
+- Het rapport wordt op dezelfde manier opgeslagen in `agent_reports`
+- De UI in het AI Team tab hoeft niet aangepast te worden
+- Credits: ~5 Firecrawl credits per scan (1 per zoekterm)
 
-### Stap 3: Als permissie ontbreekt
-- Je moet in de [Meta for Developers](https://developers.facebook.com/) console de Ads Library API permissie aanvragen
-- Dit is een review-proces dat enkele dagen kan duren
+## Technische details
 
-## Samenvatting
-
-Het kernprobleem is dat de API wordt aangesproken met het verkeerde `ad_type`. De fix is technisch simpel (parameter wijzigen), maar het hangt af van of jouw Meta App de juiste permissies heeft. Ik kan de edge function direct updaten en testen om te zien wat er precies terugkomt van de API.
+- Firecrawl API endpoint: `https://api.firecrawl.dev/v1/scrape`
+- Secret: `FIRECRAWL_API_KEY` (zojuist gekoppeld)
+- Scrape opties: `formats: ['markdown']`, `onlyMainContent: true`, `waitFor: 3000` (Facebook laadt dynamisch)
+- `LOVABLE_API_KEY` blijft nodig voor Gemini AI analyse
 
