@@ -137,7 +137,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
     if (!acc[key]) acc[key] = [];
     acc[key].push(r);
     return acc;
-  });
+  }, {});
 
   // Group auto-briefings by week too
   const autoGrouped = filteredAuto.reduce<Record<string, GeneratedBriefing[]>>((acc, b) => {
