@@ -49,6 +49,7 @@ serve(async (req) => {
     const locations = locationsRes.data || [];
     const audience = audienceRes.data || [];
     const learnings = learningsRes.data || [];
+    const reports = reportsRes.data || [];
 
     // 3. Build context
     const ctx: string[] = [];
