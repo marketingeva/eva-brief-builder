@@ -172,8 +172,10 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
           <SelectContent>
             <SelectItem value="all">Alle statussen</SelectItem>
             <SelectItem value="concept">Concept</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
             <SelectItem value="generating">Genereert</SelectItem>
             <SelectItem value="generated">Gegenereerd</SelectItem>
+            <SelectItem value="in_review">In Review</SelectItem>
             <SelectItem value="approved">Goedgekeurd</SelectItem>
             <SelectItem value="sent_to_designer">Naar designer</SelectItem>
             <SelectItem value="delivered">Opgeleverd</SelectItem>
