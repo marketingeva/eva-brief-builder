@@ -1,117 +1,51 @@
 
 
-# AI Agent Team per Client
+# Waarom de Trend Scout geen echte advertenties vindt — en hoe dit op te lossen
 
-## Overzicht
+## Het probleem
 
-Drie gespecialiseerde AI agents per client workspace, elk met een eigen rol. Ze draaien automatisch op triggers (upload, data-refresh) en zijn optioneel aanspreekbaar via een chat-interface.
+De huidige Trend Scout functie vindt **0 advertenties** omdat de Facebook Ads Library API verkeerd wordt aangesproken:
 
-```text
-┌─────────────────────────────────────────────────┐
-│  Client Workspace Tabs                          │
-│  [Overzicht] [Learning] [Briefings] [Creatives] │
-│  [Live Ads] [AI Team] ← NIEUW                   │
-└─────────────────────────────────────────────────┘
+1. **`ad_type=POLITICAL_AND_ISSUE_ADS`** — De eerste loop zoekt alleen naar politieke advertenties, niet naar recruitment/vacature-advertenties
+2. **Geen `ad_type` parameter** — De tweede loop laat dit weg, maar de API vereist dit veld expliciet
+3. **Ontbrekende API-permissie** — Om ALLE advertenties (inclusief vacatures) te doorzoeken via `ad_type=ALL`, moet de Meta App de **`ads_read`** permissie hebben en een goedgekeurd review hebben doorlopen
 
-AI Team tab:
-┌──────────────┬──────────────┬──────────────────┐
-│ 📊 Ads       │ 🔍 Trend     │ ✍️ Copywriter    │
-│ Analyst      │ Scout        │                  │
-│              │              │                  │
-│ Analyseert   │ Scrapt Ads   │ Schrijft copy    │
-│ campagne-    │ Library op   │ bij uploads van  │
-│ resultaten   │ trends voor  │ de grafisch      │
-│ en geeft     │ de zorg-     │ designer         │
-│ aanbevelin-  │ sector       │                  │
-│ gen          │              │                  │
-├──────────────┴──────────────┴──────────────────┤
-│ [Chat met agents]                               │
-│ ┌────────────────────────────────────────────┐  │
-│ │ Jij: Welke hooks werken het best bij VIG?  │  │
-│ │ Analyst: Op basis van de laatste 30 dagen..│  │
-│ └────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-```
+## Wat er nodig is
 
-## De drie agents
+### 1. Meta App permissies controleren
+De `META_ACCESS_TOKEN` en `META_APP_ID` zijn al geconfigureerd. Maar voor de Ads Library API met `ad_type=ALL` heb je nodig:
+- **`ads_read`** permissie op je Meta App (in Meta for Developers)
+- De app moet door Meta zijn goedgekeurd voor Ads Library API toegang
 
-### 1. Ads Performance Analyst
-- **Trigger**: Automatisch bij openen Live Ads tab of handmatig via chat
-- **Input**: Meta API campagne-data (spend, impressions, clicks, leads, CPL) + client learnings
-- **Output**: Performance samenvatting, winnende/verliezende ads, aanbevelingen voor optimalisatie
-- **Opslaan**: Resultaten in nieuwe `agent_reports` tabel
+**Alternatief als je die permissie niet hebt:** Je kunt `ad_type=POLITICAL_AND_ISSUE_ADS` gebruiken (werkt zonder review), maar dan vind je alleen politieke/issue-ads — niet de recruitment-ads die je zoekt.
 
-### 2. Trend Scout (Ads Library)
-- **Trigger**: Handmatig via chat ("scan trends voor VIG-zorg") of wekelijks
-- **Input**: Facebook Ads Library API — zoekt op zorgorganisaties, concurrenten, en sector-keywords
-- **Output**: Trending hooks, visuele stijlen, CTA-patronen in de zorgsector
-- **Opslaan**: Trends in `agent_reports` tabel, bruikbaar als context voor de andere agents
+### 2. Edge function fixen
+Ongeacht de permissie-status, de code moet verbeterd worden:
+- **`ad_type=ALL`** gebruiken in plaats van `POLITICAL_AND_ISSUE_ADS`
+- **Betere zoektermen**: specifieke concurrenten/pagina-namen zoeken (bijv. "Buurtzorg", "ASZ", "Zorggroep Charim")
+- **`search_page_ids`** parameter toevoegen om specifieke concurrenten te monitoren
+- **Error logging** toevoegen zodat we zien wat de API precies teruggeeft
 
-### 3. Creative Copywriter
-- **Trigger**: Automatisch bij nieuwe creative upload (bestaat al grotendeels als `analyze-creative`)
-- **Input**: Geüploade afbeelding/video + volledige client Learning context
-- **Output**: Primary text, headlines, CTA — al bestaande functionaliteit, wordt de "agent-versie"
-- **Verbetering**: Gebruikt nu ook output van Analyst (wat werkt?) en Trend Scout (wat is trending?) als extra context
+### 3. Fallback: zoeken op pagina-naam
+Als `ad_type=ALL` niet beschikbaar is, kun je ook zoeken via de **Ads Library website scraping** als alternatief, of zoeken met `EMPLOYMENT_ADS` als ad_type (indien beschikbaar met jouw token).
 
-## Technisch plan
+## Implementatieplan
 
-### Database
+### Stap 1: API-toegang testen
+- De edge function aanpassen om de exacte API-response te loggen (inclusief errors)
+- Testen met `ad_type=ALL` om te zien of je token voldoende rechten heeft
 
-Nieuwe tabel `agent_reports`:
-```sql
-CREATE TABLE agent_reports (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL,
-  agent_type TEXT NOT NULL, -- 'analyst', 'trend_scout', 'copywriter'
-  report_type TEXT,         -- 'performance_summary', 'trend_scan', 'copy_generation'
-  content JSONB NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-```
+### Stap 2: Edge function verbeteren
+- `ad_type` parameter corrigeren naar `ALL`
+- Zoektermen verfijnen: concurrenten-namen, specifieke zorgtermen
+- Optioneel: `search_page_ids` toevoegen voor gerichte concurrent-monitoring
+- Response errors loggen zodat je direct ziet waarom het faalt
 
-Nieuwe tabel `agent_conversations` voor de chat:
-```sql
-CREATE TABLE agent_conversations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL,
-  user_id UUID NOT NULL,
-  agent_type TEXT NOT NULL,
-  messages JSONB NOT NULL DEFAULT '[]',
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-```
+### Stap 3: Als permissie ontbreekt
+- Je moet in de [Meta for Developers](https://developers.facebook.com/) console de Ads Library API permissie aanvragen
+- Dit is een review-proces dat enkele dagen kan duren
 
-### Edge Functions
+## Samenvatting
 
-| Functie | Doel |
-|---------|------|
-| `agent-analyst` | Haalt Meta ads data op, analyseert met Lovable AI, slaat rapport op |
-| `agent-trend-scout` | Zoekt in Facebook Ads Library API op zorg-keywords, analyseert patronen |
-| `agent-chat` | Streaming chat endpoint — routeert naar juiste agent op basis van `agent_type`, injecteert client Learning context + eerdere rapporten |
-
-De bestaande `analyze-creative` functie wordt hergebruikt/gerefactord als de Copywriter agent.
-
-### Frontend
-
-1. **Nieuwe tab "AI Team"** in `ClientWorkspace.tsx`
-2. **Agent cards**: Drie kaarten met laatste rapport + status
-3. **Chat interface**: Onderaan de pagina, agent-selectie via tabs/dropdown, streaming responses
-4. **Auto-triggers**: Creative upload → Copywriter draait automatisch (al bestaand), Live Ads refresh → Analyst rapport optioneel
-
-### Implementatievolgorde
-
-1. Database migratie (2 tabellen + RLS)
-2. `agent-analyst` edge function — performance analyse
-3. `agent-trend-scout` edge function — Ads Library scanning
-4. `agent-chat` edge function — streaming chat met context-injectie
-5. `AI Team` tab UI met agent cards + chat
-6. Koppel bestaande `analyze-creative` als Copywriter agent
-
-## Benodigdheden
-
-- **Meta Access Token**: Reeds geconfigureerd (`META_ACCESS_TOKEN` secret)
-- **Facebook Ads Library API**: Gebruikt dezelfde Meta API token, endpoint `ads_archive`
-- **Lovable AI**: Reeds beschikbaar (`LOVABLE_API_KEY`), gebruikt `google/gemini-3-flash-preview`
-- **Geen extra API keys nodig**
+Het kernprobleem is dat de API wordt aangesproken met het verkeerde `ad_type`. De fix is technisch simpel (parameter wijzigen), maar het hangt af van of jouw Meta App de juiste permissies heeft. Ik kan de edge function direct updaten en testen om te zien wat er precies terugkomt van de API.
 
