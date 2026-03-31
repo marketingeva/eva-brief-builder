@@ -159,6 +159,8 @@ Wees specifiek en geef voorbeelden.`;
       client_id,
       agent_type: "trend_scout",
       report_type: "trend_scan",
+      report_source: "manual",
+      title: `Trend Scan — ${clientName} (${new Date().toLocaleDateString("nl-NL")})`,
       content: {
         analysis,
         search_terms: terms,

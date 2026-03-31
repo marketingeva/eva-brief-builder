@@ -174,6 +174,8 @@ Houd het praktisch en actionable.`;
       client_id,
       agent_type: "analyst",
       report_type: "performance_summary",
+      report_source: "manual",
+      title: `Performance Analyse — ${clientName} (${since} t/m ${until})`,
       content: {
         analysis,
         campaigns: campaignInsights,
