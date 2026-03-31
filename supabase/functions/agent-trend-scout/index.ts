@@ -7,7 +7,56 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const META_API_VERSION = "v21.0";
+const FIRECRAWL_API = "https://api.firecrawl.dev/v1/scrape";
+const ADS_LIBRARY_BASE = "https://www.facebook.com/ads/library/";
+
+function buildAdsLibraryUrl(term: string): string {
+  const params = new URLSearchParams({
+    active_status: "active",
+    ad_type: "all",
+    country: "NL",
+    q: term,
+    media_type: "all",
+  });
+  return `${ADS_LIBRARY_BASE}?${params.toString()}`;
+}
+
+async function scrapeAdsLibrary(term: string, apiKey: string): Promise<{ term: string; markdown: string; error?: string }> {
+  const url = buildAdsLibraryUrl(term);
+  console.log(`Scraping Ads Library for: "${term}" → ${url}`);
+
+  try {
+    const resp = await fetch(FIRECRAWL_API, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        formats: ["markdown"],
+        onlyMainContent: true,
+        waitFor: 3000,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const errMsg = data.error || `HTTP ${resp.status}`;
+      console.error(`Firecrawl error for "${term}":`, errMsg);
+      return { term, markdown: "", error: errMsg };
+    }
+
+    const markdown = data.data?.markdown || data.markdown || "";
+    console.log(`Scraped "${term}": ${markdown.length} chars`);
+    return { term, markdown };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`Fetch error for "${term}":`, errMsg);
+    return { term, markdown: "", error: errMsg };
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -20,13 +69,13 @@ serve(async (req) => {
       });
     }
 
-    const accessToken = Deno.env.get("META_ACCESS_TOKEN");
+    const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    if (!accessToken) {
-      return new Response(JSON.stringify({ error: "META_ACCESS_TOKEN not configured" }), {
+    if (!firecrawlKey) {
+      return new Response(JSON.stringify({ error: "FIRECRAWL_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -43,93 +92,49 @@ serve(async (req) => {
     const clientName = client?.name || "";
     const careType = client?.care_type || "zorg";
 
-    // Improved search terms: specific competitors + care-sector recruitment terms
+    // Build search terms
     const defaultTerms = [
+      clientName,
       "verpleegkundige vacature",
       "zorg medewerker gezocht",
       "Buurtzorg",
       "thuiszorg vacature",
-      "werken in de zorg",
-      clientName, // also search for client's own ads
     ].filter(Boolean);
-    const terms = search_terms?.length ? search_terms : defaultTerms;
+    const terms = (search_terms?.length ? search_terms : defaultTerms).slice(0, 5);
 
-    // Try multiple ad_type values for maximum coverage
-    const adTypes = ["ALL", "EMPLOYMENT_ADS", "POLITICAL_AND_ISSUE_ADS"];
-    const allAds: any[] = [];
-    const apiErrors: string[] = [];
-
-    for (const adType of adTypes) {
-      for (const term of terms.slice(0, 5)) {
-        const params = new URLSearchParams({
-          search_terms: term,
-          ad_reached_countries: "NL",
-          ad_type: adType,
-          fields: "id,ad_creative_bodies,ad_creative_link_titles,ad_creative_link_captions,ad_creative_link_descriptions,page_name,ad_delivery_start_time,ad_snapshot_url",
-          limit: "25",
-          access_token: accessToken,
-        });
-
-        const url = `https://graph.facebook.com/${META_API_VERSION}/ads_archive?${params.toString()}`;
-
-        try {
-          const resp = await fetch(url);
-          const data = await resp.json();
-
-          if (data.error) {
-            const errMsg = `[${adType}] "${term}": ${data.error.message} (code: ${data.error.code})`;
-            console.error("Ads Library API error:", errMsg);
-            apiErrors.push(errMsg);
-            // If this ad_type is not supported, skip remaining terms for it
-            if (data.error.code === 100 || data.error.message?.includes("ad_type")) {
-              console.log(`ad_type=${adType} not supported, skipping remaining terms`);
-              break;
-            }
-            continue;
-          }
-
-          if (data.data?.length) {
-            console.log(`[${adType}] "${term}": found ${data.data.length} ads`);
-            allAds.push(...data.data.map((ad: any) => ({
-              ...ad,
-              search_term: term,
-              ad_type_used: adType,
-            })));
-          } else {
-            console.log(`[${adType}] "${term}": 0 ads found`);
-          }
-        } catch (err) {
-          const errMsg = `[${adType}] "${term}": fetch failed: ${err}`;
-          console.error(errMsg);
-          apiErrors.push(errMsg);
-        }
+    // Scrape each term sequentially to conserve credits
+    const scrapeResults: { term: string; markdown: string; error?: string }[] = [];
+    for (const term of terms) {
+      const result = await scrapeAdsLibrary(term, firecrawlKey);
+      scrapeResults.push(result);
+      // Small delay between requests
+      if (terms.indexOf(term) < terms.length - 1) {
+        await new Promise(r => setTimeout(r, 1000));
       }
-
-      // If we already found enough ads, stop trying other ad_types
-      if (allAds.length >= 30) break;
     }
 
-    // Deduplicate by id
-    const uniqueAds = Array.from(new Map(allAds.map(a => [a.id, a])).values());
-    console.log(`Total unique ads found: ${uniqueAds.length} (from ${allAds.length} raw results)`);
+    const successfulScrapes = scrapeResults.filter(r => r.markdown.length > 50);
+    const errors = scrapeResults.filter(r => r.error).map(r => `"${r.term}": ${r.error}`);
 
-    // Build analysis prompt
-    const adSummaries = uniqueAds.slice(0, 50).map((ad, i) => {
-      const body = ad.ad_creative_bodies?.[0] || "";
-      const title = ad.ad_creative_link_titles?.[0] || "";
-      const desc = ad.ad_creative_link_descriptions?.[0] || "";
-      const startDate = ad.ad_delivery_start_time || "?";
-      return `[${i + 1}] Pagina: ${ad.page_name || "?"} | Start: ${startDate} | Titel: ${title} | Body: ${body.substring(0, 300)} | CTA/Desc: ${desc} | Zoekterm: ${ad.search_term}`;
-    }).join("\n");
+    console.log(`Scraping complete: ${successfulScrapes.length}/${terms.length} successful`);
 
+    // Combine all scraped content
+    const combinedContent = scrapeResults
+      .map((r, i) => {
+        if (!r.markdown) return `## Zoekterm ${i + 1}: "${r.term}"\nGeen resultaten gevonden.`;
+        return `## Zoekterm ${i + 1}: "${r.term}"\n${r.markdown.substring(0, 5000)}`;
+      })
+      .join("\n\n---\n\n");
+
+    // AI analysis prompt
     const prompt = `Je bent een trend-analist gespecialiseerd in recruitment advertising in de Nederlandse zorgsector.
 
-Analyseer de volgende ${uniqueAds.length} advertenties uit de Facebook Ads Library (zoektermen: ${terms.join(", ")}).
+Analyseer de volgende gescrapete content uit de Facebook Ads Library (zoektermen: ${terms.join(", ")}).
 
-## Gevonden advertenties
-${adSummaries || "Geen advertenties gevonden via de API. Geef alsnog een trendrapport op basis van je kennis van de huidige zorgmarkt en recruitment trends."}
+## Gescrapete advertentie-content
+${combinedContent || "Geen advertenties gevonden via scraping. Geef alsnog een trendrapport op basis van je kennis van de huidige zorgmarkt en recruitment trends."}
 
-${apiErrors.length ? `## API Opmerkingen\n${apiErrors.slice(0, 5).join("\n")}` : ""}
+${errors.length ? `## Scraping opmerkingen\n${errors.join("\n")}` : ""}
 
 ## Context
 Client: ${clientName} (${careType})
@@ -142,9 +147,6 @@ Geef een trendrapport in het Nederlands met:
 5. **Kansen voor ${clientName}**: Wat doet de concurrentie NIET? Waar liggen kansen?
 6. **Concrete suggesties**: 5 concrete hook/copy ideeën die ${clientName} kan testen, inclusief volledige voorbeeldteksten.
 
-## Bronnen & referenties
-Verwijs in je analyse naar specifieke advertenties (gebruik de nummering [1], [2] etc.) en benoem welke concurrenten je hebt geanalyseerd.
-
 Wees specifiek, geef concrete voorbeelden en maak het rapport direct actionable.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -156,7 +158,7 @@ Wees specifiek, geef concrete voorbeelden en maak het rapport direct actionable.
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: "Je bent een AI trend scout die de Facebook Ads Library analyseert op patronen in recruitment advertising voor de zorgsector. Je geeft altijd concrete voorbeelden en referenties naar specifieke advertenties." },
+          { role: "system", content: "Je bent een AI trend scout die gescrapete Facebook Ads Library data analyseert op patronen in recruitment advertising voor de zorgsector. Je geeft altijd concrete voorbeelden." },
           { role: "user", content: prompt },
         ],
       }),
@@ -181,31 +183,28 @@ Wees specifiek, geef concrete voorbeelden en maak het rapport direct actionable.
     const aiData = await aiResp.json();
     const analysis = aiData.choices?.[0]?.message?.content || "Geen analyse beschikbaar.";
 
-    // Store report with metadata about what was found
+    // Store report
     const { data: report } = await sb.from("agent_reports").insert({
       client_id,
       agent_type: "trend_scout",
       report_type: "trend_scan",
-      report_source: "manual",
+      report_source: "firecrawl",
       title: `Trend Scan — ${clientName} (${new Date().toLocaleDateString("nl-NL")})`,
       content: {
         analysis,
         search_terms: terms,
-        ads_found: uniqueAds.length,
-        api_errors: apiErrors.length ? apiErrors : undefined,
-        ad_types_tried: adTypes,
-        sample_ads: uniqueAds.slice(0, 10).map(a => ({
-          page_name: a.page_name,
-          title: a.ad_creative_link_titles?.[0],
-          body: (a.ad_creative_bodies?.[0] || "").substring(0, 200),
-          start_date: a.ad_delivery_start_time,
-          search_term: a.search_term,
-        })),
+        scrapes_successful: successfulScrapes.length,
+        scrapes_total: terms.length,
+        scrape_errors: errors.length ? errors : undefined,
         generated_at: new Date().toISOString(),
       },
     }).select().single();
 
-    return new Response(JSON.stringify({ success: true, report, meta: { ads_found: uniqueAds.length, api_errors: apiErrors } }), {
+    return new Response(JSON.stringify({
+      success: true,
+      report,
+      meta: { scrapes_successful: successfulScrapes.length, scrapes_total: terms.length, errors },
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
