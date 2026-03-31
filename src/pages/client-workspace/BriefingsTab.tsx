@@ -52,18 +52,22 @@ interface BriefingRow {
 
 const statusColors: Record<string, string> = {
   concept: 'bg-muted text-muted-foreground',
+  draft: 'bg-muted text-muted-foreground',
   generating: 'bg-primary/10 text-primary animate-pulse',
   generated: 'bg-primary/10 text-primary',
-  approved: 'bg-success/10 text-success',
+  in_review: 'bg-amber-500/10 text-amber-600',
+  approved: 'bg-green-500/10 text-green-600',
   sent_to_designer: 'bg-warning/10 text-warning',
-  delivered: 'bg-success/10 text-success',
+  delivered: 'bg-green-500/10 text-green-600',
   error: 'bg-destructive/10 text-destructive',
 };
 
 const statusLabels: Record<string, string> = {
   concept: 'Concept',
+  draft: 'Concept',
   generating: 'Genereert...',
   generated: 'Gegenereerd',
+  in_review: 'In Review',
   approved: 'Goedgekeurd',
   sent_to_designer: 'Naar designer',
   delivered: 'Opgeleverd',
