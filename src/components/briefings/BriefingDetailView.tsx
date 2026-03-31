@@ -74,8 +74,8 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const status = briefing.status || 'draft';
-  const isEditable = status !== 'approved';
+  const [currentStatus, setCurrentStatus] = useState(briefing.status || 'draft');
+  const isEditable = currentStatus !== 'approved';
 
   // Editable content state
   const originalContent = (briefing.content && typeof briefing.content === 'object' && !Array.isArray(briefing.content)) ? briefing.content as Record<string, any> : {};
