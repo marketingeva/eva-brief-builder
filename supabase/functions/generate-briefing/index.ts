@@ -258,7 +258,7 @@ Genereer daarnaast een overkoepelend briefing document met strategische context.
       .insert({
         campaign_request_id: campaignReq.id,
         client_id: clientId,
-        content: briefingContent,
+        content: { ...briefingContent, briefing_request_id: briefing_request_id },
         status: "draft",
         version: 1,
         week_number: request.week_number,
