@@ -141,6 +141,7 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
         updates.approved_at = new Date().toISOString();
       }
       await supabase.from('generated_briefings').update(updates).eq('id', briefing.id);
+      setCurrentStatus(newStatus);
       toast({ title: newStatus === 'in_review' ? 'Briefing in review' : 'Briefing goedgekeurd!' });
       onRefresh?.();
     } catch (e: any) {
