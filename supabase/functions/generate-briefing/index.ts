@@ -233,11 +233,30 @@ Genereer daarnaast een overkoepelend briefing document met strategische context.
     const result = JSON.parse(toolCall.function.arguments);
     const { rows: briefingRows, ...briefingContent } = result;
 
-    // 6. Save generated briefing
+    // 6. Create campaign_request record (FK required by generated_briefings)
+    const { data: campaignReq, error: campErr } = await sb
+      .from("campaign_requests")
+      .insert({
+        client_id: clientId,
+        created_by: request.created_by,
+        role_title: (request.functions || [])[0] || "Briefing",
+        objective: "Content briefing",
+        status: "draft",
+        internal_notes: `Vanuit briefing request ${briefing_request_id}`,
+      })
+      .select("id")
+      .single();
+
+    if (campErr || !campaignReq) {
+      console.error("Create campaign request error:", campErr);
+      throw campErr || new Error("Failed to create campaign request");
+    }
+
+    // 7. Save generated briefing
     const { data: savedBriefing, error: saveErr } = await sb
       .from("generated_briefings")
       .insert({
-        campaign_request_id: briefing_request_id,
+        campaign_request_id: campaignReq.id,
         client_id: clientId,
         content: briefingContent,
         status: "draft",
