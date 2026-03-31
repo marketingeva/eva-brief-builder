@@ -8,6 +8,7 @@ import LearningTab from '@/pages/client-workspace/LearningTab';
 import BriefingsTab from '@/pages/client-workspace/BriefingsTab';
 import CreativesCopyTab from '@/pages/client-workspace/CreativesCopyTab';
 import LiveAdsTab from '@/pages/client-workspace/LiveAdsTab';
+import AITeamTab from '@/pages/client-workspace/AITeamTab';
 
 interface Client {
   id: string;
