@@ -169,7 +169,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
 
   // Detail view — support both request-based and direct briefing selection
   if (selectedRequestId) {
-    const briefing = briefings.find(b => b.campaign_request_id === selectedRequestId) || briefings.find(b => b.id === selectedRequestId);
+    const briefing = findBriefingForRequest(selectedRequestId) || briefings.find(b => b.id === selectedRequestId);
     if (briefing) {
       const rows = briefingRows.filter(r => r.briefing_id === briefing.id);
       return (
