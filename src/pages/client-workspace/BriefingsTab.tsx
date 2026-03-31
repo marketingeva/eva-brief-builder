@@ -111,11 +111,24 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const weeks = [...new Set(requests.map(r => r.week_number).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
+  const weeks = [...new Set([
+    ...requests.map(r => r.week_number).filter(Boolean),
+    ...briefings.map(b => b.week_number).filter(Boolean),
+  ])].sort((a, b) => (b || 0) - (a || 0));
+
+  // Auto-generated briefings (no matching request)
+  const requestIds = new Set(requests.map(r => r.id));
+  const autoBriefings = briefings.filter(b => !requestIds.has(b.campaign_request_id));
 
   const filtered = requests.filter(r => {
     if (weekFilter !== 'all' && String(r.week_number) !== weekFilter) return false;
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    return true;
+  });
+
+  const filteredAuto = autoBriefings.filter(b => {
+    if (weekFilter !== 'all' && String(b.week_number) !== weekFilter) return false;
+    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
     return true;
   });
 
@@ -124,7 +137,21 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
     if (!acc[key]) acc[key] = [];
     acc[key].push(r);
     return acc;
+  });
+
+  // Group auto-briefings by week too
+  const autoGrouped = filteredAuto.reduce<Record<string, GeneratedBriefing[]>>((acc, b) => {
+    const key = b.week_number ? `Week ${b.week_number}` : 'Geen week';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(b);
+    return acc;
   }, {});
+
+  const allWeekKeys = [...new Set([...Object.keys(grouped), ...Object.keys(autoGrouped)])].sort((a, b) => {
+    const numA = parseInt(a.replace('Week ', '')) || 0;
+    const numB = parseInt(b.replace('Week ', '')) || 0;
+    return numB - numA;
+  });
 
   // Detail view — support both request-based and direct briefing selection
   if (selectedRequestId) {
