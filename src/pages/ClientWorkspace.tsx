@@ -130,6 +130,7 @@ export default function ClientWorkspace() {
         {activeTab === 'briefings' && <BriefingsTab clientId={client.id} clientName={client.name} />}
         {activeTab === 'creatives' && <CreativesCopyTab clientId={client.id} />}
         {activeTab === 'live-ads' && <LiveAdsTab clientName={client.name} clientId={client.id} />}
+        {activeTab === 'ai-team' && <AITeamTab clientId={client.id} clientName={client.name} />}
       </div>
     </div>
   );
