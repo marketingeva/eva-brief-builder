@@ -212,12 +212,12 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Laden...</p>
-      ) : requests.length === 0 ? (
+      ) : requests.length === 0 && autoBriefings.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
             <p className="text-sm font-medium text-muted-foreground">Nog geen briefings</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Maak je eerste content briefing aan</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">Maak je eerste content briefing aan of wacht op de wekelijkse auto-briefing</p>
             <Button className="mt-4" size="sm" onClick={() => setDialogOpen(true)}>
               <Sparkles className="mr-2 h-3.5 w-3.5" />
               Eerste briefing genereren
@@ -226,11 +226,41 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
         </Card>
       ) : (
         <div className="space-y-6">
-          {Object.entries(grouped).map(([week, items]) => (
+          {allWeekKeys.map(week => (
             <div key={week}>
               <h3 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">{week}</h3>
               <div className="space-y-1.5">
-                {items.map(r => {
+                {/* Auto-generated briefings */}
+                {(autoGrouped[week] || []).map(b => {
+                  const content = (b.content && typeof b.content === 'object' && !Array.isArray(b.content)) ? b.content as Record<string, any> : {};
+                  return (
+                    <div
+                      key={b.id}
+                      onClick={() => setSelectedRequestId(b.id)}
+                      className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/30 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="h-4 w-4 text-amber-500/60" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {content.role || 'Auto-briefing'} {content.region ? `— ${content.region}` : ''}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(b.created_at).toLocaleDateString('nl-NL')} · Auto-gegenereerd
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn('text-[10px]', statusColors[b.status || 'draft'])}>
+                          {statusLabels[b.status || 'draft'] || b.status}
+                        </Badge>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Request-based briefings */}
+                {(grouped[week] || []).map(r => {
                   const hasBriefing = briefings.some(b => b.campaign_request_id === r.id);
                   return (
                     <div
