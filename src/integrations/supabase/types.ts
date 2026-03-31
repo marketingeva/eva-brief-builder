@@ -59,7 +59,10 @@ export type Database = {
           content: Json
           created_at: string
           id: string
+          pdf_path: string | null
+          report_source: string
           report_type: string | null
+          title: string | null
         }
         Insert: {
           agent_type: string
@@ -67,7 +70,10 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          pdf_path?: string | null
+          report_source?: string
           report_type?: string | null
+          title?: string | null
         }
         Update: {
           agent_type?: string
@@ -75,7 +81,10 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          pdf_path?: string | null
+          report_source?: string
           report_type?: string | null
+          title?: string | null
         }
         Relationships: [
           {
