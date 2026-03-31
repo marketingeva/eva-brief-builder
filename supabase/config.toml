@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.fetch-meta-ads]
 verify_jwt = false
+
+[functions.agent-analyst]
+verify_jwt = false
+
+[functions.agent-trend-scout]
+verify_jwt = false
+
+[functions.agent-chat]
+verify_jwt = false
