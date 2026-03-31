@@ -116,9 +116,23 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
     ...briefings.map(b => b.week_number).filter(Boolean),
   ])].sort((a, b) => (b || 0) - (a || 0));
 
+  // Helper to find briefing for a request (by campaign_request_id OR content.briefing_request_id)
+  const findBriefingForRequest = (requestId: string) => {
+    return briefings.find(b => {
+      if (b.campaign_request_id === requestId) return true;
+      const content = (b.content && typeof b.content === 'object' && !Array.isArray(b.content)) ? b.content as Record<string, any> : {};
+      return content.briefing_request_id === requestId;
+    });
+  };
+
   // Auto-generated briefings (no matching request)
   const requestIds = new Set(requests.map(r => r.id));
-  const autoBriefings = briefings.filter(b => !requestIds.has(b.campaign_request_id));
+  const autoBriefings = briefings.filter(b => {
+    if (requestIds.has(b.campaign_request_id)) return false;
+    const content = (b.content && typeof b.content === 'object' && !Array.isArray(b.content)) ? b.content as Record<string, any> : {};
+    if (content.briefing_request_id && requestIds.has(content.briefing_request_id)) return false;
+    return true;
+  });
 
   const filtered = requests.filter(r => {
     if (weekFilter !== 'all' && String(r.week_number) !== weekFilter) return false;
@@ -155,7 +169,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
 
   // Detail view — support both request-based and direct briefing selection
   if (selectedRequestId) {
-    const briefing = briefings.find(b => b.campaign_request_id === selectedRequestId) || briefings.find(b => b.id === selectedRequestId);
+    const briefing = findBriefingForRequest(selectedRequestId) || briefings.find(b => b.id === selectedRequestId);
     if (briefing) {
       const rows = briefingRows.filter(r => r.briefing_id === briefing.id);
       return (
@@ -261,7 +275,7 @@ export default function BriefingsTab({ clientId, clientName }: Props) {
                 })}
                 {/* Request-based briefings */}
                 {(grouped[week] || []).map(r => {
-                  const hasBriefing = briefings.some(b => b.campaign_request_id === r.id);
+                  const hasBriefing = !!findBriefingForRequest(r.id);
                   return (
                     <div
                       key={r.id}
