@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { BookOpen, FileText, Palette, Radio, LayoutDashboard } from 'lucide-react';
+import { BookOpen, FileText, Palette, Radio, LayoutDashboard, Bot } from 'lucide-react';
 import OverviewTab from '@/pages/client-workspace/OverviewTab';
 import LearningTab from '@/pages/client-workspace/LearningTab';
 import BriefingsTab from '@/pages/client-workspace/BriefingsTab';
 import CreativesCopyTab from '@/pages/client-workspace/CreativesCopyTab';
 import LiveAdsTab from '@/pages/client-workspace/LiveAdsTab';
+import AITeamTab from '@/pages/client-workspace/AITeamTab';
 
 interface Client {
   id: string;
@@ -26,6 +27,7 @@ const tabs = [
   { key: 'briefings', label: 'Briefings', icon: FileText },
   { key: 'creatives', label: 'Creatives & Copy', icon: Palette },
   { key: 'live-ads', label: 'Live Ads', icon: Radio },
+  { key: 'ai-team', label: 'AI Team', icon: Bot },
 ] as const;
 
 type TabKey = typeof tabs[number]['key'];
@@ -128,6 +130,7 @@ export default function ClientWorkspace() {
         {activeTab === 'briefings' && <BriefingsTab clientId={client.id} clientName={client.name} />}
         {activeTab === 'creatives' && <CreativesCopyTab clientId={client.id} />}
         {activeTab === 'live-ads' && <LiveAdsTab clientName={client.name} clientId={client.id} />}
+        {activeTab === 'ai-team' && <AITeamTab clientId={client.id} clientName={client.name} />}
       </div>
     </div>
   );

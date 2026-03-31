@@ -14,6 +14,79 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_conversations: {
+        Row: {
+          agent_type: string
+          client_id: string
+          created_at: string
+          id: string
+          messages: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_type: string
+          client_id: string
+          created_at?: string
+          id?: string
+          messages?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_type?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          messages?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_conversations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_reports: {
+        Row: {
+          agent_type: string
+          client_id: string
+          content: Json
+          created_at: string
+          id: string
+          report_type: string | null
+        }
+        Insert: {
+          agent_type: string
+          client_id: string
+          content?: Json
+          created_at?: string
+          id?: string
+          report_type?: string | null
+        }
+        Update: {
+          agent_type?: string
+          client_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          report_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       briefing_requests: {
         Row: {
           care_type: string | null
