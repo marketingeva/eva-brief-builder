@@ -1,62 +1,50 @@
 
 
-# Briefing Restructuur: Weekoverzicht + Verbeterde Export
+# Fix Briefing Export & UI
 
-## Wat verandert
+## Problemen
 
-De briefing-structuur wordt omgebouwd van "1 briefing per functie" naar **1 weekbriefing met alle functies in één overzichtelijke tabel**. De tabelweergave wordt de primaire view (niet de kaartjes). Export wordt professioneel en direct bruikbaar.
+1. **CSV export is rommelig** — geen kolombreedtes, geen text wrapping, strategische context als losse regels onderaan
+2. **"Omschrijving (creatief format)"** veld staat boven de tabel en heeft geen functie → verwijderen
+3. **Kolom-volgorde mismatch** — header toont `Hook, USP's, Omschrijving` maar body rendert `Hook, Omschrijving, USP's` (swapped)
+4. **Afbeelding upload** staat technisch in de code maar is moeilijk zichtbaar door de kolom-mismatch
 
 ## Wijzigingen
 
-### 1. BriefingDetailView herschrijven — tabel-first approach
+### 1. Verwijder "Omschrijving (creatief format)" blok
+- Regels 267-280 in `BriefingDetailView.tsx` verwijderen
+- `formatDescription` state en gerelateerde save/export logica opschonen
 
-- **Tabel wordt de standaard view** (geen toggle meer tussen kaart/tabel)
-- **Strategische context** (creative richting, doelgroep, etc.) als compacte header boven de tabel, niet als aparte kaartjes
-- **Tabel layout fixes**:
-  - Alle cellen krijgen `whitespace-pre-wrap` en `word-break: break-word` — geen afgekapte tekst
-  - Verwijder `truncate` en `max-w-[200px]` classes
-  - Minimale kolombreedte per veld voor leesbaarheid
-  - Textarea in edit-modus in plaats van single-line Input
-- **USP's als bulletpoints**: USP-tekst splitsen op `\n` of `,` en renderen als `<ul><li>` in de cel
-- **"Omschrijving" veld**: Eén overkoepelend veld in de strategische header voor het creatieve format (los van de per-rij omschrijving)
-- **Creative inspiratie met afbeelding**: Voeg een upload-knop toe per rij in de `creative_inspiratie` kolom; afbeelding wordt opgeslagen in Supabase Storage en getoond als thumbnail in de cel
+### 2. Fix kolom-volgorde in tabel body
+- Body rendert nu: `functie, locatie, hook, omschrijving, usps, creative_inspiratie`
+- Header verwacht: `functie, locatie, hook, usps, omschrijving, creative_inspiratie`
+- Fix: verander de loop op regel 367 van `['functie', 'locatie', 'hook', 'omschrijving']` naar `['functie', 'locatie', 'hook']`, en render USPs daarna, dan Omschrijving als apart veld, dan Creative inspiratie + afbeelding
 
-### 2. CSV/Excel export verbeteren
+### 3. Voeg aparte "Afbeelding" kolom toe aan tabel
+- Nieuwe kolom "Inspiratie afbeelding" naast Creative inspiratie
+- Toont thumbnail + upload knop duidelijk zichtbaar per rij
+- Niet verstopt in dezelfde cel als de tekst
 
-- **Volledig uitgeschreven teksten** — geen truncatie
-- **USP's als bulletpoints**: In de CSV-cel met `\n• ` prefix per USP
-- **Strategische context als apart blok** onder de functie-tabel (met duidelijke header)
-- **BOM + UTF-8** voor correcte weergave in Excel/Sheets (al aanwezig)
-- **Creative inspiratie afbeelding**: Als URL in de export-cel
+### 4. Verbeterde Excel export (XLSX in plaats van CSV)
+- Gebruik `openpyxl` via een edge function of direct XLSX-compatible output
+- Alternatief: verbeter de CSV zodat kolommen correct gescheiden zijn en multiline cellen werken
+- Concrete fix: gebruik tab-separated values met juiste quoting, of genereer een echte `.xlsx` via een client-side library (`xlsx`/`SheetJS`)
+- Kolombreedtes instellen, text wrap aan, header vet
+- USP's als bullet-lijst in cel
+- Strategische context als apart tabblad of koptekst-blok met lege rij ertussen
+- Afbeelding URL als klikbare link in de cel
 
-### 3. BriefingsTab — weekoverzicht structuur
-
-- Per week wordt **één briefing-kaart** getoond (niet per functie)
-- Klik op een weekbriefing → opent de tabelweergave met alle functies van die week
-- Titel wordt "Weekbriefing {nummer}" in plaats van functienaam
-- Aantal functies als subtekst
-
-### 4. briefing_rows tabel — afbeelding kolom
-
-- Nieuwe kolom `creative_image_path` (text, nullable) toevoegen via migratie
-- Wordt gebruikt voor de creative inspiratie afbeelding URL
-
-### 5. Supabase Storage bucket
-
-- Bucket `briefing-assets` aanmaken voor creative inspiratie afbeeldingen
-
-## Bestanden
+### Bestanden
 
 | Bestand | Actie |
 |---------|-------|
-| `src/components/briefings/BriefingDetailView.tsx` | Herschrijven — tabel-first, wrap text, USP bullets, image upload |
-| `src/pages/client-workspace/BriefingsTab.tsx` | Update — weekoverzicht groepering |
-| Database migratie | `creative_image_path` kolom + storage bucket |
+| `src/components/briefings/BriefingDetailView.tsx` | Verwijder format description, fix kolom-volgorde, split afbeelding kolom, XLSX export |
+| `package.json` | Toevoegen: `xlsx` (SheetJS) voor client-side Excel generatie |
 
 ## Technische details
 
-- USP split logica: `usps.split(/[,\n]/).filter(Boolean)` → render als `<li>`
-- Afbeelding upload via `supabase.storage.from('briefing-assets').upload()`
-- Export: `\n• ` als bullet-separator in CSV cellen (Excel/Sheets-compatible)
-- Tabel cellen: `min-w-[150px]` per content kolom, `whitespace-pre-wrap break-words`
+- SheetJS (`xlsx` npm package) voor client-side `.xlsx` generatie met `!cols` voor kolombreedtes en cell styles
+- USP formatting: `• item1\n• item2` in de Excel cel met wrap text
+- Strategische context → apart sheet of header-blok met lege rij separator
+- Afbeelding kolom: toont thumbnail (80px) + upload knop in edit mode, URL in export
 
