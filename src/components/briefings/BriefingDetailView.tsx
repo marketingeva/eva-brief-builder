@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import BriefingStatusStepper from './BriefingStatusStepper';
 import type { Json } from '@/integrations/supabase/types';
+import * as XLSX from 'xlsx';
 
 interface BriefingRow {
   id: string;
@@ -85,7 +86,6 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
   const [extraNotesOpen, setExtraNotesOpen] = useState(false);
   const [designerNotes, setDesignerNotes] = useState(originalContent.manual_designer_notes || '');
   const [extraContext, setExtraContext] = useState(originalContent.manual_extra_context || '');
-  const [formatDescription, setFormatDescription] = useState(originalContent.format_description || '');
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const updateContent = (key: string, value: any) => {
@@ -114,7 +114,6 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
         ...editedContent,
         manual_designer_notes: designerNotes,
         manual_extra_context: extraContext,
-        format_description: formatDescription,
       };
       await supabase
         .from('generated_briefings')
@@ -143,7 +142,7 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
     } finally {
       setSaving(false);
     }
-  }, [editedContent, editedRows, designerNotes, extraContext, formatDescription, briefing.id, toast, onRefresh]);
+  }, [editedContent, editedRows, designerNotes, extraContext, briefing.id, toast, onRefresh]);
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -163,7 +162,6 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
 
   const copyAllText = () => {
     const lines: string[] = [];
-    if (formatDescription) lines.push(`Omschrijving format: ${formatDescription}`);
     strategicFields.forEach(f => {
       if (editedContent[f.key]) lines.push(`${f.label}: ${editedContent[f.key]}`);
     });
@@ -180,10 +178,14 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
     toast({ title: 'Gekopieerd naar klembord' });
   };
 
-  const exportCSV = () => {
+  const exportXLSX = () => {
     if (editedRows.length === 0) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // --- Sheet 1: Briefing rows ---
     const headers = ['Nieuw/Remake', 'Functie', 'Locatie', 'Hook', "USP's", 'Omschrijving', 'Creative inspiratie', 'Inspiratie afbeelding'];
-    const csvRows = editedRows.map(r => {
+    const data = editedRows.map(r => {
       const uspItems = (r.usps || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean);
       const uspFormatted = uspItems.length > 1 ? uspItems.map(u => `• ${u}`).join('\n') : (r.usps || '');
       return [
@@ -195,24 +197,42 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
         r.omschrijving || '',
         r.creative_inspiratie || '',
         r.creative_image_path || '',
-      ].map(v => `"${(v || '').replace(/"/g, '""')}"`).join(',');
+      ];
     });
 
-    const stratLines: string[] = [];
-    if (formatDescription) stratLines.push(`"Omschrijving format","${formatDescription.replace(/"/g, '""')}","","","","","",""`);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+
+    // Column widths
+    ws['!cols'] = [
+      { wch: 14 }, // Nieuw/Remake
+      { wch: 22 }, // Functie
+      { wch: 18 }, // Locatie
+      { wch: 35 }, // Hook
+      { wch: 35 }, // USP's
+      { wch: 35 }, // Omschrijving
+      { wch: 35 }, // Creative inspiratie
+      { wch: 40 }, // Inspiratie afbeelding
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Briefing');
+
+    // --- Sheet 2: Strategische context ---
+    const stratData: string[][] = [['Veld', 'Waarde']];
     strategicFields
       .filter(f => editedContent[f.key])
-      .forEach(f => stratLines.push(`"${f.label}","${String(editedContent[f.key]).replace(/"/g, '""')}","","","","","",""`));
+      .forEach(f => stratData.push([f.label, String(editedContent[f.key])]));
+    if (designerNotes) stratData.push(['Notities designer', designerNotes]);
+    if (extraContext) stratData.push(['Extra context', extraContext]);
 
-    const csv = [headers.join(','), ...csvRows, '', '"--- Strategische Context ---","","","","","","",""', ...stratLines].join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `briefing-week${briefing.week_number || ''}-${new Date(briefing.created_at).toLocaleDateString('nl-NL')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: 'CSV geëxporteerd' });
+    if (stratData.length > 1) {
+      const ws2 = XLSX.utils.aoa_to_sheet(stratData);
+      ws2['!cols'] = [{ wch: 25 }, { wch: 60 }];
+      XLSX.utils.book_append_sheet(wb, ws2, 'Strategische Context');
+    }
+
+    const filename = `briefing-week${briefing.week_number || ''}-${new Date(briefing.created_at).toLocaleDateString('nl-NL')}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast({ title: 'Excel geëxporteerd' });
   };
 
   return (
@@ -258,24 +278,9 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
           </Button>
         )}
         {currentStatus === 'approved' && editedRows.length > 0 && (
-          <Button size="sm" onClick={exportCSV} className="h-8 text-xs">
-            <Download className="mr-1 h-3 w-3" /> Exporteer als CSV
+          <Button size="sm" onClick={exportXLSX} className="h-8 text-xs">
+            <Download className="mr-1 h-3 w-3" /> Exporteer Excel
           </Button>
-        )}
-      </div>
-
-      {/* Format description */}
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">Omschrijving (creatief format)</label>
-        {isEditable ? (
-          <Textarea
-            value={formatDescription}
-            onChange={e => setFormatDescription(e.target.value)}
-            placeholder="Beschrijf het creatieve format als geheel..."
-            className="text-sm min-h-[50px]"
-          />
-        ) : (
-          <p className="text-sm text-foreground whitespace-pre-wrap bg-muted/30 rounded-md p-3">{formatDescription || '-'}</p>
         )}
       </div>
 
@@ -345,12 +350,14 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
                 <TableHead className="text-xs font-semibold min-w-[180px]">Hook</TableHead>
                 <TableHead className="text-xs font-semibold min-w-[180px]">USP's</TableHead>
                 <TableHead className="text-xs font-semibold min-w-[180px]">Omschrijving</TableHead>
-                <TableHead className="text-xs font-semibold min-w-[200px]">Creative inspiratie</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[180px]">Creative inspiratie</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[120px]">Afbeelding</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {editedRows.map(row => (
                 <TableRow key={row.id} className="hover:bg-muted/20 align-top">
+                  {/* Nieuw/Remake */}
                   <TableCell className="text-xs">
                     {isEditable ? (
                       <button onClick={() => updateRow(row.id, 'is_new', !row.is_new)} className="cursor-pointer">
@@ -364,7 +371,9 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
                       </Badge>
                     )}
                   </TableCell>
-                  {(['functie', 'locatie', 'hook', 'omschrijving'] as const).map(field => (
+
+                  {/* Functie, Locatie, Hook */}
+                  {(['functie', 'locatie', 'hook'] as const).map(field => (
                     <TableCell key={field} className="text-xs whitespace-pre-wrap break-words">
                       {isEditable ? (
                         <Textarea
@@ -377,7 +386,8 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
                       )}
                     </TableCell>
                   ))}
-                  {/* USPs with bullet rendering */}
+
+                  {/* USP's */}
                   <TableCell className="text-xs whitespace-pre-wrap break-words">
                     {isEditable ? (
                       <Textarea
@@ -390,55 +400,70 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
                       renderUsps(row.usps)
                     )}
                   </TableCell>
-                  {/* Creative inspiratie + image */}
+
+                  {/* Omschrijving */}
                   <TableCell className="text-xs whitespace-pre-wrap break-words">
                     {isEditable ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={row.creative_inspiratie || ''}
-                          onChange={e => updateRow(row.id, 'creative_inspiratie', e.target.value)}
-                          className="text-xs border-border/30 min-h-[60px] min-w-[150px]"
-                        />
-                        {row.creative_image_path ? (
-                          <div className="relative inline-block">
-                            <img src={row.creative_image_path} alt="Inspiratie" className="max-h-20 rounded border" />
-                            <button
-                              onClick={() => updateRow(row.id, 'creative_image_path', null)}
-                              className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              ref={el => { fileInputRefs.current[row.id] = el; }}
-                              onChange={e => {
-                                const file = e.target.files?.[0];
-                                if (file) handleImageUpload(row.id, file);
-                              }}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-[10px]"
-                              onClick={() => fileInputRefs.current[row.id]?.click()}
-                            >
-                              <ImagePlus className="mr-1 h-3 w-3" /> Afbeelding
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                      <Textarea
+                        value={row.omschrijving || ''}
+                        onChange={e => updateRow(row.id, 'omschrijving', e.target.value)}
+                        className="text-xs border-border/30 min-h-[60px] min-w-[150px]"
+                      />
                     ) : (
-                      <div className="space-y-2">
-                        <span>{row.creative_inspiratie || '-'}</span>
-                        {row.creative_image_path && (
-                          <img src={row.creative_image_path} alt="Inspiratie" className="max-h-24 rounded border mt-1" />
+                      <span>{row.omschrijving || '-'}</span>
+                    )}
+                  </TableCell>
+
+                  {/* Creative inspiratie (tekst) */}
+                  <TableCell className="text-xs whitespace-pre-wrap break-words">
+                    {isEditable ? (
+                      <Textarea
+                        value={row.creative_inspiratie || ''}
+                        onChange={e => updateRow(row.id, 'creative_inspiratie', e.target.value)}
+                        className="text-xs border-border/30 min-h-[60px] min-w-[150px]"
+                      />
+                    ) : (
+                      <span>{row.creative_inspiratie || '-'}</span>
+                    )}
+                  </TableCell>
+
+                  {/* Afbeelding — aparte kolom */}
+                  <TableCell className="text-xs">
+                    {row.creative_image_path ? (
+                      <div className="relative inline-block">
+                        <img src={row.creative_image_path} alt="Inspiratie" className="max-h-20 rounded border" />
+                        {isEditable && (
+                          <button
+                            onClick={() => updateRow(row.id, 'creative_image_path', null)}
+                            className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         )}
                       </div>
+                    ) : isEditable ? (
+                      <>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          ref={el => { fileInputRefs.current[row.id] = el; }}
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImageUpload(row.id, file);
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px]"
+                          onClick={() => fileInputRefs.current[row.id]?.click()}
+                        >
+                          <ImagePlus className="mr-1 h-3 w-3" /> Upload
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                 </TableRow>
