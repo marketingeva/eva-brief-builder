@@ -1,13 +1,11 @@
-import { useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useCallback, useRef } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, LayoutGrid, Sheet, Copy, Download, Save, Check, ChevronDown, MessageSquarePlus } from 'lucide-react';
+import { ArrowLeft, Copy, Download, Save, Check, ChevronDown, MessageSquarePlus, ImagePlus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +22,7 @@ interface BriefingRow {
   usps: string | null;
   omschrijving: string | null;
   creative_inspiratie: string | null;
+  creative_image_path?: string | null;
   sort_order: number | null;
 }
 
@@ -43,41 +42,42 @@ interface Props {
   onRefresh?: () => void;
 }
 
-const contentFields = [
-  { key: 'role', label: 'Functie' },
-  { key: 'region', label: 'Regio' },
+const strategicFields = [
+  { key: 'creative_direction', label: 'Creative richting' },
   { key: 'target_audience', label: 'Doelgroep' },
   { key: 'campaign_objective', label: 'Campagne doel' },
-  { key: 'key_recruitment_challenge', label: 'Recruitment uitdaging' },
+  { key: 'core_message', label: 'Kernboodschap' },
   { key: 'main_hook', label: 'Hoofdhook' },
   { key: 'audience_tension', label: 'Spanning / trigger' },
-  { key: 'core_message', label: 'Kernboodschap' },
-  { key: 'creative_direction', label: 'Creative richting' },
   { key: 'visual_concept', label: 'Visueel concept' },
-  { key: 'suggested_scenes', label: 'Scènes / statics' },
-  { key: 'ad_copy_starter', label: 'Ad copy concept' },
   { key: 'cta_direction', label: 'CTA richting' },
   { key: 'notes_for_designer', label: 'Notities voor designer' },
   { key: 'notes_for_recruiter', label: 'Notities voor recruiter' },
-  { key: 'internal_comments', label: 'Interne opmerkingen' },
 ];
 
-const arrayFields = [
-  { key: 'proof_points_usps', label: "USP's" },
-  { key: 'onscreen_copy_ideas', label: 'On-screen copy' },
-  { key: 'hook_variants', label: 'Hook varianten' },
-  { key: 'what_to_avoid', label: 'Te vermijden' },
-];
+function renderUsps(text: string | null) {
+  if (!text) return <span className="text-muted-foreground">-</span>;
+  const items = text.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  if (items.length <= 1) return <span>{text}</span>;
+  return (
+    <ul className="list-none space-y-0.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-start gap-1.5">
+          <span className="text-primary mt-0.5 shrink-0">•</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }: Props) {
-  const [viewMode, setViewMode] = useState<'card' | 'sheet'>('card');
   const { toast } = useToast();
   const { user } = useAuth();
 
   const [currentStatus, setCurrentStatus] = useState(briefing.status || 'draft');
   const isEditable = currentStatus !== 'approved';
 
-  // Editable content state
   const originalContent = (briefing.content && typeof briefing.content === 'object' && !Array.isArray(briefing.content)) ? briefing.content as Record<string, any> : {};
   const [editedContent, setEditedContent] = useState<Record<string, any>>({ ...originalContent });
   const [editedRows, setEditedRows] = useState<BriefingRow[]>(rows.map(r => ({ ...r })));
@@ -85,6 +85,8 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
   const [extraNotesOpen, setExtraNotesOpen] = useState(false);
   const [designerNotes, setDesignerNotes] = useState(originalContent.manual_designer_notes || '');
   const [extraContext, setExtraContext] = useState(originalContent.manual_extra_context || '');
+  const [formatDescription, setFormatDescription] = useState(originalContent.format_description || '');
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const updateContent = (key: string, value: any) => {
     setEditedContent(prev => ({ ...prev, [key]: value }));
@@ -94,6 +96,17 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
     setEditedRows(prev => prev.map(r => r.id === rowId ? { ...r, [field]: value } : r));
   };
 
+  const handleImageUpload = async (rowId: string, file: File) => {
+    const path = `${briefing.id}/${rowId}-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error } = await supabase.storage.from('briefing-assets').upload(path, file);
+    if (error) {
+      toast({ title: 'Upload mislukt', description: error.message, variant: 'destructive' });
+      return;
+    }
+    const { data: urlData } = supabase.storage.from('briefing-assets').getPublicUrl(path);
+    updateRow(rowId, 'creative_image_path', urlData.publicUrl);
+  };
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -101,14 +114,13 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
         ...editedContent,
         manual_designer_notes: designerNotes,
         manual_extra_context: extraContext,
+        format_description: formatDescription,
       };
-
       await supabase
         .from('generated_briefings')
         .update({ content: contentToSave as unknown as Json })
         .eq('id', briefing.id);
 
-      // Update rows
       for (const row of editedRows) {
         await supabase
           .from('briefing_rows')
@@ -119,11 +131,11 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
             usps: row.usps,
             omschrijving: row.omschrijving,
             creative_inspiratie: row.creative_inspiratie,
+            creative_image_path: row.creative_image_path,
             is_new: row.is_new,
           })
           .eq('id', row.id);
       }
-
       toast({ title: 'Wijzigingen opgeslagen' });
       onRefresh?.();
     } catch (e: any) {
@@ -131,7 +143,7 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
     } finally {
       setSaving(false);
     }
-  }, [editedContent, editedRows, designerNotes, extraContext, briefing.id, toast, onRefresh]);
+  }, [editedContent, editedRows, designerNotes, extraContext, formatDescription, briefing.id, toast, onRefresh]);
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -144,43 +156,55 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
       setCurrentStatus(newStatus);
       toast({ title: newStatus === 'in_review' ? 'Briefing in review' : 'Briefing goedgekeurd!' });
       onRefresh?.();
-    } catch (e: any) {
+    } catch {
       toast({ title: 'Status update mislukt', variant: 'destructive' });
     }
   };
 
   const copyAllText = () => {
     const lines: string[] = [];
-    contentFields.forEach(f => {
+    if (formatDescription) lines.push(`Omschrijving format: ${formatDescription}`);
+    strategicFields.forEach(f => {
       if (editedContent[f.key]) lines.push(`${f.label}: ${editedContent[f.key]}`);
     });
-    arrayFields.forEach(f => {
-      const arr = editedContent[f.key];
-      if (Array.isArray(arr) && arr.length) lines.push(`${f.label}:\n${arr.map((x: string) => `  • ${x}`).join('\n')}`);
+    lines.push('', '--- Functies ---');
+    editedRows.forEach(r => {
+      lines.push(`\n${r.functie || 'Functie'} (${r.locatie || '-'})`);
+      lines.push(`Hook: ${r.hook || '-'}`);
+      const uspItems = (r.usps || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+      lines.push(`USP's:\n${uspItems.map(u => `  • ${u}`).join('\n')}`);
+      lines.push(`Omschrijving: ${r.omschrijving || '-'}`);
+      lines.push(`Creative inspiratie: ${r.creative_inspiratie || '-'}`);
     });
-    navigator.clipboard.writeText(lines.join('\n\n'));
+    navigator.clipboard.writeText(lines.join('\n'));
     toast({ title: 'Gekopieerd naar klembord' });
   };
 
   const exportCSV = () => {
     if (editedRows.length === 0) return;
-    const headers = ['Nieuw/Remake', 'Functie', 'Locatie', 'Hook', "USP's", 'Omschrijving', 'Creative inspiratie'];
-    const csvRows = editedRows.map(r => [
-      r.is_new ? 'Nieuw' : 'Remake',
-      r.functie || '',
-      r.locatie || '',
-      r.hook || '',
-      r.usps || '',
-      r.omschrijving || '',
-      r.creative_inspiratie || '',
-    ].map(v => `"${(v || '').replace(/"/g, '""')}"`).join(','));
+    const headers = ['Nieuw/Remake', 'Functie', 'Locatie', 'Hook', "USP's", 'Omschrijving', 'Creative inspiratie', 'Inspiratie afbeelding'];
+    const csvRows = editedRows.map(r => {
+      const uspItems = (r.usps || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+      const uspFormatted = uspItems.length > 1 ? uspItems.map(u => `• ${u}`).join('\n') : (r.usps || '');
+      return [
+        r.is_new ? 'Nieuw' : 'Remake',
+        r.functie || '',
+        r.locatie || '',
+        r.hook || '',
+        uspFormatted,
+        r.omschrijving || '',
+        r.creative_inspiratie || '',
+        r.creative_image_path || '',
+      ].map(v => `"${(v || '').replace(/"/g, '""')}"`).join(',');
+    });
 
-    // Also add strategic content as extra rows
-    const stratLines = contentFields
+    const stratLines: string[] = [];
+    if (formatDescription) stratLines.push(`"Omschrijving format","${formatDescription.replace(/"/g, '""')}","","","","","",""`);
+    strategicFields
       .filter(f => editedContent[f.key])
-      .map(f => `"${f.label}","${String(editedContent[f.key]).replace(/"/g, '""')}","","","","",""`);
+      .forEach(f => stratLines.push(`"${f.label}","${String(editedContent[f.key]).replace(/"/g, '""')}","","","","","",""`));
 
-    const csv = [headers.join(','), ...csvRows, '', '"--- Strategische Context ---","","","","","",""', ...stratLines].join('\n');
+    const csv = [headers.join(','), ...csvRows, '', '"--- Strategische Context ---","","","","","","",""', ...stratLines].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -200,14 +224,17 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
             <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Terug
           </Button>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">{editedContent.role || 'Briefing'}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              Weekbriefing {briefing.week_number || ''}
+            </h3>
             <p className="text-[10px] text-muted-foreground">
-              Week {briefing.week_number} · v{briefing.version} · {new Date(briefing.created_at).toLocaleDateString('nl-NL')}
+              v{briefing.version} · {new Date(briefing.created_at).toLocaleDateString('nl-NL')}
+              {' · '}{editedRows.length} functie{editedRows.length !== 1 ? 's' : ''}
               {originalContent.auto_generated && <Badge variant="outline" className="ml-2 text-[9px]">Auto</Badge>}
             </p>
           </div>
         </div>
-        <BriefingStatusStepper status={status} />
+        <BriefingStatusStepper status={currentStatus} />
       </div>
 
       {/* Action bar */}
@@ -220,7 +247,6 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
         <Button variant="outline" size="sm" onClick={copyAllText} className="h-8 text-xs">
           <Copy className="mr-1 h-3 w-3" /> Kopieer
         </Button>
-
         {currentStatus === 'draft' && (
           <Button size="sm" onClick={() => handleStatusChange('in_review')} className="h-8 text-xs">
             In review zetten
@@ -238,7 +264,53 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
         )}
       </div>
 
-      {/* Manual input section — collapsible */}
+      {/* Format description */}
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-muted-foreground">Omschrijving (creatief format)</label>
+        {isEditable ? (
+          <Textarea
+            value={formatDescription}
+            onChange={e => setFormatDescription(e.target.value)}
+            placeholder="Beschrijf het creatieve format als geheel..."
+            className="text-sm min-h-[50px]"
+          />
+        ) : (
+          <p className="text-sm text-foreground whitespace-pre-wrap bg-muted/30 rounded-md p-3">{formatDescription || '-'}</p>
+        )}
+      </div>
+
+      {/* Strategic context — compact collapsible */}
+      <Collapsible>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground w-full justify-start">
+            <ChevronDown className="mr-1.5 h-3.5 w-3.5" />
+            Strategische context
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="grid gap-3 md:grid-cols-2 pt-2">
+          {strategicFields.map(f => {
+            const val = editedContent[f.key];
+            if (!val && !isEditable) return null;
+            return (
+              <div key={f.key} className="space-y-1">
+                <label className="text-[11px] font-medium text-muted-foreground">{f.label}</label>
+                {isEditable ? (
+                  <Textarea
+                    value={val || ''}
+                    onChange={e => updateContent(f.key, e.target.value)}
+                    className="text-sm min-h-[50px] border-border/30"
+                    placeholder={f.label}
+                  />
+                ) : (
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{val}</p>
+                )}
+              </div>
+            );
+          })}
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Manual input section */}
       {isEditable && (
         <Collapsible open={extraNotesOpen} onOpenChange={setExtraNotesOpen}>
           <CollapsibleTrigger asChild>
@@ -251,158 +323,136 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
           <CollapsibleContent className="space-y-3 pt-2">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Context voor designer</label>
-              <Textarea
-                value={designerNotes}
-                onChange={e => setDesignerNotes(e.target.value)}
-                placeholder="Specifieke wensen voor het ontwerp, referenties, kleuren..."
-                className="text-sm min-h-[60px]"
-              />
+              <Textarea value={designerNotes} onChange={e => setDesignerNotes(e.target.value)} placeholder="Specifieke wensen voor het ontwerp..." className="text-sm min-h-[60px]" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Extra campagne context</label>
-              <Textarea
-                value={extraContext}
-                onChange={e => setExtraContext(e.target.value)}
-                placeholder="Extra vacature-input, campagnewensen, opmerkingen..."
-                className="text-sm min-h-[60px]"
-              />
+              <Textarea value={extraContext} onChange={e => setExtraContext(e.target.value)} placeholder="Extra vacature-input, campagnewensen..." className="text-sm min-h-[60px]" />
             </div>
           </CollapsibleContent>
         </Collapsible>
       )}
 
-      {/* View toggle */}
-      <Tabs value={viewMode} onValueChange={v => setViewMode(v as 'card' | 'sheet')}>
-        <TabsList className="h-8">
-          <TabsTrigger value="card" className="text-xs h-7 px-3">
-            <LayoutGrid className="mr-1 h-3 w-3" /> Detailweergave
-          </TabsTrigger>
-          <TabsTrigger value="sheet" className="text-xs h-7 px-3">
-            <Sheet className="mr-1 h-3 w-3" /> Tabelweergave
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Card view — editable */}
-        <TabsContent value="card" className="mt-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {contentFields.map(f => {
-              const val = editedContent[f.key];
-              if (!val && !isEditable) return null;
-              return (
-                <Card key={f.key} className="border-border/50">
-                  <CardHeader className="pb-1 pt-3 px-4">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">{f.label}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-3">
+      {/* Main table — primary view */}
+      {editedRows.length > 0 ? (
+        <div className="rounded-lg border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="text-xs font-semibold w-[80px]">Nieuw</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[140px]">Functie</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[120px]">Locatie</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[180px]">Hook</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[180px]">USP's</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[180px]">Omschrijving</TableHead>
+                <TableHead className="text-xs font-semibold min-w-[200px]">Creative inspiratie</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {editedRows.map(row => (
+                <TableRow key={row.id} className="hover:bg-muted/20 align-top">
+                  <TableCell className="text-xs">
                     {isEditable ? (
-                      <Textarea
-                        value={val || ''}
-                        onChange={e => updateContent(f.key, e.target.value)}
-                        className="text-sm min-h-[60px] border-border/30"
-                        placeholder={f.label}
-                      />
+                      <button onClick={() => updateRow(row.id, 'is_new', !row.is_new)} className="cursor-pointer">
+                        <Badge variant={row.is_new ? 'default' : 'secondary'} className="text-[10px]">
+                          {row.is_new ? 'Nieuw' : 'Remake'}
+                        </Badge>
+                      </button>
                     ) : (
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{val}</p>
+                      <Badge variant={row.is_new ? 'default' : 'secondary'} className="text-[10px]">
+                        {row.is_new ? 'Nieuw' : 'Remake'}
+                      </Badge>
                     )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-            {arrayFields.map(f => {
-              const arr = editedContent[f.key];
-              if ((!Array.isArray(arr) || !arr.length) && !isEditable) return null;
-              return (
-                <Card key={f.key} className="border-border/50">
-                  <CardHeader className="pb-1 pt-3 px-4">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">{f.label}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-3">
-                    {isEditable ? (
-                      <Textarea
-                        value={Array.isArray(arr) ? arr.join('\n') : ''}
-                        onChange={e => updateContent(f.key, e.target.value.split('\n').filter(Boolean))}
-                        className="text-sm min-h-[60px] border-border/30"
-                        placeholder="Eén item per regel"
-                      />
-                    ) : (
-                      <ul className="space-y-1">
-                        {(arr || []).map((item: string, i: number) => (
-                          <li key={i} className="text-sm text-foreground flex items-start gap-1.5">
-                            <span className="text-primary mt-1">•</span>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        {/* Sheet view — editable */}
-        <TabsContent value="sheet" className="mt-4">
-          {editedRows.length > 0 ? (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="text-xs font-semibold w-[80px]">Nieuw</TableHead>
-                    <TableHead className="text-xs font-semibold">Functie</TableHead>
-                    <TableHead className="text-xs font-semibold">Locatie</TableHead>
-                    <TableHead className="text-xs font-semibold">Hook</TableHead>
-                    <TableHead className="text-xs font-semibold">USP's</TableHead>
-                    <TableHead className="text-xs font-semibold">Omschrijving</TableHead>
-                    <TableHead className="text-xs font-semibold">Creative inspiratie</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {editedRows.map(row => (
-                    <TableRow key={row.id} className="hover:bg-muted/20">
-                      <TableCell className="text-xs">
-                        {isEditable ? (
-                          <button
-                            onClick={() => updateRow(row.id, 'is_new', !row.is_new)}
-                            className="cursor-pointer"
-                          >
-                            <Badge variant={row.is_new ? 'default' : 'secondary'} className="text-[10px]">
-                              {row.is_new ? 'Nieuw' : 'Remake'}
-                            </Badge>
-                          </button>
-                        ) : (
-                          <Badge variant={row.is_new ? 'default' : 'secondary'} className="text-[10px]">
-                            {row.is_new ? 'Nieuw' : 'Remake'}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      {(['functie', 'locatie', 'hook', 'usps', 'omschrijving', 'creative_inspiratie'] as const).map(field => (
-                        <TableCell key={field} className="text-xs">
-                          {isEditable ? (
-                            <Input
-                              value={row[field] || ''}
-                              onChange={e => updateRow(row.id, field, e.target.value)}
-                              className="h-7 text-xs border-border/30 min-w-[120px]"
-                            />
-                          ) : (
-                            <span className="max-w-[200px] truncate block">{row[field] || '-'}</span>
-                          )}
-                        </TableCell>
-                      ))}
-                    </TableRow>
+                  </TableCell>
+                  {(['functie', 'locatie', 'hook', 'omschrijving'] as const).map(field => (
+                    <TableCell key={field} className="text-xs whitespace-pre-wrap break-words">
+                      {isEditable ? (
+                        <Textarea
+                          value={row[field] || ''}
+                          onChange={e => updateRow(row.id, field, e.target.value)}
+                          className="text-xs border-border/30 min-h-[60px] min-w-[120px]"
+                        />
+                      ) : (
+                        <span>{row[field] || '-'}</span>
+                      )}
+                    </TableCell>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <p className="text-sm text-muted-foreground">Geen briefing rijen beschikbaar.</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+                  {/* USPs with bullet rendering */}
+                  <TableCell className="text-xs whitespace-pre-wrap break-words">
+                    {isEditable ? (
+                      <Textarea
+                        value={row.usps || ''}
+                        onChange={e => updateRow(row.id, 'usps', e.target.value)}
+                        className="text-xs border-border/30 min-h-[60px] min-w-[150px]"
+                        placeholder="Eén USP per regel"
+                      />
+                    ) : (
+                      renderUsps(row.usps)
+                    )}
+                  </TableCell>
+                  {/* Creative inspiratie + image */}
+                  <TableCell className="text-xs whitespace-pre-wrap break-words">
+                    {isEditable ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={row.creative_inspiratie || ''}
+                          onChange={e => updateRow(row.id, 'creative_inspiratie', e.target.value)}
+                          className="text-xs border-border/30 min-h-[60px] min-w-[150px]"
+                        />
+                        {row.creative_image_path ? (
+                          <div className="relative inline-block">
+                            <img src={row.creative_image_path} alt="Inspiratie" className="max-h-20 rounded border" />
+                            <button
+                              onClick={() => updateRow(row.id, 'creative_image_path', null)}
+                              className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              ref={el => { fileInputRefs.current[row.id] = el; }}
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) handleImageUpload(row.id, file);
+                              }}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[10px]"
+                              onClick={() => fileInputRefs.current[row.id]?.click()}
+                            >
+                              <ImagePlus className="mr-1 h-3 w-3" /> Afbeelding
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <span>{row.creative_inspiratie || '-'}</span>
+                        {row.creative_image_path && (
+                          <img src={row.creative_image_path} alt="Inspiratie" className="max-h-24 rounded border mt-1" />
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <p className="text-sm text-muted-foreground">Geen briefing rijen beschikbaar.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

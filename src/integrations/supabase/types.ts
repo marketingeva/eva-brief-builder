@@ -190,6 +190,7 @@ export type Database = {
           briefing_id: string
           client_id: string
           created_at: string
+          creative_image_path: string | null
           creative_inspiratie: string | null
           functie: string | null
           hook: string | null
@@ -204,6 +205,7 @@ export type Database = {
           briefing_id: string
           client_id: string
           created_at?: string
+          creative_image_path?: string | null
           creative_inspiratie?: string | null
           functie?: string | null
           hook?: string | null
@@ -218,6 +220,7 @@ export type Database = {
           briefing_id?: string
           client_id?: string
           created_at?: string
+          creative_image_path?: string | null
           creative_inspiratie?: string | null
           functie?: string | null
           hook?: string | null
