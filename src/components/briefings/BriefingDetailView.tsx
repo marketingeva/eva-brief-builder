@@ -146,7 +146,7 @@ export default function BriefingDetailView({ briefing, rows, onBack, onRefresh }
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      const updates: Record<string, any> = { status: newStatus };
+      const updates: { status: string; approved_by?: string; approved_at?: string } = { status: newStatus };
       if (newStatus === 'approved') {
         updates.approved_by = user?.id;
         updates.approved_at = new Date().toISOString();
