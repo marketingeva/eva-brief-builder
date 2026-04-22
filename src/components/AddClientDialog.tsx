@@ -22,6 +22,8 @@ function generateSlug(name: string) {
 export default function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   const [name, setName] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [metaFilter, setMetaFilter] = useState('');
+  const [metaPageId, setMetaPageId] = useState('');
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -33,7 +35,13 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
     const slug = generateSlug(name);
     const { data, error } = await supabase
       .from('clients')
-      .insert({ name: name.trim(), website_url: websiteUrl.trim() || null, slug })
+      .insert({
+        name: name.trim(),
+        website_url: websiteUrl.trim() || null,
+        slug,
+        meta_name_filter: metaFilter.trim() || null,
+        meta_page_id: metaPageId.trim() || null,
+      })
       .select('id, slug')
       .single();
 
@@ -60,6 +68,8 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
 
     setName('');
     setWebsiteUrl('');
+    setMetaFilter('');
+    setMetaPageId('');
     setSaving(false);
     onOpenChange(false);
     onCreated(data);
@@ -80,6 +90,16 @@ export default function AddClientDialog({ open, onOpenChange, onCreated }: Props
             <Label htmlFor="website-url">Website URL</Label>
             <Input id="website-url" type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="bijv. https://www.marthaflora.nl" />
             <p className="text-[11px] text-muted-foreground">De AI analyseert de website automatisch en vult het Learning profiel in.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="meta-filter">Meta naam-filter</Label>
+            <Input id="meta-filter" value={metaFilter} onChange={(e) => setMetaFilter(e.target.value)} placeholder="bijv. MF, Rivas, WIJdezorg" />
+            <p className="text-[11px] text-muted-foreground">Filtert Meta campagnes/adsets/lead forms op naam (case-insensitive).</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="meta-page-id">Meta Page ID</Label>
+            <Input id="meta-page-id" value={metaPageId} onChange={(e) => setMetaPageId(e.target.value)} placeholder="bijv. 102345678901234" />
+            <p className="text-[11px] text-muted-foreground">Facebook Page ID — nodig voor lead formulieren bij ad launches.</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>

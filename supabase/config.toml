@@ -26,3 +26,12 @@ verify_jwt = false
 
 [functions.auto-generate-briefing]
 verify_jwt = false
+
+[functions.meta-list-resources]
+verify_jwt = false
+
+[functions.meta-upload-creative]
+verify_jwt = false
+
+[functions.generate-ad-copy]
+verify_jwt = false

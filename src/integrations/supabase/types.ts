@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_launches: {
+        Row: {
+          ad_id: string | null
+          adset_id: string | null
+          campaign_id: string | null
+          client_id: string
+          creative_filename: string | null
+          creative_id: string | null
+          error: string | null
+          id: string
+          launched_at: string
+          launched_by: string | null
+          lead_form_id: string | null
+          status: string
+        }
+        Insert: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          client_id: string
+          creative_filename?: string | null
+          creative_id?: string | null
+          error?: string | null
+          id?: string
+          launched_at?: string
+          launched_by?: string | null
+          lead_form_id?: string | null
+          status?: string
+        }
+        Update: {
+          ad_id?: string | null
+          adset_id?: string | null
+          campaign_id?: string | null
+          client_id?: string
+          creative_filename?: string | null
+          creative_id?: string | null
+          error?: string | null
+          id?: string
+          launched_at?: string
+          launched_by?: string | null
+          lead_form_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_launches_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_conversations: {
         Row: {
           agent_type: string
@@ -693,6 +746,8 @@ export type Database = {
           description: string | null
           id: string
           logo_url: string | null
+          meta_name_filter: string | null
+          meta_page_id: string | null
           mission: string | null
           name: string
           slug: string | null
@@ -706,6 +761,8 @@ export type Database = {
           description?: string | null
           id?: string
           logo_url?: string | null
+          meta_name_filter?: string | null
+          meta_page_id?: string | null
           mission?: string | null
           name: string
           slug?: string | null
@@ -719,6 +776,8 @@ export type Database = {
           description?: string | null
           id?: string
           logo_url?: string | null
+          meta_name_filter?: string | null
+          meta_page_id?: string | null
           mission?: string | null
           name?: string
           slug?: string | null
