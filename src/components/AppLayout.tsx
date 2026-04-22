@@ -1,8 +1,8 @@
-import { Outlet, useNavigate, useParams } from 'react-router-dom';
+import { Outlet, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Search, Plus, Menu, X, Building2 } from 'lucide-react';
+import { LogOut, Search, Plus, Menu, X, Building2, Rocket } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,8 @@ export default function AppLayout() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { slug } = useParams();
+  const location = useLocation();
+  const isAdLauncher = location.pathname.startsWith('/ad-launcher');
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -87,8 +89,24 @@ export default function AppLayout() {
           </button>
         </div>
 
+        {/* Tools */}
+        <div className="px-2 pt-3 pb-1">
+          <button
+            onClick={() => { navigate('/ad-launcher'); setMobileOpen(false); }}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all',
+              isAdLauncher
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
+                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+            )}
+          >
+            <Rocket className="h-4 w-4 shrink-0" />
+            <span>Ad Launcher</span>
+          </button>
+        </div>
+
         {/* Search */}
-        <div className="px-3 pt-3 pb-2">
+        <div className="px-3 pt-2 pb-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/40" />
             <Input
