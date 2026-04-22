@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Rocket } from 'lucide-react';
+import { Rocket, Settings } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import AdLauncherTab from '@/pages/client-workspace/AdLauncherTab';
+import MetaSettingsDialog from '@/components/ad-launcher/MetaSettingsDialog';
 
 interface ClientItem { id: string; name: string; slug: string | null }
 
@@ -11,6 +13,8 @@ export default function AdLauncherPage() {
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('client') || '';
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     supabase.from('clients').select('id, name, slug').order('name').then(({ data }) => {
@@ -48,19 +52,39 @@ export default function AdLauncherPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!selected}
+              onClick={() => setSettingsOpen(true)}
+              title="Meta-instellingen voor deze klant"
+            >
+              <Settings className="h-4 w-4 mr-1" />
+              Meta-instellingen
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {selected ? (
-          <AdLauncherTab clientId={selected.id} clientName={selected.name} />
+          <AdLauncherTab key={refreshKey} clientId={selected.id} clientName={selected.name} />
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
             Selecteer een klant om te starten
           </div>
         )}
       </div>
+
+      {selected && (
+        <MetaSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          clientId={selected.id}
+          clientName={selected.name}
+          onSaved={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }
