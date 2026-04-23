@@ -1,44 +1,116 @@
-// Lists Meta campaigns / ad sets / lead forms, filtered by client name filter.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const META_API = 'https://graph.facebook.com/v21.0';
+const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms']);
+
+type MetaResource = 'campaigns' | 'adsets' | 'leadforms';
+
+type RequestBody = {
+  resource?: unknown;
+  campaign_id?: unknown;
+  name_filter?: unknown;
+  page_id?: unknown;
+};
 
 async function fetchAll(url: string, token: string) {
   const out: any[] = [];
   let next: string | null = `${url}${url.includes('?') ? '&' : '?'}access_token=${token}&limit=100`;
   let safety = 0;
+
   while (next && safety < 20) {
-    const r = await fetch(next);
-    const j = await r.json();
-    if (j.error) throw new Error(j.error.message || 'Meta error');
-    if (Array.isArray(j.data)) out.push(...j.data);
-    next = j.paging?.next || null;
-    safety++;
+    const response = await fetch(next);
+    const json = await response.json();
+
+    if (json.error) {
+      throw new Error(json.error.message || 'Meta error');
+    }
+
+    if (Array.isArray(json.data)) {
+      out.push(...json.data);
+    }
+
+    next = json.paging?.next || null;
+    safety += 1;
   }
+
   return out;
 }
 
+function asTrimmedString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeMetaName(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[|/\\()[\]{}.,:;'"`´’‘“”+*&^%$#@!?=<>~_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchesName(name: string, rawFilter: string) {
+  const normalizedFilter = normalizeMetaName(rawFilter);
+  if (!normalizedFilter) {
+    return true;
+  }
+
+  const normalizedName = normalizeMetaName(name || '');
+  if (!normalizedName) {
+    return false;
+  }
+
+  if (normalizedName.includes(normalizedFilter)) {
+    return true;
+  }
+
+  const filterTokens = normalizedFilter.split(' ').filter(Boolean);
+  return filterTokens.every((token) => normalizedName.includes(token));
+}
+
+function isVisibleStatus(status?: string | null) {
+  return status !== 'DELETED' && status !== 'ARCHIVED';
+}
+
+function sortByName<T extends { name?: string | null }>(items: T[]) {
+  return [...items].sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', 'nl', { sensitivity: 'base' }),
+  );
+}
+
+function jsonResponse(payload: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
     const token = Deno.env.get('META_ACCESS_TOKEN');
     const adAccount = Deno.env.get('AD_ACCOUNT_ID');
-    if (!token || !adAccount) throw new Error('META_ACCESS_TOKEN or AD_ACCOUNT_ID not configured');
 
-    const body = await req.json().catch(() => ({}));
-    const { resource, campaign_id, name_filter, page_id } = body as {
-      resource: 'campaigns' | 'adsets' | 'leadforms';
-      campaign_id?: string;
-      name_filter?: string;
-      page_id?: string;
-    };
+    if (!token || !adAccount) {
+      throw new Error('META_ACCESS_TOKEN of AD_ACCOUNT_ID ontbreekt.');
+    }
 
-    const filter = (name_filter || '').trim().toLowerCase();
-    const matches = (n: string) => !filter || (n || '').toLowerCase().includes(filter);
+    const body = await req.json().catch(() => ({})) as RequestBody;
+    const resource = asTrimmedString(body.resource) as MetaResource;
+    const nameFilter = asTrimmedString(body.name_filter);
+    const campaignId = asTrimmedString(body.campaign_id);
+    const pageId = asTrimmedString(body.page_id);
+
+    if (!VALID_RESOURCES.has(resource)) {
+      return jsonResponse({ data: [], error: 'Ongeldige resource opgevraagd.', fallback: true }, 400);
+    }
 
     let data: any[] = [];
 
@@ -48,79 +120,102 @@ Deno.serve(async (req) => {
         `${META_API}/${account}/campaigns?fields=id,name,status,effective_status,objective`,
         token,
       );
-      data = items
-        .filter((c) => matches(c.name))
-        .filter((c) => c.effective_status !== 'DELETED' && c.effective_status !== 'ARCHIVED');
-    } else if (resource === 'adsets') {
-      if (!campaign_id) throw new Error('campaign_id required');
+
+      data = sortByName(
+        items
+          .filter((campaign) => isVisibleStatus(campaign.effective_status))
+          .filter((campaign) => matchesName(campaign.name || '', nameFilter)),
+      );
+    }
+
+    if (resource === 'adsets') {
+      if (!campaignId) {
+        return jsonResponse({ data: [], error: 'campaign_id ontbreekt.', fallback: true }, 400);
+      }
+
       const items = await fetchAll(
-        `${META_API}/${campaign_id}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event`,
+        `${META_API}/${campaignId}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event`,
         token,
       );
-      data = items.filter((a) => a.effective_status !== 'DELETED' && a.effective_status !== 'ARCHIVED');
-    } else if (resource === 'leadforms') {
-      if (!page_id) throw new Error('page_id required for leadforms');
 
-      // Try to get a Page Access Token. Two strategies:
-      // 1) Direct: GET /{page_id}?fields=access_token  (works for User tokens that admin the page)
-      // 2) Fallback: GET /me/accounts (works for System User tokens assigned to the page)
+      data = sortByName(
+        items
+          .filter((adset) => isVisibleStatus(adset.effective_status))
+          .filter((adset) => matchesName(adset.name || '', nameFilter)),
+      );
+    }
+
+    if (resource === 'leadforms') {
+      if (!pageId) {
+        return jsonResponse({ data: [], error: 'page_id ontbreekt voor leadforms.', fallback: true }, 400);
+      }
+
       let pageToken: string | null = null;
       let debugInfo = '';
 
-      const directRes = await fetch(
-        `${META_API}/${page_id}?fields=access_token,name&access_token=${token}`,
-      );
+      const directRes = await fetch(`${META_API}/${pageId}?fields=access_token,name&access_token=${token}`);
       const directJson = await directRes.json();
       console.log('Page token direct lookup:', JSON.stringify(directJson));
+
       if (directJson.access_token) {
         pageToken = directJson.access_token;
       } else {
         debugInfo += `Direct lookup failed: ${directJson.error?.message || 'no access_token returned'}. `;
 
-        // Fallback: list all pages the token can access
         const accountsRes = await fetch(
           `${META_API}/me/accounts?fields=id,name,access_token&limit=200&access_token=${token}`,
         );
         const accountsJson = await accountsRes.json();
-        console.log('me/accounts lookup:', JSON.stringify({ error: accountsJson.error, count: accountsJson.data?.length }));
+        console.log(
+          'me/accounts lookup:',
+          JSON.stringify({ error: accountsJson.error, count: accountsJson.data?.length }),
+        );
+
         if (accountsJson.error) {
           debugInfo += `me/accounts failed: ${accountsJson.error.message}. `;
         } else {
-          const match = (accountsJson.data || []).find((p: any) => p.id === page_id);
+          const match = (accountsJson.data || []).find((page: any) => page.id === pageId);
           if (match?.access_token) {
             pageToken = match.access_token;
           } else {
-            const availableIds = (accountsJson.data || []).map((p: any) => `${p.name} (${p.id})`).join(', ');
-            debugInfo += `Page ${page_id} niet gevonden in toegankelijke pages. Beschikbaar: ${availableIds || '(geen)'}. `;
+            const availableIds = (accountsJson.data || [])
+              .map((page: any) => `${page.name} (${page.id})`)
+              .join(', ');
+            debugInfo += `Page ${pageId} niet gevonden in toegankelijke pages. Beschikbaar: ${availableIds || '(geen)'}. `;
           }
         }
       }
 
       if (!pageToken) {
         throw new Error(
-          `Kon geen Page Access Token ophalen voor page ${page_id}. ${debugInfo}` +
-          `Controleer: (1) Page ID is correct, (2) je META_ACCESS_TOKEN heeft de scopes pages_show_list, pages_read_engagement, pages_manage_ads en leads_retrieval, ` +
-          `(3) de System User of gebruiker is toegevoegd als admin/advertiser op deze Page in Meta Business Manager.`,
+          `Kon geen Page Access Token ophalen voor page ${pageId}. ${debugInfo}` +
+            'Controleer: (1) de Page ID klopt, (2) de token de scopes pages_show_list, pages_read_engagement, pages_manage_ads en leads_retrieval heeft, ' +
+            '(3) de gebruiker of system user toegang heeft tot deze page in Meta Business Manager.',
         );
       }
 
       const items = await fetchAll(
-        `${META_API}/${page_id}/leadgen_forms?fields=id,name,status`,
+        `${META_API}/${pageId}/leadgen_forms?fields=id,name,status`,
         pageToken,
       );
-      data = items.filter((f) => matches(f.name)).filter((f) => f.status !== 'ARCHIVED');
-    } else {
-      throw new Error('Unknown resource');
+
+      data = sortByName(
+        items
+          .filter((form) => isVisibleStatus(form.status))
+          .filter((form) => matchesName(form.name || '', nameFilter)),
+      );
     }
 
-    return new Response(JSON.stringify({ data }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    return jsonResponse({
+      data,
+      meta: {
+        normalized_filter: normalizeMetaName(nameFilter),
+        total: data.length,
+      },
     });
-  } catch (e) {
-    console.error('meta-list-resources error', e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('meta-list-resources error', message);
+    return jsonResponse({ data: [], error: message, fallback: true });
   }
 });
