@@ -60,9 +60,20 @@ Deno.serve(async (req) => {
       data = items.filter((a) => a.effective_status !== 'DELETED' && a.effective_status !== 'ARCHIVED');
     } else if (resource === 'leadforms') {
       if (!page_id) throw new Error('page_id required for leadforms');
+      // Lead forms require a Page Access Token. Exchange the user/system token for one.
+      const pageTokenRes = await fetch(
+        `${META_API}/${page_id}?fields=access_token&access_token=${token}`,
+      );
+      const pageTokenJson = await pageTokenRes.json();
+      if (pageTokenJson.error || !pageTokenJson.access_token) {
+        throw new Error(
+          `Kon geen Page Access Token ophalen voor page ${page_id}: ${pageTokenJson.error?.message || 'geen access_token in response. Controleer of de token rechten heeft op deze Page (pages_show_list, pages_manage_ads, leads_retrieval, pages_read_engagement).'}`,
+        );
+      }
+      const pageToken = pageTokenJson.access_token as string;
       const items = await fetchAll(
         `${META_API}/${page_id}/leadgen_forms?fields=id,name,status`,
-        token,
+        pageToken,
       );
       data = items.filter((f) => matches(f.name)).filter((f) => f.status !== 'ARCHIVED');
     } else {
