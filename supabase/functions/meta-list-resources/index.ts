@@ -55,18 +55,12 @@ function normalizeMetaName(value: string) {
 
 function matchesName(name: string, rawFilter: string) {
   const normalizedFilter = normalizeMetaName(rawFilter);
-  if (!normalizedFilter) {
-    return true;
-  }
+  if (!normalizedFilter) return true;
 
   const normalizedName = normalizeMetaName(name || '');
-  if (!normalizedName) {
-    return false;
-  }
+  if (!normalizedName) return false;
 
-  if (normalizedName.includes(normalizedFilter)) {
-    return true;
-  }
+  if (normalizedName.includes(normalizedFilter)) return true;
 
   const filterTokens = normalizedFilter.split(' ').filter(Boolean);
   return filterTokens.every((token) => normalizedName.includes(token));
@@ -76,10 +70,19 @@ function isVisibleStatus(status?: string | null) {
   return status !== 'DELETED' && status !== 'ARCHIVED';
 }
 
-function sortByName<T extends { name?: string | null }>(items: T[]) {
-  return [...items].sort((a, b) =>
-    (a.name || '').localeCompare(b.name || '', 'nl', { sensitivity: 'base' }),
-  );
+function statusRank(item: { effective_status?: string | null; status?: string | null }) {
+  const s = item.effective_status || item.status || '';
+  if (s === 'ACTIVE') return 0;
+  if (s === 'PAUSED') return 1;
+  return 2;
+}
+
+function sortActiveFirst<T extends { name?: string | null; effective_status?: string | null; status?: string | null }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    const r = statusRank(a) - statusRank(b);
+    if (r !== 0) return r;
+    return (a.name || '').localeCompare(b.name || '', 'nl', { sensitivity: 'base' });
+  });
 }
 
 function jsonResponse(payload: Record<string, unknown>, status = 200) {
@@ -117,14 +120,18 @@ Deno.serve(async (req) => {
     if (resource === 'campaigns') {
       const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
       const items = await fetchAll(
-        `${META_API}/${account}/campaigns?fields=id,name,status,effective_status,objective`,
+        `${META_API}/${account}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget,bid_strategy`,
         token,
       );
 
-      data = sortByName(
+      data = sortActiveFirst(
         items
-          .filter((campaign) => isVisibleStatus(campaign.effective_status))
-          .filter((campaign) => matchesName(campaign.name || '', nameFilter)),
+          .filter((c) => isVisibleStatus(c.effective_status))
+          .filter((c) => matchesName(c.name || '', nameFilter))
+          .map((c) => ({
+            ...c,
+            budget_type: (c.daily_budget || c.lifetime_budget) ? 'CBO' : 'ABO',
+          })),
       );
     }
 
@@ -134,14 +141,14 @@ Deno.serve(async (req) => {
       }
 
       const items = await fetchAll(
-        `${META_API}/${campaignId}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event`,
+        `${META_API}/${campaignId}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event,daily_budget,lifetime_budget`,
         token,
       );
 
-      data = sortByName(
+      data = sortActiveFirst(
         items
-          .filter((adset) => isVisibleStatus(adset.effective_status))
-          .filter((adset) => matchesName(adset.name || '', nameFilter)),
+          .filter((a) => isVisibleStatus(a.effective_status))
+          .filter((a) => matchesName(a.name || '', nameFilter)),
       );
     }
 
@@ -155,7 +162,6 @@ Deno.serve(async (req) => {
 
       const directRes = await fetch(`${META_API}/${pageId}?fields=access_token,name&access_token=${token}`);
       const directJson = await directRes.json();
-      console.log('Page token direct lookup:', JSON.stringify(directJson));
 
       if (directJson.access_token) {
         pageToken = directJson.access_token;
@@ -166,10 +172,6 @@ Deno.serve(async (req) => {
           `${META_API}/me/accounts?fields=id,name,access_token&limit=200&access_token=${token}`,
         );
         const accountsJson = await accountsRes.json();
-        console.log(
-          'me/accounts lookup:',
-          JSON.stringify({ error: accountsJson.error, count: accountsJson.data?.length }),
-        );
 
         if (accountsJson.error) {
           debugInfo += `me/accounts failed: ${accountsJson.error.message}. `;
@@ -199,7 +201,7 @@ Deno.serve(async (req) => {
         pageToken,
       );
 
-      data = sortByName(
+      data = sortActiveFirst(
         items
           .filter((form) => isVisibleStatus(form.status))
           .filter((form) => matchesName(form.name || '', nameFilter)),
