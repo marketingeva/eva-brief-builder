@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Sparkles, ImagePlus } from 'lucide-react';
 import CreativeUploadZone from '@/components/ad-launcher/CreativeUploadZone';
 import MetaSelectors, { MetaSelection } from '@/components/ad-launcher/MetaSelectors';
 import CreativeTextsPanel, { CreativeText } from '@/components/ad-launcher/CreativeTextsPanel';
@@ -45,7 +44,6 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   });
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [launchAsActive, setLaunchAsActive] = useState(false);
   const [launching, setLaunching] = useState(false);
 
   useEffect(() => {
@@ -96,7 +94,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       adset_id: selection.adset_id,
       lead_form_id: selection.lead_form_id,
       page_id: pageId!,
-      status: launchAsActive ? 'ACTIVE' : 'PAUSED',
+      status: 'PAUSED',
       creatives: creatives.map((r) => ({
         storage_path: r.storage_path!,
         file_name: r.file.name,
@@ -123,75 +121,100 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
         : { ...r, launch_status: 'failed', launch_error: res.error };
     }));
     const ok = results.filter((r) => r.success).length;
-    toast({ title: 'Launch voltooid', description: `${ok}/${results.length} advertenties aangemaakt (${launchAsActive ? 'actief' : 'gepauzeerd'}).` });
+    toast({ title: 'Launch voltooid', description: `${ok}/${results.length} advertenties aangemaakt (gepauzeerd in Meta).` });
   };
 
   return (
     <div className="p-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Selection */}
-        <Card className="lg:col-span-3 p-5 space-y-4 h-fit">
-          <h3 className="text-sm font-semibold">Selectie</h3>
-          {!nameFilter && (
-            <p className="text-xs text-warning">Geen Meta naam-filter ingesteld voor deze klant. Alle resources worden getoond.</p>
-          )}
-          {!pageId && (
-            <p className="text-xs text-warning">Geen Meta Page ID ingesteld — lead formulieren kunnen niet geladen worden.</p>
-          )}
-          <MetaSelectors nameFilter={nameFilter} pageId={pageId} value={selection} onChange={setSelection} />
-          <div className="flex items-center justify-between pt-2 border-t">
-            <Label htmlFor="active-toggle" className="text-xs">Direct activeren</Label>
-            <Switch id="active-toggle" checked={launchAsActive} onCheckedChange={setLaunchAsActive} />
-          </div>
-        </Card>
+        {/* Left column: Selection + Upload */}
+        <div className="lg:col-span-5 space-y-6">
+          <Card className="p-5 space-y-4">
+            <h3 className="text-sm font-semibold">Selectie</h3>
+            {!nameFilter && (
+              <p className="text-xs text-warning">Geen Meta naam-filter ingesteld voor deze klant. Alle resources worden getoond.</p>
+            )}
+            {!pageId && (
+              <p className="text-xs text-warning">Geen Meta Page ID ingesteld — lead formulieren kunnen niet geladen worden.</p>
+            )}
+            <MetaSelectors nameFilter={nameFilter} pageId={pageId} value={selection} onChange={setSelection} />
+          </Card>
 
-        {/* Upload */}
-        <Card className="lg:col-span-4 p-5 space-y-3 h-fit">
-          <h3 className="text-sm font-semibold">Upload creatives</h3>
-          <CreativeUploadZone onFiles={handleFiles} />
-          <p className="text-[11px] text-muted-foreground">Bestanden worden tijdelijk opgeslagen totdat de advertenties gelanceerd zijn.</p>
-        </Card>
+          <Card className="p-5 space-y-3">
+            <h3 className="text-sm font-semibold">Upload creatives</h3>
+            <CreativeUploadZone onFiles={handleFiles} />
+            <p className="text-[11px] text-muted-foreground">
+              Bestanden worden tijdelijk opgeslagen totdat de advertenties gelanceerd zijn. Nieuwe ads worden altijd <strong>gepauzeerd</strong> aangemaakt in Meta — je activeert ze daar handmatig.
+            </p>
+          </Card>
+        </div>
 
-        {/* Preview / Launch */}
-        <Card className="lg:col-span-5 p-5 space-y-3">
+        {/* Right column: Preview / Launch */}
+        <Card className="lg:col-span-7 p-6 space-y-4 min-h-[500px]">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Preview & Launch ({creatives.length})</h3>
+            <div>
+              <h3 className="text-sm font-semibold">Preview & Launch</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {creatives.length === 0 ? 'Wachten op creatives' : `${creatives.length} creative${creatives.length === 1 ? '' : 's'} klaar`}
+              </p>
+            </div>
             <Button size="sm" onClick={launch} disabled={!canLaunch || launching}>
-              {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+              {launching ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Rocket className="h-4 w-4 mr-1" />}
               Launch Ads
             </Button>
           </div>
-          {creatives.length === 0 && (
-            <p className="text-sm text-muted-foreground py-8 text-center">Nog geen creatives — upload om te starten.</p>
-          )}
-          <div className="space-y-2">
-            {creatives.map((row) => (
-              <div key={row.id} className="flex items-center gap-3 p-2 border rounded-lg">
-                {row.file.type.startsWith('video') ? (
-                  <video src={row.preview_url} className="w-16 h-16 rounded object-cover bg-muted" />
-                ) : (
-                  <img src={row.preview_url} className="w-16 h-16 rounded object-cover bg-muted" alt="" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{row.file.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {row.uploading && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Uploaden</span>}
-                    {row.upload_error && <span className="text-[11px] text-destructive">{row.upload_error}</span>}
-                    {!row.uploading && !row.upload_error && !row.launch_status && <span className="text-[11px] text-muted-foreground">Klaar</span>}
-                    {row.launch_status === 'pending' && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Lanceren</span>}
-                    {row.launch_status === 'success' && <span className="text-[11px] text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Live</span>}
-                    {row.launch_status === 'failed' && <span className="text-[11px] text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {row.launch_error}</span>}
-                  </div>
+
+          {creatives.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              {/* Animated empty state */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2.5s' }} />
+                <div className="absolute inset-2 rounded-full bg-primary/15 animate-pulse" />
+                <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
+                  <ImagePlus className="h-10 w-10 text-primary animate-[fade-in_0.6s_ease-out]" />
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setEditingId(row.id)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => removeRow(row.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <Sparkles className="absolute -top-1 -right-1 h-5 w-5 text-primary animate-pulse" />
+                <Sparkles className="absolute -bottom-1 -left-2 h-4 w-4 text-primary/60 animate-pulse" style={{ animationDelay: '0.5s' }} />
               </div>
-            ))}
-          </div>
+              <h4 className="text-base font-semibold text-foreground">Nog geen creatives</h4>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+                Sleep afbeeldingen of video's naar de upload-zone hiernaast. Zodra ze geladen zijn, verschijnt hier een preview.
+              </p>
+              <div className="mt-6 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                <span>Wachten op upload...</span>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2 animate-fade-in">
+              {creatives.map((row) => (
+                <div key={row.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                  {row.file.type.startsWith('video') ? (
+                    <video src={row.preview_url} className="w-20 h-20 rounded-md object-cover bg-muted shrink-0" />
+                  ) : (
+                    <img src={row.preview_url} className="w-20 h-20 rounded-md object-cover bg-muted shrink-0" alt="" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{row.file.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {row.uploading && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Uploaden</span>}
+                      {row.upload_error && <span className="text-[11px] text-destructive">{row.upload_error}</span>}
+                      {!row.uploading && !row.upload_error && !row.launch_status && <span className="text-[11px] text-muted-foreground">Klaar voor launch</span>}
+                      {row.launch_status === 'pending' && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Lanceren</span>}
+                      {row.launch_status === 'success' && <span className="text-[11px] text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Aangemaakt (gepauzeerd)</span>}
+                      {row.launch_status === 'failed' && <span className="text-[11px] text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {row.launch_error}</span>}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setEditingId(row.id)} title="Teksten bewerken">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => removeRow(row.id)} title="Verwijderen">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
