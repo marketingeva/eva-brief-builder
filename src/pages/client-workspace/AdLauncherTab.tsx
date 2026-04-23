@@ -151,22 +151,46 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
 
         {/* Right column: Preview / Launch */}
         <Card className="lg:col-span-7 p-6 space-y-4 min-h-[500px]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold">Preview & Launch</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {creatives.length === 0 ? 'Wachten op creatives' : `${creatives.length} creative${creatives.length === 1 ? '' : 's'} klaar`}
-              </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span>Uploading to</span>
+                {clientName && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 normal-case">
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    {clientName}
+                  </span>
+                )}
+                {selection.campaign_id && (
+                  <>
+                    <span>/</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/20 normal-case">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      Campaign
+                    </span>
+                  </>
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-semibold">Preview & Launch</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Preview {creatives.length} creative{creatives.length === 1 ? '' : 's'} ready to launch.
+                </p>
+              </div>
             </div>
-            <Button size="sm" onClick={launch} disabled={!canLaunch || launching}>
-              {launching ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Rocket className="h-4 w-4 mr-1" />}
-              Launch Ads
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled>
+                + Create Ad Set
+              </Button>
+              <Button size="sm" onClick={launch} disabled={!canLaunch || launching} className="font-semibold">
+                {launching ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Rocket className="h-4 w-4 mr-1.5" />}
+                Launch Ads
+              </Button>
+            </div>
           </div>
 
           {creatives.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              {/* Animated empty state */}
               <div className="relative mb-6">
                 <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2.5s' }} />
                 <div className="absolute inset-2 rounded-full bg-primary/15 animate-pulse" />
@@ -187,32 +211,61 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
             </div>
           ) : (
             <div className="space-y-2 animate-fade-in">
-              {creatives.map((row) => (
-                <div key={row.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                  {row.file.type.startsWith('video') ? (
-                    <video src={row.preview_url} className="w-20 h-20 rounded-md object-cover bg-muted shrink-0" />
-                  ) : (
-                    <img src={row.preview_url} className="w-20 h-20 rounded-md object-cover bg-muted shrink-0" alt="" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{row.file.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {row.uploading && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Uploaden</span>}
-                      {row.upload_error && <span className="text-[11px] text-destructive">{row.upload_error}</span>}
-                      {!row.uploading && !row.upload_error && !row.launch_status && <span className="text-[11px] text-muted-foreground">Klaar voor launch</span>}
-                      {row.launch_status === 'pending' && <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Lanceren</span>}
-                      {row.launch_status === 'success' && <span className="text-[11px] text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Aangemaakt (gepauzeerd)</span>}
-                      {row.launch_status === 'failed' && <span className="text-[11px] text-destructive flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {row.launch_error}</span>}
+              {creatives.map((row) => {
+                const sizeMb = (row.file.size / (1024 * 1024)).toFixed(2);
+                const ext = row.file.name.split('.').pop()?.toUpperCase() || (row.file.type.split('/')[1] || '').toUpperCase();
+                const ready = !row.uploading && !row.upload_error && !row.launch_status;
+                const pCount = row.texts.primary_texts.filter(Boolean).length;
+                const hCount = row.texts.headlines.filter(Boolean).length;
+                const dCount = row.texts.descriptions.filter(Boolean).length;
+                return (
+                  <div key={row.id} className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                    {row.file.type.startsWith('video') ? (
+                      <video src={row.preview_url} className="w-24 h-24 rounded-md object-cover bg-muted shrink-0" />
+                    ) : (
+                      <img src={row.preview_url} className="w-24 h-24 rounded-md object-cover bg-muted shrink-0" alt="" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{row.file.name}</p>
+                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
+                        <span>{sizeMb} MB</span>
+                        <span>·</span>
+                        <span>{ext}</span>
+                        <span>·</span>
+                        {row.uploading && (
+                          <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Uploaden</span>
+                        )}
+                        {row.upload_error && <span className="text-destructive">{row.upload_error}</span>}
+                        {ready && (
+                          <span className="flex items-center gap-1 text-success">
+                            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Ready
+                          </span>
+                        )}
+                        {row.launch_status === 'pending' && (
+                          <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Lanceren</span>
+                        )}
+                        {row.launch_status === 'success' && (
+                          <span className="flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> Aangemaakt (gepauzeerd)</span>
+                        )}
+                        {row.launch_status === 'failed' && (
+                          <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" /> {row.launch_error}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-full bg-muted text-[10px] font-semibold" title="Primary texts">P{pCount}</span>
+                      <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-full bg-muted text-[10px] font-semibold" title="Headlines">H{hCount}</span>
+                      <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-full bg-muted text-[10px] font-semibold" title="Descriptions">D{dCount}</span>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingId(row.id)} title="Teksten bewerken">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeRow(row.id)} title="Verwijderen">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => setEditingId(row.id)} title="Teksten bewerken">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => removeRow(row.id)} title="Verwijderen">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
