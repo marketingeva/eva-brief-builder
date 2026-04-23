@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Loader2, ChevronsUpDown, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export interface MetaSelection {
   campaign_id: string;
@@ -22,12 +25,119 @@ interface Props {
 interface Item {
   id: string;
   name: string;
+  status?: string | null;
+  effective_status?: string | null;
+  budget_type?: 'ABO' | 'CBO';
 }
 
 interface MetaFunctionResponse {
   data?: Item[];
   error?: string;
   fallback?: boolean;
+}
+
+function StatusDot({ status }: { status?: string | null }) {
+  const s = status || '';
+  const color =
+    s === 'ACTIVE' ? 'bg-success'
+    : s === 'PAUSED' ? 'bg-muted-foreground/50'
+    : 'bg-destructive/70';
+  return <span className={cn('h-2 w-2 rounded-full shrink-0', color)} />;
+}
+
+function StatusPill({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'active' | 'warn' }) {
+  const cls = tone === 'active' ? 'bg-success/15 text-success border-success/30'
+    : tone === 'warn' ? 'bg-amber-500/15 text-amber-700 border-amber-500/30'
+    : 'bg-muted text-muted-foreground border-border';
+  return (
+    <span className={cn('text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border font-medium', cls)}>
+      {label}
+    </span>
+  );
+}
+
+interface ComboboxProps {
+  items: Item[];
+  value: string;
+  onSelect: (id: string) => void;
+  placeholder: string;
+  searchPlaceholder: string;
+  emptyText: string;
+  disabled?: boolean;
+  loading?: boolean;
+  showBudgetPill?: boolean;
+}
+
+function ResourceCombobox({
+  items, value, onSelect, placeholder, searchPlaceholder, emptyText,
+  disabled, loading, showBudgetPill,
+}: ComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const selected = items.find((i) => i.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-full justify-between font-normal h-10"
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            {selected ? (
+              <>
+                <StatusDot status={selected.effective_status || selected.status} />
+                <span className="truncate">{selected.name}</span>
+                {showBudgetPill && selected.budget_type && (
+                  <StatusPill label={selected.budget_type} />
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+          </span>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {items.map((item) => {
+                const status = item.effective_status || item.status || '';
+                return (
+                  <CommandItem
+                    key={item.id}
+                    value={`${item.name} ${item.id}`}
+                    onSelect={() => {
+                      onSelect(item.id);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <StatusDot status={status} />
+                    <span className="flex-1 truncate">{item.name}</span>
+                    {showBudgetPill && item.budget_type && (
+                      <StatusPill label={item.budget_type} />
+                    )}
+                    {status && status !== 'ACTIVE' && (
+                      <StatusPill label={status} tone={status === 'PAUSED' ? 'warn' : 'neutral'} />
+                    )}
+                    {value === item.id && <Check className="h-4 w-4 ml-1" />}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function MetaSelectors({ nameFilter, pageId, value, onChange }: Props) {
@@ -41,7 +151,6 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
 
   useEffect(() => {
     let active = true;
-
     setLoadingC(true);
     setError(null);
 
@@ -51,81 +160,59 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
       })
       .then(({ data, error }) => {
         if (!active) return;
-
         setLoadingC(false);
         if (error || data?.error) {
           setCampaigns([]);
           setError(error?.message || data?.error || 'Campagnes konden niet geladen worden.');
           return;
         }
-
         const items = data?.data || [];
         setCampaigns(items);
-
         if (value.campaign_id && !items.some((item) => item.id === value.campaign_id)) {
           onChange({ ...value, campaign_id: '', adset_id: '' });
         }
       });
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [nameFilter]);
 
   useEffect(() => {
     let active = true;
-
     if (!value.campaign_id) {
       setAdsets([]);
-      return () => {
-        active = false;
-      };
+      return () => { active = false; };
     }
-
     setLoadingA(true);
     setError(null);
 
     supabase.functions
       .invoke<MetaFunctionResponse>('meta-list-resources', {
-        body: {
-          resource: 'adsets',
-          campaign_id: value.campaign_id,
-          name_filter: nameFilter || '',
-        },
+        body: { resource: 'adsets', campaign_id: value.campaign_id, name_filter: nameFilter || '' },
       })
       .then(({ data, error }) => {
         if (!active) return;
-
         setLoadingA(false);
         if (error || data?.error) {
           setAdsets([]);
           setError(error?.message || data?.error || 'Ad sets konden niet geladen worden.');
           return;
         }
-
         const items = data?.data || [];
         setAdsets(items);
-
         if (value.adset_id && !items.some((item) => item.id === value.adset_id)) {
           onChange({ ...value, adset_id: '' });
         }
       });
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [value.campaign_id, nameFilter]);
 
   useEffect(() => {
     let active = true;
-
     if (!pageId) {
       setLeadForms([]);
-      return () => {
-        active = false;
-      };
+      return () => { active = false; };
     }
-
     setLoadingL(true);
     setError(null);
 
@@ -135,94 +222,68 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
       })
       .then(({ data, error }) => {
         if (!active) return;
-
         setLoadingL(false);
         if (error || data?.error) {
           setLeadForms([]);
           setError(error?.message || data?.error || 'Lead formulieren konden niet geladen worden.');
           return;
         }
-
         const items = data?.data || [];
         setLeadForms(items);
-
         if (value.lead_form_id && !items.some((item) => item.id === value.lead_form_id)) {
           onChange({ ...value, lead_form_id: '' });
         }
       });
 
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [pageId, nameFilter]);
 
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-2">
-          Campagne {loadingC && <Loader2 className="h-3 w-3 animate-spin" />}
-        </Label>
-        <Select value={value.campaign_id} onValueChange={(v) => onChange({ ...value, campaign_id: v, adset_id: '' })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Kies campagne" />
-          </SelectTrigger>
-          <SelectContent>
-            {campaigns.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-            {!loadingC && !campaigns.length && (
-              <div className="px-2 py-2 text-xs text-muted-foreground">Geen campagnes gevonden</div>
-            )}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Campagne</Label>
+        <ResourceCombobox
+          items={campaigns}
+          value={value.campaign_id}
+          onSelect={(id) => onChange({ ...value, campaign_id: id, adset_id: '' })}
+          placeholder="Kies campagne"
+          searchPlaceholder="Zoek campagne..."
+          emptyText="Geen campagnes gevonden"
+          loading={loadingC}
+          showBudgetPill
+        />
       </div>
 
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-2">
-          Ad set {loadingA && <Loader2 className="h-3 w-3 animate-spin" />}
-        </Label>
-        <Select value={value.adset_id} onValueChange={(v) => onChange({ ...value, adset_id: v })} disabled={!value.campaign_id}>
-          <SelectTrigger>
-            <SelectValue placeholder={value.campaign_id ? 'Kies ad set' : 'Eerst campagne'} />
-          </SelectTrigger>
-          <SelectContent>
-            {adsets.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.name}
-              </SelectItem>
-            ))}
-            {!!value.campaign_id && !loadingA && !adsets.length && (
-              <div className="px-2 py-2 text-xs text-muted-foreground">Geen ad sets gevonden</div>
-            )}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Ad set</Label>
+        <ResourceCombobox
+          items={adsets}
+          value={value.adset_id}
+          onSelect={(id) => onChange({ ...value, adset_id: id })}
+          placeholder={value.campaign_id ? 'Kies ad set' : 'Eerst campagne'}
+          searchPlaceholder="Zoek ad set..."
+          emptyText="Geen ad sets gevonden"
+          loading={loadingA}
+          disabled={!value.campaign_id}
+        />
       </div>
 
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-2">
-          Lead formulier {loadingL && <Loader2 className="h-3 w-3 animate-spin" />}
-        </Label>
-        <Select value={value.lead_form_id} onValueChange={(v) => onChange({ ...value, lead_form_id: v })} disabled={!pageId}>
-          <SelectTrigger>
-            <SelectValue placeholder={pageId ? 'Kies formulier' : 'Geen Page ID ingesteld'} />
-          </SelectTrigger>
-          <SelectContent>
-            {leadForms.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.name}
-              </SelectItem>
-            ))}
-            {!!pageId && !loadingL && !leadForms.length && (
-              <div className="px-2 py-2 text-xs text-muted-foreground">Geen lead formulieren gevonden</div>
-            )}
-          </SelectContent>
-        </Select>
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Lead formulier</Label>
+        <ResourceCombobox
+          items={leadForms}
+          value={value.lead_form_id}
+          onSelect={(id) => onChange({ ...value, lead_form_id: id })}
+          placeholder={pageId ? 'Kies formulier' : 'Geen Page ID ingesteld'}
+          searchPlaceholder="Zoek formulier..."
+          emptyText="Geen lead formulieren gevonden"
+          loading={loadingL}
+          disabled={!pageId}
+        />
       </div>
 
       <div className="space-y-1.5">
-        <Label>Website URL</Label>
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Website URL</Label>
         <Input
           value={value.link_url}
           onChange={(e) => onChange({ ...value, link_url: e.target.value })}

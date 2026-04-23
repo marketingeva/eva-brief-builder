@@ -40,7 +40,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [nameFilter, setNameFilter] = useState<string | null>(null);
   const [pageId, setPageId] = useState<string | null>(null);
   const [selection, setSelection] = useState<MetaSelection>({
-    campaign_id: '', adset_id: '', lead_form_id: '', link_url: '',
+    campaign_id: '', adset_id: '', lead_form_id: '', link_url: 'http://fb.me/',
   });
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
