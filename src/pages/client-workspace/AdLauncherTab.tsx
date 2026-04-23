@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Sparkles, ImagePlus } from 'lucide-react';
 import CreativeUploadZone from '@/components/ad-launcher/CreativeUploadZone';
 import MetaSelectors, { MetaSelection } from '@/components/ad-launcher/MetaSelectors';
 import CreativeTextsPanel, { CreativeText } from '@/components/ad-launcher/CreativeTextsPanel';
@@ -45,7 +44,6 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   });
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [launchAsActive, setLaunchAsActive] = useState(false);
   const [launching, setLaunching] = useState(false);
 
   useEffect(() => {
@@ -96,7 +94,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       adset_id: selection.adset_id,
       lead_form_id: selection.lead_form_id,
       page_id: pageId!,
-      status: launchAsActive ? 'ACTIVE' : 'PAUSED',
+      status: 'PAUSED',
       creatives: creatives.map((r) => ({
         storage_path: r.storage_path!,
         file_name: r.file.name,
@@ -123,7 +121,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
         : { ...r, launch_status: 'failed', launch_error: res.error };
     }));
     const ok = results.filter((r) => r.success).length;
-    toast({ title: 'Launch voltooid', description: `${ok}/${results.length} advertenties aangemaakt (${launchAsActive ? 'actief' : 'gepauzeerd'}).` });
+    toast({ title: 'Launch voltooid', description: `${ok}/${results.length} advertenties aangemaakt (gepauzeerd in Meta).` });
   };
 
   return (
