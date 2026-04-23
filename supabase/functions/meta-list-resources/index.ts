@@ -60,17 +60,50 @@ Deno.serve(async (req) => {
       data = items.filter((a) => a.effective_status !== 'DELETED' && a.effective_status !== 'ARCHIVED');
     } else if (resource === 'leadforms') {
       if (!page_id) throw new Error('page_id required for leadforms');
-      // Lead forms require a Page Access Token. Exchange the user/system token for one.
-      const pageTokenRes = await fetch(
-        `${META_API}/${page_id}?fields=access_token&access_token=${token}`,
+
+      // Try to get a Page Access Token. Two strategies:
+      // 1) Direct: GET /{page_id}?fields=access_token  (works for User tokens that admin the page)
+      // 2) Fallback: GET /me/accounts (works for System User tokens assigned to the page)
+      let pageToken: string | null = null;
+      let debugInfo = '';
+
+      const directRes = await fetch(
+        `${META_API}/${page_id}?fields=access_token,name&access_token=${token}`,
       );
-      const pageTokenJson = await pageTokenRes.json();
-      if (pageTokenJson.error || !pageTokenJson.access_token) {
+      const directJson = await directRes.json();
+      console.log('Page token direct lookup:', JSON.stringify(directJson));
+      if (directJson.access_token) {
+        pageToken = directJson.access_token;
+      } else {
+        debugInfo += `Direct lookup failed: ${directJson.error?.message || 'no access_token returned'}. `;
+
+        // Fallback: list all pages the token can access
+        const accountsRes = await fetch(
+          `${META_API}/me/accounts?fields=id,name,access_token&limit=200&access_token=${token}`,
+        );
+        const accountsJson = await accountsRes.json();
+        console.log('me/accounts lookup:', JSON.stringify({ error: accountsJson.error, count: accountsJson.data?.length }));
+        if (accountsJson.error) {
+          debugInfo += `me/accounts failed: ${accountsJson.error.message}. `;
+        } else {
+          const match = (accountsJson.data || []).find((p: any) => p.id === page_id);
+          if (match?.access_token) {
+            pageToken = match.access_token;
+          } else {
+            const availableIds = (accountsJson.data || []).map((p: any) => `${p.name} (${p.id})`).join(', ');
+            debugInfo += `Page ${page_id} niet gevonden in toegankelijke pages. Beschikbaar: ${availableIds || '(geen)'}. `;
+          }
+        }
+      }
+
+      if (!pageToken) {
         throw new Error(
-          `Kon geen Page Access Token ophalen voor page ${page_id}: ${pageTokenJson.error?.message || 'geen access_token in response. Controleer of de token rechten heeft op deze Page (pages_show_list, pages_manage_ads, leads_retrieval, pages_read_engagement).'}`,
+          `Kon geen Page Access Token ophalen voor page ${page_id}. ${debugInfo}` +
+          `Controleer: (1) Page ID is correct, (2) je META_ACCESS_TOKEN heeft de scopes pages_show_list, pages_read_engagement, pages_manage_ads en leads_retrieval, ` +
+          `(3) de System User of gebruiker is toegevoegd als admin/advertiser op deze Page in Meta Business Manager.`,
         );
       }
-      const pageToken = pageTokenJson.access_token as string;
+
       const items = await fetchAll(
         `${META_API}/${page_id}/leadgen_forms?fields=id,name,status`,
         pageToken,
