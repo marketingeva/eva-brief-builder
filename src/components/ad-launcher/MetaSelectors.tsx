@@ -19,7 +19,16 @@ interface Props {
   onChange: (v: MetaSelection) => void;
 }
 
-interface Item { id: string; name: string }
+interface Item {
+  id: string;
+  name: string;
+}
+
+interface MetaFunctionResponse {
+  data?: Item[];
+  error?: string;
+  fallback?: boolean;
+}
 
 export default function MetaSelectors({ nameFilter, pageId, value, onChange }: Props) {
   const [campaigns, setCampaigns] = useState<Item[]>([]);
@@ -31,77 +40,194 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     setLoadingC(true);
     setError(null);
-    supabase.functions.invoke('meta-list-resources', {
-      body: { resource: 'campaigns', name_filter: nameFilter || '' },
-    }).then(({ data, error }) => {
-      setLoadingC(false);
-      if (error || data?.error) { setError(error?.message || data.error); return; }
-      setCampaigns(data?.data || []);
-    });
+
+    supabase.functions
+      .invoke<MetaFunctionResponse>('meta-list-resources', {
+        body: { resource: 'campaigns', name_filter: nameFilter || '' },
+      })
+      .then(({ data, error }) => {
+        if (!active) return;
+
+        setLoadingC(false);
+        if (error || data?.error) {
+          setCampaigns([]);
+          setError(error?.message || data?.error || 'Campagnes konden niet geladen worden.');
+          return;
+        }
+
+        const items = data?.data || [];
+        setCampaigns(items);
+
+        if (value.campaign_id && !items.some((item) => item.id === value.campaign_id)) {
+          onChange({ ...value, campaign_id: '', adset_id: '' });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [nameFilter]);
 
   useEffect(() => {
-    if (!value.campaign_id) { setAdsets([]); return; }
+    let active = true;
+
+    if (!value.campaign_id) {
+      setAdsets([]);
+      return () => {
+        active = false;
+      };
+    }
+
     setLoadingA(true);
-    supabase.functions.invoke('meta-list-resources', {
-      body: { resource: 'adsets', campaign_id: value.campaign_id },
-    }).then(({ data, error }) => {
-      setLoadingA(false);
-      if (error || data?.error) { setError(error?.message || data.error); return; }
-      setAdsets(data?.data || []);
-    });
-  }, [value.campaign_id]);
+    setError(null);
+
+    supabase.functions
+      .invoke<MetaFunctionResponse>('meta-list-resources', {
+        body: {
+          resource: 'adsets',
+          campaign_id: value.campaign_id,
+          name_filter: nameFilter || '',
+        },
+      })
+      .then(({ data, error }) => {
+        if (!active) return;
+
+        setLoadingA(false);
+        if (error || data?.error) {
+          setAdsets([]);
+          setError(error?.message || data?.error || 'Ad sets konden niet geladen worden.');
+          return;
+        }
+
+        const items = data?.data || [];
+        setAdsets(items);
+
+        if (value.adset_id && !items.some((item) => item.id === value.adset_id)) {
+          onChange({ ...value, adset_id: '' });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [value.campaign_id, nameFilter]);
 
   useEffect(() => {
-    if (!pageId) { setLeadForms([]); return; }
+    let active = true;
+
+    if (!pageId) {
+      setLeadForms([]);
+      return () => {
+        active = false;
+      };
+    }
+
     setLoadingL(true);
-    supabase.functions.invoke('meta-list-resources', {
-      body: { resource: 'leadforms', page_id: pageId, name_filter: nameFilter || '' },
-    }).then(({ data, error }) => {
-      setLoadingL(false);
-      if (error || data?.error) { setError(error?.message || data.error); return; }
-      setLeadForms(data?.data || []);
-    });
+    setError(null);
+
+    supabase.functions
+      .invoke<MetaFunctionResponse>('meta-list-resources', {
+        body: { resource: 'leadforms', page_id: pageId, name_filter: nameFilter || '' },
+      })
+      .then(({ data, error }) => {
+        if (!active) return;
+
+        setLoadingL(false);
+        if (error || data?.error) {
+          setLeadForms([]);
+          setError(error?.message || data?.error || 'Lead formulieren konden niet geladen worden.');
+          return;
+        }
+
+        const items = data?.data || [];
+        setLeadForms(items);
+
+        if (value.lead_form_id && !items.some((item) => item.id === value.lead_form_id)) {
+          onChange({ ...value, lead_form_id: '' });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [pageId, nameFilter]);
 
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-2">Campagne {loadingC && <Loader2 className="h-3 w-3 animate-spin" />}</Label>
+        <Label className="flex items-center gap-2">
+          Campagne {loadingC && <Loader2 className="h-3 w-3 animate-spin" />}
+        </Label>
         <Select value={value.campaign_id} onValueChange={(v) => onChange({ ...value, campaign_id: v, adset_id: '' })}>
-          <SelectTrigger><SelectValue placeholder="Kies campagne" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Kies campagne" />
+          </SelectTrigger>
           <SelectContent>
-            {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-            {!loadingC && !campaigns.length && <div className="px-2 py-2 text-xs text-muted-foreground">Geen resultaten</div>}
+            {campaigns.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+            {!loadingC && !campaigns.length && (
+              <div className="px-2 py-2 text-xs text-muted-foreground">Geen campagnes gevonden</div>
+            )}
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-2">Ad set {loadingA && <Loader2 className="h-3 w-3 animate-spin" />}</Label>
+        <Label className="flex items-center gap-2">
+          Ad set {loadingA && <Loader2 className="h-3 w-3 animate-spin" />}
+        </Label>
         <Select value={value.adset_id} onValueChange={(v) => onChange({ ...value, adset_id: v })} disabled={!value.campaign_id}>
-          <SelectTrigger><SelectValue placeholder={value.campaign_id ? 'Kies ad set' : 'Eerst campagne'} /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder={value.campaign_id ? 'Kies ad set' : 'Eerst campagne'} />
+          </SelectTrigger>
           <SelectContent>
-            {adsets.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+            {adsets.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.name}
+              </SelectItem>
+            ))}
+            {!!value.campaign_id && !loadingA && !adsets.length && (
+              <div className="px-2 py-2 text-xs text-muted-foreground">Geen ad sets gevonden</div>
+            )}
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-2">Lead formulier {loadingL && <Loader2 className="h-3 w-3 animate-spin" />}</Label>
+        <Label className="flex items-center gap-2">
+          Lead formulier {loadingL && <Loader2 className="h-3 w-3 animate-spin" />}
+        </Label>
         <Select value={value.lead_form_id} onValueChange={(v) => onChange({ ...value, lead_form_id: v })} disabled={!pageId}>
-          <SelectTrigger><SelectValue placeholder={pageId ? 'Kies formulier' : 'Geen Page ID ingesteld'} /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder={pageId ? 'Kies formulier' : 'Geen Page ID ingesteld'} />
+          </SelectTrigger>
           <SelectContent>
-            {leadForms.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+            {leadForms.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.name}
+              </SelectItem>
+            ))}
+            {!!pageId && !loadingL && !leadForms.length && (
+              <div className="px-2 py-2 text-xs text-muted-foreground">Geen lead formulieren gevonden</div>
+            )}
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-1.5">
         <Label>Website URL</Label>
-        <Input value={value.link_url} onChange={(e) => onChange({ ...value, link_url: e.target.value })} placeholder="http://fb.me/" />
+        <Input
+          value={value.link_url}
+          onChange={(e) => onChange({ ...value, link_url: e.target.value })}
+          placeholder="http://fb.me/"
+        />
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
