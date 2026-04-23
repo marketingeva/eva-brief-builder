@@ -83,82 +83,104 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar text-sidebar-foreground transition-transform duration-200 lg:relative',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          'fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-200 lg:relative',
+          collapsed ? 'w-14' : 'w-64',
+          mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Header with Eva logo */}
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-          <div className="flex items-center gap-3">
-            <img src={evaIcon} alt="Eva" className="h-8 w-8 rounded-lg" />
-            <div className="flex flex-col">
-              <span className="font-bold text-sm text-sidebar-foreground">Eva AI</span>
-              <span className="text-[10px] text-sidebar-foreground/50 font-medium">Marketeer</span>
+        <div className={cn('flex h-16 items-center border-b border-sidebar-border', collapsed ? 'justify-center px-2' : 'justify-between px-4')}>
+          {!collapsed && (
+            <div className="flex items-center gap-3">
+              <img src={evaIcon} alt="Eva" className="h-8 w-8 rounded-lg" />
+              <div className="flex flex-col">
+                <span className="font-bold text-sm text-sidebar-foreground">Eva AI</span>
+                <span className="text-[10px] text-sidebar-foreground/50 font-medium">Marketeer</span>
+              </div>
             </div>
-          </div>
+          )}
+          {collapsed && <img src={evaIcon} alt="Eva" className="h-8 w-8 rounded-lg" />}
           <button onClick={() => setMobileOpen(false)} className="lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground">
             <X className="h-5 w-5" />
+          </button>
+          <button
+            onClick={toggleCollapsed}
+            className={cn(
+              'hidden lg:flex h-7 w-7 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors',
+              collapsed && 'absolute -right-3 top-5 bg-sidebar border border-sidebar-border shadow-sm'
+            )}
+            title={collapsed ? 'Zijbalk uitklappen' : 'Zijbalk inklappen'}
+          >
+            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
         </div>
 
         {/* Tools */}
-        <div className="px-2 pt-3 pb-1">
+        <div className={cn('pt-3 pb-1', collapsed ? 'px-2' : 'px-2')}>
           <button
             onClick={() => { navigate('/ad-launcher'); setMobileOpen(false); }}
             className={cn(
-              'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all',
+              'flex w-full items-center rounded-lg text-sm transition-all',
+              collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-2.5 py-2',
               isAdLauncher
                 ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
                 : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
             )}
+            title="Ad Launcher"
           >
             <Rocket className="h-4 w-4 shrink-0" />
-            <span>Ad Launcher</span>
+            {!collapsed && <span>Ad Launcher</span>}
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-3 pt-2 pb-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/40" />
-            <Input
-              placeholder="Zoek client..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 pl-8 text-xs bg-sidebar-accent/50 border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/40 focus-visible:ring-sidebar-ring"
-            />
+        {!collapsed && (
+          <div className="px-3 pt-2 pb-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/40" />
+              <Input
+                placeholder="Zoek client..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-8 text-xs bg-sidebar-accent/50 border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/40 focus-visible:ring-sidebar-ring"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Client list */}
-        <nav className="flex-1 overflow-y-auto px-2 pb-2">
-          <div className="mb-1 flex items-center justify-between px-2 pt-1">
-            <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-medium">Clients</span>
-            <button
-              onClick={() => setAddOpen(true)}
-              className="flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/40 hover:text-sidebar-primary hover:bg-sidebar-accent/50 transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
-          </div>
+        <nav className={cn('flex-1 overflow-y-auto pb-2', collapsed ? 'px-2 pt-2' : 'px-2')}>
+          {!collapsed && (
+            <div className="mb-1 flex items-center justify-between px-2 pt-1">
+              <span className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-medium">Clients</span>
+              <button
+                onClick={() => setAddOpen(true)}
+                className="flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/40 hover:text-sidebar-primary hover:bg-sidebar-accent/50 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
           {loading ? (
-            <div className="px-3 py-6 text-xs text-sidebar-foreground/40">Loading...</div>
+            !collapsed && <div className="px-3 py-6 text-xs text-sidebar-foreground/40">Loading...</div>
           ) : filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center">
-              <Building2 className="mx-auto mb-2 h-6 w-6 text-sidebar-foreground/20" />
-              <p className="text-xs text-sidebar-foreground/40">
-                {search ? 'Geen resultaten' : 'Nog geen clients'}
-              </p>
-              {!search && (
-                <button
-                  onClick={() => setAddOpen(true)}
-                  className="mt-2 text-xs text-sidebar-primary hover:underline"
-                >
-                  Voeg eerste client toe
-                </button>
-              )}
-            </div>
+            !collapsed && (
+              <div className="px-3 py-6 text-center">
+                <Building2 className="mx-auto mb-2 h-6 w-6 text-sidebar-foreground/20" />
+                <p className="text-xs text-sidebar-foreground/40">
+                  {search ? 'Geen resultaten' : 'Nog geen clients'}
+                </p>
+                {!search && (
+                  <button
+                    onClick={() => setAddOpen(true)}
+                    className="mt-2 text-xs text-sidebar-primary hover:underline"
+                  >
+                    Voeg eerste client toe
+                  </button>
+                )}
+              </div>
+            )
           ) : (
             <div className="space-y-0.5">
               {filtered.map((client) => {
@@ -168,8 +190,10 @@ export default function AppLayout() {
                   <button
                     key={client.id}
                     onClick={() => handleClientClick(client)}
+                    title={collapsed ? client.name : undefined}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-all',
+                      'flex w-full items-center rounded-lg text-left text-sm transition-all',
+                      collapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2.5 py-2',
                       isActive
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
                         : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
@@ -181,12 +205,14 @@ export default function AppLayout() {
                     )}>
                       {client.name.charAt(0)}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{client.name}</p>
-                      {client.care_type && (
-                        <p className="truncate text-[10px] text-sidebar-foreground/40">{client.care_type}</p>
-                      )}
-                    </div>
+                    {!collapsed && (
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{client.name}</p>
+                        {client.care_type && (
+                          <p className="truncate text-[10px] text-sidebar-foreground/40">{client.care_type}</p>
+                        )}
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -196,15 +222,21 @@ export default function AppLayout() {
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-2">
-          <div className="mb-1 truncate px-2.5 py-1 text-[10px] text-sidebar-foreground/40">
-            {user?.email}
-          </div>
+          {!collapsed && (
+            <div className="mb-1 truncate px-2.5 py-1 text-[10px] text-sidebar-foreground/40">
+              {user?.email}
+            </div>
+          )}
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            title={collapsed ? 'Uitloggen' : undefined}
+            className={cn(
+              'flex w-full items-center rounded-lg text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors',
+              collapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+            )}
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            <span>Uitloggen</span>
+            {!collapsed && <span>Uitloggen</span>}
           </button>
         </div>
       </aside>
