@@ -11,6 +11,7 @@ export interface MetaSelection {
   campaign_id: string;
   adset_id: string;
   lead_form_id: string;
+  template_ad_id: string;
 }
 
 interface Props {
@@ -142,9 +143,11 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
   const [campaigns, setCampaigns] = useState<Item[]>([]);
   const [adsets, setAdsets] = useState<Item[]>([]);
   const [leadForms, setLeadForms] = useState<Item[]>([]);
+  const [templateAds, setTemplateAds] = useState<Item[]>([]);
   const [loadingC, setLoadingC] = useState(false);
   const [loadingA, setLoadingA] = useState(false);
   const [loadingL, setLoadingL] = useState(false);
+  const [loadingT, setLoadingT] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -236,6 +239,34 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
     return () => { active = false; };
   }, [pageId]);
 
+  // Load template ads inside the chosen ad set, so we can clone a working creative.
+  useEffect(() => {
+    let active = true;
+    if (!value.adset_id) {
+      setTemplateAds([]);
+      return () => { active = false; };
+    }
+    setLoadingT(true);
+    supabase.functions
+      .invoke<MetaFunctionResponse>('meta-list-resources', {
+        body: { resource: 'template_ads', adset_id: value.adset_id },
+      })
+      .then(({ data, error }) => {
+        if (!active) return;
+        setLoadingT(false);
+        if (error || data?.error) {
+          setTemplateAds([]);
+          return;
+        }
+        const items = data?.data || [];
+        setTemplateAds(items);
+        if (value.template_ad_id && !items.some((item) => item.id === value.template_ad_id)) {
+          onChange({ ...value, template_ad_id: '' });
+        }
+      });
+    return () => { active = false; };
+  }, [value.adset_id]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
@@ -256,13 +287,32 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
         <ResourceCombobox
           items={adsets}
           value={value.adset_id}
-          onSelect={(id) => onChange({ ...value, adset_id: id })}
+          onSelect={(id) => onChange({ ...value, adset_id: id, template_ad_id: '' })}
           placeholder={value.campaign_id ? 'Kies ad set' : 'Eerst campagne'}
           searchPlaceholder="Zoek ad set..."
           emptyText="Geen ad sets gevonden"
           loading={loadingA}
           disabled={!value.campaign_id}
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          Template advertentie <span className="text-muted-foreground/70 normal-case">(aanbevolen — kloont werkende creative)</span>
+        </Label>
+        <ResourceCombobox
+          items={templateAds}
+          value={value.template_ad_id}
+          onSelect={(id) => onChange({ ...value, template_ad_id: id })}
+          placeholder={value.adset_id ? (templateAds.length ? 'Kies bestaande ad als template' : 'Geen ads in deze ad set') : 'Eerst ad set'}
+          searchPlaceholder="Zoek advertentie..."
+          emptyText="Geen advertenties gevonden"
+          loading={loadingT}
+          disabled={!value.adset_id || templateAds.length === 0}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Optioneel maar sterk aanbevolen: nieuwe ads erven dan placement-, profiel- en enhancement-instellingen van deze advertentie.
+        </p>
       </div>
 
       <div className="space-y-1.5">

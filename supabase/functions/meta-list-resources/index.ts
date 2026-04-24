@@ -4,13 +4,15 @@ const corsHeaders = {
 };
 
 const META_API = 'https://graph.facebook.com/v21.0';
-const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms']);
+const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms', 'template_ads', 'template_ad_detail']);
 
-type MetaResource = 'campaigns' | 'adsets' | 'leadforms';
+type MetaResource = 'campaigns' | 'adsets' | 'leadforms' | 'template_ads' | 'template_ad_detail';
 
 type RequestBody = {
   resource?: unknown;
   campaign_id?: unknown;
+  adset_id?: unknown;
+  ad_id?: unknown;
   name_filter?: unknown;
   page_id?: unknown;
 };
@@ -130,6 +132,8 @@ Deno.serve(async (req) => {
     const resource = asTrimmedString(body.resource) as MetaResource;
     const nameFilter = asTrimmedString(body.name_filter);
     const campaignId = asTrimmedString(body.campaign_id);
+    const adsetId = asTrimmedString(body.adset_id);
+    const adId = asTrimmedString(body.ad_id);
     const pageId = asTrimmedString(body.page_id);
 
     if (!VALID_RESOURCES.has(resource)) {
@@ -220,6 +224,36 @@ Deno.serve(async (req) => {
       data = sortActiveFirst(
         items.filter((form) => isVisibleStatus(form.status)),
       );
+    }
+
+    if (resource === 'template_ads') {
+      if (!adsetId) {
+        return jsonResponse({ data: [], error: 'adset_id ontbreekt voor template_ads.', fallback: true }, 400);
+      }
+      const items = await fetchAll(
+        `${META_API}/${adsetId}/ads?fields=id,name,status,effective_status,creative{id}`,
+        token,
+      );
+      data = sortActiveFirst(
+        items.filter((a) => isVisibleStatus(a.effective_status)),
+      );
+    }
+
+    if (resource === 'template_ad_detail') {
+      if (!adId) {
+        return jsonResponse({ data: [], error: 'ad_id ontbreekt voor template_ad_detail.', fallback: true }, 400);
+      }
+      // Fetch the ad + full creative spec so we can clone it.
+      const fields = [
+        'id',
+        'name',
+        'creative{id,name,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,instagram_user_id,instagram_actor_id,object_type,call_to_action_type,template_url,url_tags,product_set_id}',
+      ].join(',');
+      const url = `${META_API}/${adId}?fields=${encodeURIComponent(fields)}&access_token=${token}`;
+      const r = await fetch(url);
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message || 'template_ad_detail error');
+      return jsonResponse({ data: j });
     }
 
     return jsonResponse({
