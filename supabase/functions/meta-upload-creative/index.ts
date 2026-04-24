@@ -117,8 +117,6 @@ function buildLeadCreativePayload(opts: {
   const mainHeadline = headlines[0] || '';
   const mainDescription = descriptions[0] || '';
 
-  // Only add asset_feed_spec if there are MULTIPLE variants in any field.
-  // This activates "Multiple Text Options" in Meta Ads Manager (1 of N).
   const hasMultiple =
     primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
 
@@ -127,52 +125,52 @@ function buildLeadCreativePayload(opts: {
     value: { lead_gen_form_id: leadFormId, link },
   };
 
+  // Always include a valid object_story_spec as the base / fallback creative.
+  // For Lead Ads on standard (non-Dynamic-Creative) ad sets this is what Meta
+  // validates against. The "Multiple Text Options" feature is layered on top
+  // via creative_asset_groups_spec (Flexible Ad Format), which does NOT
+  // require the ad set to be Dynamic Creative.
   const object_story_spec: Record<string, unknown> = { page_id: pageId };
-  const payload: Record<string, unknown> = { object_story_spec };
-
-  if (!hasMultiple) {
-    if (videoId) {
-      object_story_spec.video_data = {
-        video_id: videoId,
-        message: mainPrimary,
-        title: mainHeadline,
-        link_description: mainDescription,
-        call_to_action,
-      };
-    } else {
-      object_story_spec.link_data = {
-        message: mainPrimary,
-        link,
-        name: mainHeadline,
-        description: mainDescription,
-        image_hash: imageHash,
-        call_to_action,
-      };
-    }
+  if (videoId) {
+    object_story_spec.video_data = {
+      video_id: videoId,
+      message: mainPrimary,
+      title: mainHeadline,
+      link_description: mainDescription,
+      call_to_action,
+    };
+  } else {
+    object_story_spec.link_data = {
+      message: mainPrimary,
+      link,
+      name: mainHeadline,
+      description: mainDescription,
+      image_hash: imageHash,
+      call_to_action,
+    };
   }
 
+  const payload: Record<string, unknown> = { object_story_spec };
+
   if (hasMultiple) {
-    const bodies = (primaryTexts.length > 0 ? primaryTexts : [' ']).map((t) => ({ text: t }));
-    const titles = (headlines.length > 0 ? headlines : [' ']).map((t) => ({ text: t }));
-    const descs = (descriptions.length > 0 ? descriptions : [' ']).map((t) => ({ text: t }));
+    // Flexible Ad Format: bundle multiple text variants under a single ad
+    // without requiring Dynamic Creative on the ad set.
+    const texts: Array<Record<string, string>> = [];
+    for (const t of primaryTexts) texts.push({ text: t, text_type: 'primary_text' });
+    for (const t of headlines) texts.push({ text: t, text_type: 'headline' });
+    for (const t of descriptions) texts.push({ text: t, text_type: 'description' });
 
-    const assetFeed: Record<string, unknown> = {
-      bodies,
-      titles,
-      descriptions: descs,
-      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-      link_urls: [{ website_url: link }],
-      call_to_actions: [call_to_action],
-      call_to_action_types: [ctaType],
+    const group: Record<string, unknown> = {
+      texts,
+      call_to_action,
     };
-
     if (videoId) {
-      assetFeed.videos = [{ video_id: videoId }];
+      group.videos = [{ video_id: videoId }];
     } else if (imageHash) {
-      assetFeed.images = [{ hash: imageHash }];
+      group.images = [{ hash: imageHash }];
     }
 
-    payload.asset_feed_spec = assetFeed;
+    payload.creative_asset_groups_spec = { groups: [group] };
   }
 
   return payload;
