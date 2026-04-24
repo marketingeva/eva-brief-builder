@@ -239,6 +239,34 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
     return () => { active = false; };
   }, [pageId]);
 
+  // Load template ads inside the chosen ad set, so we can clone a working creative.
+  useEffect(() => {
+    let active = true;
+    if (!value.adset_id) {
+      setTemplateAds([]);
+      return () => { active = false; };
+    }
+    setLoadingT(true);
+    supabase.functions
+      .invoke<MetaFunctionResponse>('meta-list-resources', {
+        body: { resource: 'template_ads', adset_id: value.adset_id },
+      })
+      .then(({ data, error }) => {
+        if (!active) return;
+        setLoadingT(false);
+        if (error || data?.error) {
+          setTemplateAds([]);
+          return;
+        }
+        const items = data?.data || [];
+        setTemplateAds(items);
+        if (value.template_ad_id && !items.some((item) => item.id === value.template_ad_id)) {
+          onChange({ ...value, template_ad_id: '' });
+        }
+      });
+    return () => { active = false; };
+  }, [value.adset_id]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
