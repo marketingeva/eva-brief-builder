@@ -1,10 +1,16 @@
 // Uploads creatives to Meta and creates ads under the chosen ad set.
 //
-// Per file -> 1 advertentie met optioneel meerdere tekstvarianten
-// (Multiple Text Options / Standard Enhancements). Werkt op normale
-// (non-DCO) Lead Gen ad sets door asset_feed_spec te combineren met
-// degrees_of_freedom_spec.creative_features_spec.standard_enhancements
-// (enroll_status: OPT_IN). Dit is de officieel ondersteunde route.
+// Strategy: CLONE-FROM-TEMPLATE.
+// 1) Fetch a known-good existing ad creative (template_ad_id) from the same
+//    ad account/ad set so we inherit its placement-, profile- and enhancement
+//    context (page_id, instagram_user_id, link_data structure, etc).
+// 2) Override only media + texts + (optional) call_to_action.
+// 3) For multi-variant text we add asset_feed_spec on top of the template's
+//    object_story_spec (Multiple Text Options). Disable Standard Enhancements
+//    by default (Rapid-Ads style) so Meta does not auto-mutate the creative.
+// 4) Fallback: when no template is selected, fall back to legacy minimal
+//    payload (page_id + lead_form_id), so the launcher still works for
+//    accounts where a template can't be picked.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -35,6 +41,8 @@ interface LaunchBody {
   adset_id: string;
   lead_form_id: string;
   page_id: string;
+  template_ad_id?: string;
+  disable_enhancements?: boolean;
   status?: 'PAUSED' | 'ACTIVE';
   creatives: CreativeItem[];
 }
@@ -92,14 +100,136 @@ function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-function buildLeadCreativePayload(opts: {
+async function fetchTemplateCreative(token: string, adId: string) {
+  const fields = [
+    'id',
+    'name',
+    'creative{id,name,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,instagram_user_id,instagram_actor_id,url_tags}',
+  ].join(',');
+  const r = await fetch(`${META_API}/${adId}?fields=${encodeURIComponent(fields)}&access_token=${token}`);
+  const j = await r.json();
+  if (j.error) throw new Error(`template_ad: ${j.error.message}`);
+  return j.creative || {};
+}
+
+/**
+ * Build a creative payload from a template creative, replacing only
+ * media + texts. Keeps page_id / instagram_user_id / placement context
+ * from the template intact.
+ */
+function buildPayloadFromTemplate(opts: {
+  template: any;
+  text: CreativeText;
+  imageHash?: string;
+  videoId?: string;
+  leadFormId?: string;
+  disableEnhancements: boolean;
+}) {
+  const { template, text, imageHash, videoId, leadFormId, disableEnhancements } = opts;
+
+  const tplOss = template?.object_story_spec || {};
+  const tplLink = tplOss.link_data || {};
+  const tplVideo = tplOss.video_data || {};
+
+  const primaryTexts = cleanVariants(text.primary_texts).slice(0, 5);
+  const headlines = cleanVariants(text.headlines).slice(0, 5);
+  const descriptions = cleanVariants(text.descriptions).slice(0, 5);
+
+  const mainPrimary = primaryTexts[0] || '';
+  const mainHeadline = headlines[0] || '';
+  const mainDescription = descriptions[0] || '';
+
+  // Inherit CTA from template, but allow override of lead_gen_form_id and link.
+  const tplCta = tplLink.call_to_action || tplVideo.call_to_action || {};
+  const ctaType = text.cta || tplCta.type || 'SIGN_UP';
+  const link = text.link_url || tplLink.link || tplCta?.value?.link || 'http://fb.me/';
+  const callToAction = {
+    type: ctaType,
+    value: {
+      ...(tplCta.value || {}),
+      link,
+      ...(leadFormId ? { lead_gen_form_id: leadFormId } : {}),
+    },
+  };
+
+  // Rebuild object_story_spec preserving template profile fields.
+  const object_story_spec: Record<string, unknown> = {
+    ...tplOss,
+  };
+  // Don't carry over the original post id — we are creating a new unpublished post.
+  delete (object_story_spec as any).template_data;
+
+  if (videoId) {
+    object_story_spec.video_data = {
+      ...tplVideo,
+      video_id: videoId,
+      message: mainPrimary || tplVideo.message,
+      title: mainHeadline || tplVideo.title,
+      link_description: mainDescription || tplVideo.link_description,
+      call_to_action: callToAction,
+    };
+    delete (object_story_spec as any).link_data;
+  } else {
+    object_story_spec.link_data = {
+      ...tplLink,
+      message: mainPrimary || tplLink.message,
+      link,
+      name: mainHeadline || tplLink.name,
+      description: mainDescription || tplLink.description,
+      image_hash: imageHash || tplLink.image_hash,
+      call_to_action: callToAction,
+    };
+    delete (object_story_spec as any).video_data;
+  }
+
+  const payload: Record<string, unknown> = { object_story_spec };
+
+  // Carry instagram_user_id when present (required for IG placements).
+  if (template.instagram_user_id) {
+    payload.instagram_user_id = template.instagram_user_id;
+  }
+
+  const hasMultiple =
+    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+
+  if (hasMultiple) {
+    const asset_feed_spec: Record<string, unknown> = {
+      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+      bodies: primaryTexts.map((t) => ({ text: t })),
+      titles: headlines.map((t) => ({ text: t })),
+      descriptions: descriptions.map((t) => ({ text: t })),
+      link_urls: [{ website_url: link }],
+      call_to_action_types: [ctaType],
+      call_to_actions: [callToAction],
+    };
+    if (videoId) asset_feed_spec.videos = [{ video_id: videoId }];
+    else if (imageHash) asset_feed_spec.images = [{ hash: imageHash }];
+    payload.asset_feed_spec = asset_feed_spec;
+  }
+
+  // Standard Enhancements: explicitly opt-out by default ("Rapid Ads"-style),
+  // unless we need them for the multi-text variants to be served.
+  payload.degrees_of_freedom_spec = {
+    creative_features_spec: {
+      standard_enhancements: {
+        enroll_status: disableEnhancements && !hasMultiple ? 'OPT_OUT' : 'OPT_IN',
+      },
+    },
+  };
+
+  return payload;
+}
+
+/** Fallback when no template ad is selected. */
+function buildLegacyLeadPayload(opts: {
   pageId: string;
   leadFormId: string;
   text: CreativeText;
   imageHash?: string;
   videoId?: string;
+  disableEnhancements: boolean;
 }) {
-  const { pageId, leadFormId, text, imageHash, videoId } = opts;
+  const { pageId, leadFormId, text, imageHash, videoId, disableEnhancements } = opts;
   const link = text.link_url || 'http://fb.me/';
   const ctaType = text.cta || 'SIGN_UP';
 
@@ -111,16 +241,9 @@ function buildLeadCreativePayload(opts: {
   const mainHeadline = headlines[0] || '';
   const mainDescription = descriptions[0] || '';
 
-  const hasMultiple =
-    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
-
-  const call_to_action = {
-    type: ctaType,
-    value: { lead_gen_form_id: leadFormId, link },
-  };
-
-  // Base object_story_spec — fallback creative shown when only 1 variant exists.
+  const call_to_action = { type: ctaType, value: { lead_gen_form_id: leadFormId, link } };
   const object_story_spec: Record<string, unknown> = { page_id: pageId };
+
   if (videoId) {
     object_story_spec.video_data = {
       video_id: videoId,
@@ -140,37 +263,31 @@ function buildLeadCreativePayload(opts: {
     };
   }
 
-  if (!hasMultiple) {
-    return { object_story_spec };
+  const hasMultiple =
+    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+  const payload: Record<string, unknown> = { object_story_spec };
+
+  if (hasMultiple) {
+    payload.asset_feed_spec = {
+      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+      bodies: primaryTexts.map((t) => ({ text: t })),
+      titles: headlines.map((t) => ({ text: t })),
+      descriptions: descriptions.map((t) => ({ text: t })),
+      link_urls: [{ website_url: link }],
+      call_to_action_types: [ctaType],
+      call_to_actions: [call_to_action],
+      ...(videoId ? { videos: [{ video_id: videoId }] } : imageHash ? { images: [{ hash: imageHash }] } : {}),
+    };
   }
 
-  // Multiple text options via asset_feed_spec.
-  // This is the documented path that works on standard (non-DCO) ad sets
-  // when combined with standard_enhancements OPT_IN.
-  const asset_feed_spec: Record<string, unknown> = {
-    ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-    bodies: primaryTexts.map((t) => ({ text: t })),
-    titles: headlines.map((t) => ({ text: t })),
-    descriptions: descriptions.map((t) => ({ text: t })),
-    link_urls: [{ website_url: link }],
-    call_to_action_types: [ctaType],
-    call_to_actions: [call_to_action],
-  };
-  if (videoId) {
-    asset_feed_spec.videos = [{ video_id: videoId }];
-  } else if (imageHash) {
-    asset_feed_spec.images = [{ hash: imageHash }];
-  }
-
-  return {
-    object_story_spec,
-    asset_feed_spec,
-    degrees_of_freedom_spec: {
-      creative_features_spec: {
-        standard_enhancements: { enroll_status: 'OPT_IN' },
+  payload.degrees_of_freedom_spec = {
+    creative_features_spec: {
+      standard_enhancements: {
+        enroll_status: disableEnhancements && !hasMultiple ? 'OPT_OUT' : 'OPT_IN',
       },
     },
   };
+  return payload;
 }
 
 Deno.serve(async (req) => {
@@ -189,6 +306,18 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
+    const disableEnhancements = body.disable_enhancements !== false; // default ON
+
+    // Fetch template creative once if provided.
+    let template: any = null;
+    if (body.template_ad_id) {
+      try {
+        template = await fetchTemplateCreative(token, body.template_ad_id);
+        console.log('Loaded template creative', template?.id, 'has_oss:', !!template?.object_story_spec);
+      } catch (e) {
+        console.error('Template fetch failed, falling back to legacy payload', e);
+      }
+    }
 
     const results: any[] = [];
 
@@ -216,15 +345,26 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const creativePayload = buildLeadCreativePayload({
-          pageId: body.page_id,
-          leadFormId: body.lead_form_id,
-          text: c.texts,
-          imageHash,
-          videoId,
-        });
+        const creativePayload = template
+          ? buildPayloadFromTemplate({
+              template,
+              text: c.texts,
+              imageHash,
+              videoId,
+              leadFormId: body.lead_form_id,
+              disableEnhancements,
+            })
+          : buildLegacyLeadPayload({
+              pageId: body.page_id,
+              leadFormId: body.lead_form_id,
+              text: c.texts,
+              imageHash,
+              videoId,
+              disableEnhancements,
+            });
 
         const adName = c.file_name.replace(/\.[^.]+$/, '');
+        console.log('Creating creative', adName, 'template_used:', !!template);
         const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
           name: adName,
           ...creativePayload,
@@ -254,10 +394,12 @@ Deno.serve(async (req) => {
           file_name: c.file_name,
           ad_id: adJson.id,
           variants_bundled: variantsCount,
+          template_used: !!template,
           success: true,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        console.error('Launch failed for', c.file_name, msg);
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
           status: 'failed',
@@ -268,7 +410,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ results }),
+      JSON.stringify({ results, template_used: !!template }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e) {
