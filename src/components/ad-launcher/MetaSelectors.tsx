@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -12,7 +11,6 @@ export interface MetaSelection {
   campaign_id: string;
   adset_id: string;
   lead_form_id: string;
-  link_url: string;
 }
 
 interface Props {
@@ -280,16 +278,6 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
           disabled={!pageId}
         />
       </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Website URL</Label>
-        <Input
-          value={value.link_url}
-          onChange={(e) => onChange({ ...value, link_url: e.target.value })}
-          placeholder="http://fb.me/"
-        />
-      </div>
-
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
