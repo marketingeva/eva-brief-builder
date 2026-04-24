@@ -1,16 +1,16 @@
 // Uploads creatives to Meta and creates ads under the chosen ad set.
 //
-// Strategy: CLONE-FROM-TEMPLATE.
-// 1) Fetch a known-good existing ad creative (template_ad_id) from the same
-//    ad account/ad set so we inherit its placement-, profile- and enhancement
-//    context (page_id, instagram_user_id, link_data structure, etc).
-// 2) Override only media + texts + (optional) call_to_action.
-// 3) For multi-variant text we add asset_feed_spec on top of the template's
-//    object_story_spec (Multiple Text Options). Disable Standard Enhancements
-//    by default (Rapid-Ads style) so Meta does not auto-mutate the creative.
-// 4) Fallback: when no template is selected, fall back to legacy minimal
-//    payload (page_id + lead_form_id), so the launcher still works for
-//    accounts where a template can't be picked.
+// Strategy: AUTO-COPY.
+// 1) Automatically pick a known-good source ad from the chosen ad set
+//    (preferably an ACTIVE lead-gen ad).
+// 2) Duplicate it via the Ads Copy API: POST /{source_ad_id}/copies
+// 3) Use `creative_parameters` to override only the fields we care about
+//    (image_hash / video_id, body, title, link_description, link_url,
+//    call_to_action with the lead_gen_form_id).
+// 4) For multiple text variants, use asset_feed_spec inside creative_parameters
+//    so all variants live inside ONE ad.
+// 5) Fallback: if no source ad exists in the ad set, fall back to a minimal
+//    legacy creative payload so the launcher still works.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -41,31 +41,8 @@ interface LaunchBody {
   adset_id: string;
   lead_form_id: string;
   page_id: string;
-  template_ad_id?: string;
-  disable_enhancements?: boolean;
   status?: 'PAUSED' | 'ACTIVE';
   creatives: CreativeItem[];
-}
-
-async function uploadImage(adAccount: string, token: string, blob: Blob, filename: string) {
-  const fd = new FormData();
-  fd.append('access_token', token);
-  fd.append('source', blob, filename);
-  const r = await fetch(`${META_API}/${adAccount}/adimages`, { method: 'POST', body: fd });
-  const j = await r.json();
-  if (j.error) throw new Error(`adimages: ${j.error.message}`);
-  const key = Object.keys(j.images || {})[0];
-  return j.images[key].hash as string;
-}
-
-async function uploadVideo(adAccount: string, token: string, blob: Blob, filename: string) {
-  const fd = new FormData();
-  fd.append('access_token', token);
-  fd.append('source', blob, filename);
-  const r = await fetch(`${META_API}/${adAccount}/advideos`, { method: 'POST', body: fd });
-  const j = await r.json();
-  if (j.error) throw new Error(`advideos: ${j.error.message}`);
-  return j.id as string;
 }
 
 function metaErrorMessage(prefix: string, error: any) {
@@ -96,40 +73,56 @@ async function postToMeta(path: string, token: string, payload: Record<string, u
   return json;
 }
 
+async function uploadImage(adAccount: string, token: string, blob: Blob, filename: string) {
+  const fd = new FormData();
+  fd.append('access_token', token);
+  fd.append('source', blob, filename);
+  const r = await fetch(`${META_API}/${adAccount}/adimages`, { method: 'POST', body: fd });
+  const j = await r.json();
+  if (j.error) throw new Error(`adimages: ${j.error.message}`);
+  const key = Object.keys(j.images || {})[0];
+  return j.images[key].hash as string;
+}
+
+async function uploadVideo(adAccount: string, token: string, blob: Blob, filename: string) {
+  const fd = new FormData();
+  fd.append('access_token', token);
+  fd.append('source', blob, filename);
+  const r = await fetch(`${META_API}/${adAccount}/advideos`, { method: 'POST', body: fd });
+  const j = await r.json();
+  if (j.error) throw new Error(`advideos: ${j.error.message}`);
+  return j.id as string;
+}
+
 function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-async function fetchTemplateCreative(token: string, adId: string) {
-  const fields = [
-    'id',
-    'name',
-    'creative{id,name,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,instagram_user_id,instagram_actor_id,url_tags}',
-  ].join(',');
-  const r = await fetch(`${META_API}/${adId}?fields=${encodeURIComponent(fields)}&access_token=${token}`);
+/** Pick a usable source ad from the chosen ad set. Prefer ACTIVE ads. */
+async function pickSourceAd(token: string, adsetId: string): Promise<string | null> {
+  const url = `${META_API}/${adsetId}/ads?fields=id,name,status,effective_status&limit=50&access_token=${token}`;
+  const r = await fetch(url);
   const j = await r.json();
-  if (j.error) throw new Error(`template_ad: ${j.error.message}`);
-  return j.creative || {};
+  if (j.error) {
+    console.error('pickSourceAd list error', j.error);
+    return null;
+  }
+  const ads: any[] = j.data || [];
+  const active = ads.find((a) => a.effective_status === 'ACTIVE');
+  if (active) return active.id;
+  const paused = ads.find((a) => a.effective_status === 'PAUSED');
+  if (paused) return paused.id;
+  return ads[0]?.id || null;
 }
 
-/**
- * Build a creative payload from a template creative, replacing only
- * media + texts. Keeps page_id / instagram_user_id / placement context
- * from the template intact.
- */
-function buildPayloadFromTemplate(opts: {
-  template: any;
+/** Build creative_parameters for the copy. Override only what we want to change. */
+function buildCreativeParameters(opts: {
   text: CreativeText;
+  leadFormId: string;
   imageHash?: string;
   videoId?: string;
-  leadFormId?: string;
-  disableEnhancements: boolean;
 }) {
-  const { template, text, imageHash, videoId, leadFormId, disableEnhancements } = opts;
-
-  const tplOss = template?.object_story_spec || {};
-  const tplLink = tplOss.link_data || {};
-  const tplVideo = tplOss.video_data || {};
+  const { text, leadFormId, imageHash, videoId } = opts;
 
   const primaryTexts = cleanVariants(text.primary_texts).slice(0, 5);
   const headlines = cleanVariants(text.headlines).slice(0, 5);
@@ -139,55 +132,22 @@ function buildPayloadFromTemplate(opts: {
   const mainHeadline = headlines[0] || '';
   const mainDescription = descriptions[0] || '';
 
-  // Inherit CTA from template, but allow override of lead_gen_form_id and link.
-  const tplCta = tplLink.call_to_action || tplVideo.call_to_action || {};
-  const ctaType = text.cta || tplCta.type || 'SIGN_UP';
-  const link = text.link_url || tplLink.link || tplCta?.value?.link || 'http://fb.me/';
+  const link = text.link_url || 'http://fb.me/';
+  const ctaType = text.cta || 'SIGN_UP';
   const callToAction = {
     type: ctaType,
-    value: {
-      ...(tplCta.value || {}),
-      link,
-      ...(leadFormId ? { lead_gen_form_id: leadFormId } : {}),
-    },
+    value: { link, lead_gen_form_id: leadFormId },
   };
 
-  // Rebuild object_story_spec preserving template profile fields.
-  const object_story_spec: Record<string, unknown> = {
-    ...tplOss,
+  // Top-level creative parameter overrides supported by Ad Copies API.
+  const params: Record<string, unknown> = {
+    body: mainPrimary,
+    title: mainHeadline,
+    link_description: mainDescription,
+    link_url: link,
   };
-  // Don't carry over the original post id — we are creating a new unpublished post.
-  delete (object_story_spec as any).template_data;
 
-  if (videoId) {
-    object_story_spec.video_data = {
-      ...tplVideo,
-      video_id: videoId,
-      message: mainPrimary || tplVideo.message,
-      title: mainHeadline || tplVideo.title,
-      link_description: mainDescription || tplVideo.link_description,
-      call_to_action: callToAction,
-    };
-    delete (object_story_spec as any).link_data;
-  } else {
-    object_story_spec.link_data = {
-      ...tplLink,
-      message: mainPrimary || tplLink.message,
-      link,
-      name: mainHeadline || tplLink.name,
-      description: mainDescription || tplLink.description,
-      image_hash: imageHash || tplLink.image_hash,
-      call_to_action: callToAction,
-    };
-    delete (object_story_spec as any).video_data;
-  }
-
-  const payload: Record<string, unknown> = { object_story_spec };
-
-  // Carry instagram_user_id when present (required for IG placements).
-  if (template.instagram_user_id) {
-    payload.instagram_user_id = template.instagram_user_id;
-  }
+  if (imageHash) params.image_hash = imageHash;
 
   const hasMultiple =
     primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
@@ -204,90 +164,10 @@ function buildPayloadFromTemplate(opts: {
     };
     if (videoId) asset_feed_spec.videos = [{ video_id: videoId }];
     else if (imageHash) asset_feed_spec.images = [{ hash: imageHash }];
-    payload.asset_feed_spec = asset_feed_spec;
+    params.asset_feed_spec = asset_feed_spec;
   }
 
-  // Standard Enhancements: explicitly opt-out by default ("Rapid Ads"-style),
-  // unless we need them for the multi-text variants to be served.
-  payload.degrees_of_freedom_spec = {
-    creative_features_spec: {
-      standard_enhancements: {
-        enroll_status: disableEnhancements && !hasMultiple ? 'OPT_OUT' : 'OPT_IN',
-      },
-    },
-  };
-
-  return payload;
-}
-
-/** Fallback when no template ad is selected. */
-function buildLegacyLeadPayload(opts: {
-  pageId: string;
-  leadFormId: string;
-  text: CreativeText;
-  imageHash?: string;
-  videoId?: string;
-  disableEnhancements: boolean;
-}) {
-  const { pageId, leadFormId, text, imageHash, videoId, disableEnhancements } = opts;
-  const link = text.link_url || 'http://fb.me/';
-  const ctaType = text.cta || 'SIGN_UP';
-
-  const primaryTexts = cleanVariants(text.primary_texts).slice(0, 5);
-  const headlines = cleanVariants(text.headlines).slice(0, 5);
-  const descriptions = cleanVariants(text.descriptions).slice(0, 5);
-
-  const mainPrimary = primaryTexts[0] || '';
-  const mainHeadline = headlines[0] || '';
-  const mainDescription = descriptions[0] || '';
-
-  const call_to_action = { type: ctaType, value: { lead_gen_form_id: leadFormId, link } };
-  const object_story_spec: Record<string, unknown> = { page_id: pageId };
-
-  if (videoId) {
-    object_story_spec.video_data = {
-      video_id: videoId,
-      message: mainPrimary,
-      title: mainHeadline,
-      link_description: mainDescription,
-      call_to_action,
-    };
-  } else {
-    object_story_spec.link_data = {
-      message: mainPrimary,
-      link,
-      name: mainHeadline,
-      description: mainDescription,
-      image_hash: imageHash,
-      call_to_action,
-    };
-  }
-
-  const hasMultiple =
-    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
-  const payload: Record<string, unknown> = { object_story_spec };
-
-  if (hasMultiple) {
-    payload.asset_feed_spec = {
-      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-      bodies: primaryTexts.map((t) => ({ text: t })),
-      titles: headlines.map((t) => ({ text: t })),
-      descriptions: descriptions.map((t) => ({ text: t })),
-      link_urls: [{ website_url: link }],
-      call_to_action_types: [ctaType],
-      call_to_actions: [call_to_action],
-      ...(videoId ? { videos: [{ video_id: videoId }] } : imageHash ? { images: [{ hash: imageHash }] } : {}),
-    };
-  }
-
-  payload.degrees_of_freedom_spec = {
-    creative_features_spec: {
-      standard_enhancements: {
-        enroll_status: disableEnhancements && !hasMultiple ? 'OPT_OUT' : 'OPT_IN',
-      },
-    },
-  };
-  return payload;
+  return params;
 }
 
 Deno.serve(async (req) => {
@@ -306,18 +186,16 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
-    const disableEnhancements = body.disable_enhancements !== false; // default ON
 
-    // Fetch template creative once if provided.
-    let template: any = null;
-    if (body.template_ad_id) {
-      try {
-        template = await fetchTemplateCreative(token, body.template_ad_id);
-        console.log('Loaded template creative', template?.id, 'has_oss:', !!template?.object_story_spec);
-      } catch (e) {
-        console.error('Template fetch failed, falling back to legacy payload', e);
-      }
+    // Find a source ad in the ad set to copy from.
+    const sourceAdId = await pickSourceAd(token, body.adset_id);
+    if (!sourceAdId) {
+      throw new Error(
+        'Geen bestaande advertentie gevonden in deze ad set om te dupliceren. ' +
+          'Maak handmatig 1 werkende advertentie aan in deze ad set in Meta Ads Manager, en probeer opnieuw.',
+      );
     }
+    console.log('Using source ad for copy:', sourceAdId);
 
     const results: any[] = [];
 
@@ -345,38 +223,35 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const creativePayload = template
-          ? buildPayloadFromTemplate({
-              template,
-              text: c.texts,
-              imageHash,
-              videoId,
-              leadFormId: body.lead_form_id,
-              disableEnhancements,
-            })
-          : buildLegacyLeadPayload({
-              pageId: body.page_id,
-              leadFormId: body.lead_form_id,
-              text: c.texts,
-              imageHash,
-              videoId,
-              disableEnhancements,
-            });
-
         const adName = c.file_name.replace(/\.[^.]+$/, '');
-        console.log('Creating creative', adName, 'template_used:', !!template);
-        const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
-          name: adName,
-          ...creativePayload,
+        const creativeParameters = buildCreativeParameters({
+          text: c.texts,
+          leadFormId: body.lead_form_id,
+          imageHash,
+          videoId,
         });
-        const creativeId = creativeJson.id;
 
-        const adJson = await postToMeta(`${adAccount}/ads`, token, {
-          name: adName,
+        // Use Meta's Ads Copy API: clones the entire ad and only overrides
+        // the supplied creative parameters. Avoids rebuilding object_story_spec.
+        console.log('Copying ad', sourceAdId, 'with overrides for', adName);
+        const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
           adset_id: body.adset_id,
-          creative: { creative_id: creativeId },
-          status,
+          status_option: status,
+          rename_options: { rename_strategy: 'NO_RENAME' },
+          creative_parameters: creativeParameters,
         });
+
+        const newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
+        if (!newAdId) {
+          throw new Error(`copies: geen copied_ad_id terug van Meta — ${JSON.stringify(copyJson)}`);
+        }
+
+        // Rename the new ad to match the uploaded file (best-effort).
+        try {
+          await postToMeta(`${newAdId}`, token, { name: adName });
+        } catch (e) {
+          console.warn('rename copy failed', e);
+        }
 
         const variantsCount =
           cleanVariants(c.texts.primary_texts).length +
@@ -385,16 +260,15 @@ Deno.serve(async (req) => {
 
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
-          creative_id: creativeId,
-          ad_id: adJson.id,
+          ad_id: newAdId,
           status: 'success',
         });
 
         results.push({
           file_name: c.file_name,
-          ad_id: adJson.id,
+          ad_id: newAdId,
           variants_bundled: variantsCount,
-          template_used: !!template,
+          source_ad_id: sourceAdId,
           success: true,
         });
       } catch (err) {
@@ -410,7 +284,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ results, template_used: !!template }),
+      JSON.stringify({ results, source_ad_id: sourceAdId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e) {

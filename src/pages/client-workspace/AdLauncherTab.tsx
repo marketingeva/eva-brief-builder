@@ -40,7 +40,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [nameFilter, setNameFilter] = useState<string | null>(null);
   const [pageId, setPageId] = useState<string | null>(null);
   const [selection, setSelection] = useState<MetaSelection>({
-    campaign_id: '', adset_id: '', lead_form_id: '', template_ad_id: '',
+    campaign_id: '', adset_id: '', lead_form_id: '',
   });
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -94,7 +94,6 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       adset_id: selection.adset_id,
       lead_form_id: selection.lead_form_id,
       page_id: pageId!,
-      template_ad_id: selection.template_ad_id || undefined,
       disable_enhancements: true,
       status: 'PAUSED',
       creatives: creatives.map((r) => ({
