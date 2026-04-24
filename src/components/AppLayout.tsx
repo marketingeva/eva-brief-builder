@@ -2,7 +2,7 @@ import { Outlet, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ export default function AppLayout() {
   const { slug } = useParams();
   const location = useLocation();
   const isAdLauncher = location.pathname.startsWith('/ad-launcher');
+  const isBriefings = location.pathname.startsWith('/briefings');
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -116,7 +117,7 @@ export default function AppLayout() {
         </div>
 
         {/* Tools */}
-        <div className={cn('pt-3 pb-1', collapsed ? 'px-2' : 'px-2')}>
+        <div className={cn('pt-3 pb-1 space-y-0.5', collapsed ? 'px-2' : 'px-2')}>
           <button
             onClick={() => { navigate('/ad-launcher'); setMobileOpen(false); }}
             className={cn(
@@ -130,6 +131,20 @@ export default function AppLayout() {
           >
             <Rocket className="h-4 w-4 shrink-0" />
             {!collapsed && <span>Ad Launcher</span>}
+          </button>
+          <button
+            onClick={() => { navigate('/briefings'); setMobileOpen(false); }}
+            className={cn(
+              'flex w-full items-center rounded-lg text-sm transition-all',
+              collapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-2.5 py-2',
+              isBriefings
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
+                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+            )}
+            title="Briefings"
+          >
+            <FileText className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>Briefings</span>}
           </button>
         </div>
 
