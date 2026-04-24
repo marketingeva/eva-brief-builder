@@ -87,79 +87,59 @@ async function postToMeta(path: string, token: string, payload: Record<string, u
   return json;
 }
 
-interface CreativeVariant {
-  primary_text: string;
-  headline: string;
-  description: string;
-  cta: string;
-  link_url: string;
-  suffix?: string;
-}
-
 function cleanVariants(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean);
 }
 
-function buildCreativeVariants(text: CreativeText): CreativeVariant[] {
-  const primaryTexts = cleanVariants(text.primary_texts);
-  const headlines = cleanVariants(text.headlines);
-  const descriptions = cleanVariants(text.descriptions);
-  const totalVariants = Math.max(primaryTexts.length, headlines.length, descriptions.length, 1);
-
-  return Array.from({ length: totalVariants }, (_, index) => ({
-    primary_text: primaryTexts[index] ?? primaryTexts[0] ?? '',
-    headline: headlines[index] ?? headlines[0] ?? '',
-    description: descriptions[index] ?? descriptions[0] ?? '',
-    cta: text.cta || 'SIGN_UP',
-    link_url: text.link_url || 'http://fb.me/',
-    suffix: totalVariants > 1 ? `V${index + 1}` : undefined,
-  }));
-}
-
-function buildStandardCreativePayload(opts: {
+function buildAssetFeedCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
-  variant: CreativeVariant;
+  text: CreativeText;
   imageHash?: string;
   videoId?: string;
 }) {
-  const { pageId, leadFormId, variant, imageHash, videoId } = opts;
-  const cta = {
-    type: variant.cta || 'SIGN_UP',
-    value: { lead_gen_form_id: leadFormId, link: variant.link_url || 'http://fb.me/' },
-  };
+  const { pageId, leadFormId, text, imageHash, videoId } = opts;
+  const link = text.link_url || 'http://fb.me/';
+  const ctaType = text.cta || 'SIGN_UP';
 
-  const link_data: Record<string, unknown> = {
-    message: variant.primary_text,
-    name: variant.headline,
-    description: variant.description,
-    link: variant.link_url || 'http://fb.me/',
-    call_to_action: cta,
-  };
+  const bodies = cleanVariants(text.primary_texts).map((t) => ({ text: t }));
+  const titles = cleanVariants(text.headlines).map((t) => ({ text: t }));
+  const descriptions = cleanVariants(text.descriptions).map((t) => ({ text: t }));
 
-  if (imageHash) {
-    link_data.image_hash = imageHash;
-  }
+  // Meta requires at least 1 entry per field
+  if (bodies.length === 0) bodies.push({ text: '' });
+  if (titles.length === 0) titles.push({ text: '' });
+  if (descriptions.length === 0) descriptions.push({ text: '' });
+
+  const asset_feed_spec: Record<string, unknown> = {
+    bodies,
+    titles,
+    descriptions,
+    link_urls: [{ website_url: link }],
+    ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+    call_to_action_types: [ctaType],
+    call_to_actions: [
+      {
+        type: ctaType,
+        value: { lead_gen_form_id: leadFormId, link },
+      },
+    ],
+  };
 
   if (videoId) {
-    return {
-      object_story_spec: {
-        page_id: pageId,
-        video_data: {
-          video_id: videoId,
-          message: variant.primary_text,
-          title: variant.headline,
-          link_description: variant.description,
-          call_to_action: cta,
-        },
-      },
-    };
+    asset_feed_spec.videos = [{ video_id: videoId }];
+  } else if (imageHash) {
+    asset_feed_spec.images = [{ hash: imageHash }];
   }
 
   return {
-    object_story_spec: {
-      page_id: pageId,
-      link_data,
+    object_story_spec: { page_id: pageId },
+    asset_feed_spec,
+    // Disable Advantage+ optimizations so Meta keeps our text variants intact
+    degrees_of_freedom_spec: {
+      creative_features_spec: {
+        standard_enhancements: { enroll_status: 'OPT_OUT' },
+      },
     },
   };
 }
@@ -207,48 +187,42 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const variants = buildCreativeVariants(c.texts);
-        const variantResults: any[] = [];
+        const creativePayload = buildAssetFeedCreativePayload({
+          pageId: body.page_id,
+          leadFormId: body.lead_form_id,
+          text: c.texts,
+          imageHash,
+          videoId,
+        });
 
-        for (const variant of variants) {
-          const creativePayload = buildStandardCreativePayload({
-            pageId: body.page_id,
-            leadFormId: body.lead_form_id,
-            variant,
-            imageHash,
-            videoId,
-          });
+        const adName = c.file_name.replace(/\.[^.]+$/, '');
+        const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
+          name: adName,
+          ...creativePayload,
+        });
+        const creativeId = creativeJson.id;
 
-          const adName = [c.file_name.replace(/\.[^.]+$/, ''), variant.suffix].filter(Boolean).join(' - ');
-          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
-            name: adName,
-            ...creativePayload,
-          });
-          const creativeId = creativeJson.id;
+        const adJson = await postToMeta(`${adAccount}/ads`, token, {
+          name: adName,
+          adset_id: body.adset_id,
+          creative: { creative_id: creativeId },
+          status,
+        });
 
-          const adJson = await postToMeta(`${adAccount}/ads`, token, {
-            name: adName,
-            adset_id: body.adset_id,
-            creative: { creative_id: creativeId },
-            status,
-          });
-
-          const launchRow = {
-            ...launchRowBase,
-            creative_filename: variant.suffix ? `${c.file_name} (${variant.suffix})` : c.file_name,
-            creative_id: creativeId,
-            ad_id: adJson.id,
-            status: 'success',
-          };
-          await supabase.from('ad_launches').insert(launchRow);
-          variantResults.push({ ad_id: adJson.id, creative_id: creativeId, variant: variant.suffix ?? 'V1' });
-        }
+        await supabase.from('ad_launches').insert({
+          ...launchRowBase,
+          creative_id: creativeId,
+          ad_id: adJson.id,
+          status: 'success',
+        });
 
         results.push({
           file_name: c.file_name,
-          ad_id: variantResults[0]?.ad_id ?? null,
-          ad_ids: variantResults.map((entry) => entry.ad_id),
-          variants_created: variantResults.length,
+          ad_id: adJson.id,
+          variants_created:
+            cleanVariants(c.texts.primary_texts).length +
+            cleanVariants(c.texts.headlines).length +
+            cleanVariants(c.texts.descriptions).length,
           success: true,
         });
       } catch (err) {
