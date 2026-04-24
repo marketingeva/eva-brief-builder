@@ -190,7 +190,7 @@ export default function BriefingsPage() {
         <div className="text-center py-16 border-2 border-dashed rounded-lg">
           <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground mb-4">Nog geen briefings</p>
-          <Button onClick={createNewWeek} variant="outline" size="sm">
+          <Button onClick={openNewWeekDialog} variant="outline" size="sm">
             <Plus className="h-4 w-4 mr-2" /> Maak eerste briefing
           </Button>
         </div>
