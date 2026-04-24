@@ -49,16 +49,19 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
       setYear(defaultYear);
       setStartMode('empty');
       setPrevious(null);
+      setExisting(null);
+      setWipeExisting(false);
     }
   }, [open, defaultWeek, defaultYear]);
 
-  // Find the most recent previous (year, week) across all clients (excluding the target week)
+  // Detect: (a) existing rows for this exact week  (b) most recent previous week to copy from
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
       setCheckingPrev(true);
       setPrevious(null);
+      setExisting(null);
       const { data: metas } = await supabase
         .from('briefings_meta' as any)
         .select('id, client_id, week_number, year')
@@ -67,6 +70,20 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
         .limit(50);
       if (cancelled) return;
       const list = (metas as any[]) || [];
+
+      // (a) existing rows for the target week
+      const sameTarget = list.filter((m: any) => m.week_number === week && m.year === year);
+      if (sameTarget.length > 0) {
+        const ids = sameTarget.map((m: any) => m.id);
+        const { count } = await supabase
+          .from('briefing_rows')
+          .select('id', { count: 'exact', head: true })
+          .in('meta_briefing_id', ids);
+        if (cancelled) return;
+        if ((count || 0) > 0) setExisting({ metaIds: ids, rowCount: count || 0 });
+      }
+
+      // (b) previous week candidate (different than target)
       const candidate = list.find((m: any) => !(m.week_number === week && m.year === year));
       if (!candidate) {
         setCheckingPrev(false);
