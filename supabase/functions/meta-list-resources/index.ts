@@ -17,10 +17,10 @@ type RequestBody = {
 
 async function fetchAll(url: string, token: string) {
   const out: any[] = [];
-  let next: string | null = `${url}${url.includes('?') ? '&' : '?'}access_token=${token}&limit=100`;
+  let next: string | null = `${url}${url.includes('?') ? '&' : '?'}access_token=${token}&limit=200`;
   let safety = 0;
 
-  while (next && safety < 20) {
+  while (next && safety < 100) {
     const response = await fetch(next);
     const json = await response.json();
 
@@ -127,11 +127,7 @@ Deno.serve(async (req) => {
       data = sortActiveFirst(
         items
           .filter((c) => isVisibleStatus(c.effective_status))
-          .filter((c) => matchesName(c.name || '', nameFilter))
-          .map((c) => ({
-            ...c,
-            budget_type: (c.daily_budget || c.lifetime_budget) ? 'CBO' : 'ABO',
-          })),
+          .filter((c) => matchesName(c.name || '', nameFilter)),
       );
     }
 
@@ -140,8 +136,11 @@ Deno.serve(async (req) => {
         return jsonResponse({ data: [], error: 'campaign_id ontbreekt.', fallback: true }, 400);
       }
 
+      // Fetch adsets via the ad account scoped to this campaign — this returns ALL adsets
+      // (the /{campaign_id}/adsets endpoint can omit some depending on permissions).
+      const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
       const items = await fetchAll(
-        `${META_API}/${campaignId}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event,daily_budget,lifetime_budget`,
+        `${META_API}/${account}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event,daily_budget,lifetime_budget,campaign_id&filtering=[{"field":"campaign.id","operator":"EQUAL","value":"${campaignId}"}]`,
         token,
       );
 

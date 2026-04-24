@@ -151,11 +151,6 @@ export default function CreativeTextsPanel({ open, onOpenChange, initial, onSave
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">Website URL (optioneel)</span>
-            <Input value={text.link_url} onChange={(e) => setText((t) => ({ ...t, link_url: e.target.value }))} placeholder="http://fb.me/" />
-          </div>
-
           <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-background pb-1">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
             <Button onClick={() => { onSave(text); onOpenChange(false); }}>Opslaan</Button>
