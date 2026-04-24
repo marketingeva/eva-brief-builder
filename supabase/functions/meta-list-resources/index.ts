@@ -15,17 +15,38 @@ type RequestBody = {
   page_id?: unknown;
 };
 
+async function sleep(ms: number) {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
 async function fetchAll(url: string, token: string) {
   const out: any[] = [];
   let next: string | null = `${url}${url.includes('?') ? '&' : '?'}access_token=${token}&limit=200`;
   let safety = 0;
 
   while (next && safety < 100) {
-    const response = await fetch(next);
-    const json = await response.json();
+    let attempt = 0;
+    let json: any = null;
 
-    if (json.error) {
-      throw new Error(json.error.message || 'Meta error');
+    while (attempt < 4) {
+      const response = await fetch(next);
+      json = await response.json();
+
+      const err = json?.error;
+      const isRateLimit = err && (err.code === 17 || err.code === 4 || err.code === 32 || err.code === 613 ||
+        /request limit|rate limit|user request limit/i.test(err.message || ''));
+
+      if (isRateLimit && attempt < 3) {
+        await sleep(1500 * (attempt + 1));
+        attempt += 1;
+        continue;
+      }
+
+      if (err) {
+        throw new Error(err.message || 'Meta error');
+      }
+
+      break;
     }
 
     if (Array.isArray(json.data)) {
@@ -136,11 +157,9 @@ Deno.serve(async (req) => {
         return jsonResponse({ data: [], error: 'campaign_id ontbreekt.', fallback: true }, 400);
       }
 
-      // Fetch adsets via the ad account scoped to this campaign — this returns ALL adsets
-      // (the /{campaign_id}/adsets endpoint can omit some depending on permissions).
-      const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
+      // Use the campaign-scoped endpoint (proven to return all adsets without rate-limit issues).
       const items = await fetchAll(
-        `${META_API}/${account}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event,daily_budget,lifetime_budget,campaign_id&filtering=[{"field":"campaign.id","operator":"EQUAL","value":"${campaignId}"}]`,
+        `${META_API}/${campaignId}/adsets?fields=id,name,status,effective_status,optimization_goal,billing_event,daily_budget,lifetime_budget`,
         token,
       );
 
