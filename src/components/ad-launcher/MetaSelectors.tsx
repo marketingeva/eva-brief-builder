@@ -279,19 +279,6 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Lead formulier</Label>
-        <ResourceCombobox
-          items={leadForms}
-          value={value.lead_form_id}
-          onSelect={(id) => onChange({ ...value, lead_form_id: id })}
-          placeholder={pageId ? 'Kies formulier' : 'Geen Page ID ingesteld'}
-          searchPlaceholder="Zoek formulier..."
-          emptyText="Geen lead formulieren gevonden"
-          loading={loadingL}
-          disabled={!pageId}
-        />
-      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
