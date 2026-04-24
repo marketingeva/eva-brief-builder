@@ -226,9 +226,35 @@ Deno.serve(async (req) => {
       );
     }
 
-    return jsonResponse({
-      data,
-      meta: {
+    if (resource === 'template_ads') {
+      if (!adsetId) {
+        return jsonResponse({ data: [], error: 'adset_id ontbreekt voor template_ads.', fallback: true }, 400);
+      }
+      const items = await fetchAll(
+        `${META_API}/${adsetId}/ads?fields=id,name,status,effective_status,creative{id}`,
+        token,
+      );
+      data = sortActiveFirst(
+        items.filter((a) => isVisibleStatus(a.effective_status)),
+      );
+    }
+
+    if (resource === 'template_ad_detail') {
+      if (!adId) {
+        return jsonResponse({ data: [], error: 'ad_id ontbreekt voor template_ad_detail.', fallback: true }, 400);
+      }
+      // Fetch the ad + full creative spec so we can clone it.
+      const fields = [
+        'id',
+        'name',
+        'creative{id,name,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,instagram_user_id,instagram_actor_id,object_type,call_to_action_type,template_url,url_tags,product_set_id}',
+      ].join(',');
+      const url = `${META_API}/${adId}?fields=${encodeURIComponent(fields)}&access_token=${token}`;
+      const r = await fetch(url);
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message || 'template_ad_detail error');
+      return jsonResponse({ data: j });
+    }
         normalized_filter: normalizeMetaName(nameFilter),
         total: data.length,
       },
