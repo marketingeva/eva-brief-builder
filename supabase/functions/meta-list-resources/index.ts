@@ -218,9 +218,7 @@ Deno.serve(async (req) => {
       );
 
       data = sortActiveFirst(
-        items
-          .filter((form) => isVisibleStatus(form.status))
-          .filter((form) => matchesName(form.name || '', nameFilter)),
+        items.filter((form) => isVisibleStatus(form.status)),
       );
     }
 
