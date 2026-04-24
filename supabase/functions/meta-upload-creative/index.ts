@@ -117,39 +117,39 @@ function buildLeadCreativePayload(opts: {
   const mainHeadline = headlines[0] || '';
   const mainDescription = descriptions[0] || '';
 
+  // Only add asset_feed_spec if there are MULTIPLE variants in any field.
+  // This activates "Multiple Text Options" in Meta Ads Manager (1 of N).
+  const hasMultiple =
+    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+
   const call_to_action = {
     type: ctaType,
     value: { lead_gen_form_id: leadFormId, link },
   };
 
-  // Build object_story_spec with the main creative (image/video + first text variant)
   const object_story_spec: Record<string, unknown> = { page_id: pageId };
-
-  if (videoId) {
-    object_story_spec.video_data = {
-      video_id: videoId,
-      message: mainPrimary,
-      title: mainHeadline,
-      link_description: mainDescription,
-      call_to_action,
-    };
-  } else {
-    object_story_spec.link_data = {
-      message: mainPrimary,
-      link,
-      name: mainHeadline,
-      description: mainDescription,
-      image_hash: imageHash,
-      call_to_action,
-    };
-  }
-
   const payload: Record<string, unknown> = { object_story_spec };
 
-  // Only add asset_feed_spec if there are MULTIPLE variants in any field.
-  // This activates "Multiple Text Options" in Meta Ads Manager (1 of N).
-  const hasMultiple =
-    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+  if (!hasMultiple) {
+    if (videoId) {
+      object_story_spec.video_data = {
+        video_id: videoId,
+        message: mainPrimary,
+        title: mainHeadline,
+        link_description: mainDescription,
+        call_to_action,
+      };
+    } else {
+      object_story_spec.link_data = {
+        message: mainPrimary,
+        link,
+        name: mainHeadline,
+        description: mainDescription,
+        image_hash: imageHash,
+        call_to_action,
+      };
+    }
+  }
 
   if (hasMultiple) {
     const bodies = (primaryTexts.length > 0 ? primaryTexts : [' ']).map((t) => ({ text: t }));
@@ -162,6 +162,7 @@ function buildLeadCreativePayload(opts: {
       descriptions: descs,
       ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
       link_urls: [{ website_url: link }],
+      call_to_actions: [call_to_action],
       call_to_action_types: [ctaType],
     };
 
