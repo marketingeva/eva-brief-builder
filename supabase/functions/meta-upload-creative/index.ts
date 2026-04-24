@@ -87,48 +87,59 @@ async function postToMeta(path: string, token: string, payload: Record<string, u
   return json;
 }
 
-function buildCreativePayload(opts: {
+interface CreativeVariant {
+  primary_text: string;
+  headline: string;
+  description: string;
+  cta: string;
+  link_url: string;
+  suffix?: string;
+}
+
+function cleanVariants(values: string[]) {
+  return values.map((value) => value.trim()).filter(Boolean);
+}
+
+function buildCreativeVariants(text: CreativeText): CreativeVariant[] {
+  const primaryTexts = cleanVariants(text.primary_texts);
+  const headlines = cleanVariants(text.headlines);
+  const descriptions = cleanVariants(text.descriptions);
+  const totalVariants = Math.max(primaryTexts.length, headlines.length, descriptions.length, 1);
+
+  return Array.from({ length: totalVariants }, (_, index) => ({
+    primary_text: primaryTexts[index] ?? primaryTexts[0] ?? '',
+    headline: headlines[index] ?? headlines[0] ?? '',
+    description: descriptions[index] ?? descriptions[0] ?? '',
+    cta: text.cta || 'SIGN_UP',
+    link_url: text.link_url || 'http://fb.me/',
+    suffix: totalVariants > 1 ? `V${index + 1}` : undefined,
+  }));
+}
+
+function buildStandardCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
-  text: CreativeText;
+  variant: CreativeVariant;
   imageHash?: string;
   videoId?: string;
 }) {
-  const { pageId, leadFormId, text, imageHash, videoId } = opts;
+  const { pageId, leadFormId, variant, imageHash, videoId } = opts;
   const cta = {
-    type: text.cta || 'SIGN_UP',
-    value: { lead_gen_form_id: leadFormId, link: text.link_url || 'http://fb.me/' },
+    type: variant.cta || 'SIGN_UP',
+    value: { lead_gen_form_id: leadFormId, link: variant.link_url || 'http://fb.me/' },
   };
 
-  const useDynamic =
-    text.primary_texts.length > 1 || text.headlines.length > 1 || text.descriptions.length > 1;
-
-  if (useDynamic) {
-    const asset_feed_spec: any = {
-      bodies: text.primary_texts.filter(Boolean).map((t) => ({ text: t })),
-      titles: text.headlines.filter(Boolean).map((t) => ({ text: t })),
-      descriptions: text.descriptions.filter(Boolean).map((t) => ({ text: t })),
-      ad_formats: [imageHash ? 'SINGLE_IMAGE' : 'SINGLE_VIDEO'],
-      call_to_action_types: [text.cta || 'SIGN_UP'],
-      link_urls: [{ website_url: text.link_url || 'http://fb.me/' }],
-    };
-    if (imageHash) asset_feed_spec.images = [{ hash: imageHash }];
-    if (videoId) asset_feed_spec.videos = [{ video_id: videoId }];
-
-    return {
-      object_story_spec: { page_id: pageId },
-      asset_feed_spec,
-    };
-  }
-
-  const link_data: any = {
-    message: text.primary_texts[0] || '',
-    name: text.headlines[0] || '',
-    description: text.descriptions[0] || '',
-    link: text.link_url || 'http://fb.me/',
+  const link_data: Record<string, unknown> = {
+    message: variant.primary_text,
+    name: variant.headline,
+    description: variant.description,
+    link: variant.link_url || 'http://fb.me/',
     call_to_action: cta,
   };
-  if (imageHash) link_data.image_hash = imageHash;
+
+  if (imageHash) {
+    link_data.image_hash = imageHash;
+  }
 
   if (videoId) {
     return {
@@ -136,8 +147,9 @@ function buildCreativePayload(opts: {
         page_id: pageId,
         video_data: {
           video_id: videoId,
-          message: text.primary_texts[0] || '',
-          title: text.headlines[0] || '',
+          message: variant.primary_text,
+          title: variant.headline,
+          link_description: variant.description,
           call_to_action: cta,
         },
       },
@@ -172,17 +184,15 @@ Deno.serve(async (req) => {
     const results: any[] = [];
 
     for (const c of body.creatives) {
-      const launchRow: any = {
+      const launchRowBase: any = {
         client_id: body.client_id,
         campaign_id: body.campaign_id,
         adset_id: body.adset_id,
         lead_form_id: body.lead_form_id,
         creative_filename: c.file_name,
-        status: 'pending',
       };
 
       try {
-        // Download from storage
         const { data: fileData, error: dlErr } = await supabase.storage
           .from('ad-launcher-uploads')
           .download(c.storage_path);
@@ -197,39 +207,58 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const creativePayload = buildCreativePayload({
-          pageId: body.page_id,
-          leadFormId: body.lead_form_id,
-          text: c.texts,
-          imageHash,
-          videoId,
+        const variants = buildCreativeVariants(c.texts);
+        const variantResults: any[] = [];
+
+        for (const variant of variants) {
+          const creativePayload = buildStandardCreativePayload({
+            pageId: body.page_id,
+            leadFormId: body.lead_form_id,
+            variant,
+            imageHash,
+            videoId,
+          });
+
+          const adName = [c.file_name.replace(/\.[^.]+$/, ''), variant.suffix].filter(Boolean).join(' - ');
+          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
+            name: adName,
+            ...creativePayload,
+          });
+          const creativeId = creativeJson.id;
+
+          const adJson = await postToMeta(`${adAccount}/ads`, token, {
+            name: adName,
+            adset_id: body.adset_id,
+            creative: { creative_id: creativeId },
+            status,
+          });
+
+          const launchRow = {
+            ...launchRowBase,
+            creative_filename: variant.suffix ? `${c.file_name} (${variant.suffix})` : c.file_name,
+            creative_id: creativeId,
+            ad_id: adJson.id,
+            status: 'success',
+          };
+          await supabase.from('ad_launches').insert(launchRow);
+          variantResults.push({ ad_id: adJson.id, creative_id: creativeId, variant: variant.suffix ?? 'V1' });
+        }
+
+        results.push({
+          file_name: c.file_name,
+          ad_id: variantResults[0]?.ad_id ?? null,
+          ad_ids: variantResults.map((entry) => entry.ad_id),
+          variants_created: variantResults.length,
+          success: true,
         });
-
-        const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
-          name: c.file_name,
-          ...creativePayload,
-        });
-        const creativeId = creativeJson.id;
-
-        launchRow.creative_id = creativeId;
-
-        const adJson = await postToMeta(`${adAccount}/ads`, token, {
-          name: c.file_name,
-          adset_id: body.adset_id,
-          creative: { creative_id: creativeId },
-          status,
-        });
-
-        launchRow.ad_id = adJson.id;
-        launchRow.status = 'success';
-        results.push({ file_name: c.file_name, ad_id: adJson.id, success: true });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        launchRow.status = 'failed';
-        launchRow.error = msg;
+        await supabase.from('ad_launches').insert({
+          ...launchRowBase,
+          status: 'failed',
+          error: msg,
+        });
         results.push({ file_name: c.file_name, error: msg, success: false });
-      } finally {
-        await supabase.from('ad_launches').insert(launchRow);
       }
     }
 
