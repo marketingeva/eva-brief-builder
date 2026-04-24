@@ -255,30 +255,33 @@ function RowCard({
 
   return (
     <div className={cn(
-      'rounded-2xl border bg-card shadow-sm transition-all overflow-hidden',
-      isOpen ? 'shadow-md ring-1 ring-primary/10' : 'hover:shadow-md hover:border-primary/30'
+      'rounded-xl border bg-card transition-all overflow-hidden',
+      isOpen ? 'shadow-md border-primary/30 ring-1 ring-primary/5' : 'shadow-sm hover:shadow-md hover:border-primary/20'
     )}>
-      {/* Summary header (always visible) */}
+      {/* Summary header (always visible) — fixed height for consistency */}
       <button
         type="button"
         onClick={toggleExpand}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left group"
+        className={cn(
+          'w-full flex items-center gap-3 px-4 text-left h-14',
+          isOpen && 'border-b bg-muted/30'
+        )}
       >
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">
           {index + 1}
         </div>
-        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr,1fr,auto] gap-2 sm:gap-4 items-center">
+        <div className="flex-1 min-w-0 grid grid-cols-[1.2fr,1fr,auto] gap-4 items-center">
           <div className="flex items-center gap-1.5 min-w-0">
             <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium truncate">{summaryFunctie}</span>
-            {moreFunctie > 0 && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">+{moreFunctie}</span>}
+            {moreFunctie > 0 && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">+{moreFunctie}</span>}
           </div>
           <div className="flex items-center gap-1.5 min-w-0">
             <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="text-sm text-muted-foreground truncate">{summaryLocatie}</span>
-            {moreLocatie > 0 && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">+{moreLocatie}</span>}
+            {moreLocatie > 0 && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">+{moreLocatie}</span>}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
             {row.hook && <span title="Hook ingevuld" className="h-1.5 w-1.5 rounded-full bg-success" />}
             {imgCount > 0 && (
               <span className="flex items-center gap-1"><ImageIcon className="h-3 w-3" />{imgCount}</span>
@@ -290,8 +293,8 @@ function RowCard({
 
       {/* Expanded content */}
       {isOpen && (
-        <div className="border-t bg-muted/20 px-4 sm:px-5 py-5 space-y-5">
-          {/* Top row: Functie / Locatie / Vacaturelink */}
+        <div className="px-5 py-5 space-y-5">
+          {/* Row 1: Selectors + Link — three equal columns, identical input height */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Functie" icon={Briefcase}>
               {isApproved ? <ReadOnlyChips items={row.functies} variant="primary" /> : (
@@ -316,11 +319,11 @@ function RowCard({
             <Field label="Vacaturelink" icon={ExternalLink}>
               {isApproved ? (
                 row.vacature_url ? (
-                  <a href={row.vacature_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 break-all py-1.5">
+                  <a href={row.vacature_url} target="_blank" rel="noreferrer" className="h-9 inline-flex items-center gap-1.5 text-xs text-primary hover:underline w-full">
                     <ExternalLink className="h-3 w-3 shrink-0" />
                     <span className="truncate">{row.vacature_url}</span>
                   </a>
-                ) : <span className="text-xs text-muted-foreground/40">—</span>
+                ) : <span className="h-9 inline-flex items-center text-xs text-muted-foreground/40">—</span>
               ) : (
                 <div className="relative">
                   <Input
@@ -329,7 +332,7 @@ function RowCard({
                     onChange={(e) => updateRow(row.id, { vacature_url: e.target.value })}
                     onBlur={() => persistRow(row, { vacature_url: row.vacature_url })}
                     placeholder="https://..."
-                    className="text-xs h-9 pr-8 bg-card"
+                    className="text-xs h-9 pr-8"
                   />
                   {row.vacature_url && (
                     <a href={row.vacature_url} target="_blank" rel="noreferrer" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary">
@@ -341,10 +344,10 @@ function RowCard({
             </Field>
           </div>
 
-          {/* Middle row: Hook / USPs / Omschrijving */}
+          {/* Row 2: Three textareas — equal heights via fixed row count + h-full */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Field label="Hook" icon={SparklesIcon}>
-              {isApproved ? <ReadOnlyText text={row.hook} /> : (
+              {isApproved ? <ReadOnlyText text={row.hook} minHeight={112} /> : (
                 <AIFieldTextarea
                   value={row.hook || ''}
                   onChange={(v) => updateRow(row.id, { hook: v })}
@@ -354,12 +357,12 @@ function RowCard({
                   clientId={briefing.client_id}
                   functies={row.functies}
                   locaties={row.locaties}
-                  rows={3}
+                  rows={4}
                 />
               )}
             </Field>
             <Field label="USP's" icon={SparklesIcon}>
-              {isApproved ? <ReadOnlyText text={row.usps} /> : (
+              {isApproved ? <ReadOnlyText text={row.usps} minHeight={112} /> : (
                 <AIFieldTextarea
                   value={row.usps || ''}
                   onChange={(v) => updateRow(row.id, { usps: v })}
@@ -374,7 +377,7 @@ function RowCard({
               )}
             </Field>
             <Field label="Omschrijving" icon={SparklesIcon}>
-              {isApproved ? <ReadOnlyText text={row.omschrijving} /> : (
+              {isApproved ? <ReadOnlyText text={row.omschrijving} minHeight={112} /> : (
                 <AIFieldTextarea
                   value={row.omschrijving || ''}
                   onChange={(v) => updateRow(row.id, { omschrijving: v })}
@@ -390,7 +393,7 @@ function RowCard({
             </Field>
           </div>
 
-          {/* Bottom: Inspiration */}
+          {/* Row 3: Inspiration */}
           <Field label="Creatieve inspiratie" icon={ImageIcon}>
             <InspirationImageUpload
               paths={row.creative_image_paths}
@@ -402,7 +405,7 @@ function RowCard({
 
           {/* Row footer actions */}
           {!isApproved && (
-            <div className="flex justify-end pt-2 border-t border-border/50">
+            <div className="flex justify-end pt-3 border-t border-border/60">
               <button
                 onClick={() => deleteRow(row.id)}
                 className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1.5 px-2 py-1 rounded transition-colors"
@@ -421,29 +424,36 @@ function RowCard({
 // ============== Helpers ==============
 function Field({ label, icon: Icon, children }: { label: string; icon: any; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col gap-2 min-w-0">
       <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         <Icon className="h-3 w-3" />
         {label}
       </label>
-      {children}
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 }
 
 function ReadOnlyChips({ items, variant = 'primary' }: { items: string[]; variant?: 'primary' | 'accent' }) {
-  if (!items?.length) return <span className="text-xs text-muted-foreground/40">—</span>;
   const cls = variant === 'accent' ? 'bg-accent/15 text-accent-foreground' : 'bg-primary/10 text-primary';
   return (
-    <div className="flex flex-wrap gap-1.5 pt-1">
-      {items.map(i => (
-        <span key={i} className={cn('inline-flex text-xs px-2.5 py-0.5 rounded-full font-medium', cls)}>{i}</span>
-      ))}
+    <div className="min-h-9 flex flex-wrap items-center gap-1.5">
+      {!items?.length
+        ? <span className="text-xs text-muted-foreground/40">—</span>
+        : items.map(i => (
+            <span key={i} className={cn('inline-flex text-xs px-2.5 py-0.5 rounded-full font-medium', cls)}>{i}</span>
+          ))}
     </div>
   );
 }
 
-function ReadOnlyText({ text }: { text: string | null }) {
-  if (!text) return <span className="text-xs text-muted-foreground/40">—</span>;
-  return <p className="text-xs whitespace-pre-wrap leading-relaxed bg-card border rounded-md p-2.5">{text}</p>;
+function ReadOnlyText({ text, minHeight = 80 }: { text: string | null; minHeight?: number }) {
+  return (
+    <div
+      className="text-xs whitespace-pre-wrap leading-relaxed bg-muted/30 border rounded-md p-3"
+      style={{ minHeight }}
+    >
+      {text || <span className="text-muted-foreground/40">—</span>}
+    </div>
+  );
 }
