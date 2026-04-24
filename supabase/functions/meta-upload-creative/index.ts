@@ -156,12 +156,22 @@ function buildLeadCreativePayload(opts: {
     const titles = (headlines.length > 0 ? headlines : [' ']).map((t) => ({ text: t }));
     const descs = (descriptions.length > 0 ? descriptions : [' ']).map((t) => ({ text: t }));
 
-    payload.asset_feed_spec = {
+    const assetFeed: Record<string, unknown> = {
       bodies,
       titles,
       descriptions: descs,
       ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+      link_urls: [{ website_url: link }],
+      call_to_action_types: [ctaType],
     };
+
+    if (videoId) {
+      assetFeed.videos = [{ video_id: videoId }];
+    } else if (imageHash) {
+      assetFeed.images = [{ hash: imageHash }];
+    }
+
+    payload.asset_feed_spec = assetFeed;
   }
 
   return payload;
