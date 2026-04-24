@@ -41,6 +41,7 @@ export default function BriefingsPage() {
   const [selectedWeek, setSelectedWeek] = useState<{ week: number; year: number } | null>(null);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [newWeekOpen, setNewWeekOpen] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
