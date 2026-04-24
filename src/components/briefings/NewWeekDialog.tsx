@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2, Sparkles } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -13,9 +12,9 @@ import { toast } from '@/hooks/use-toast';
 interface Client { id: string; name: string; }
 
 interface PreviousWeekInfo {
-  meta_id: string;
   week_number: number;
   year: number;
+  metaIds: string[]; // one per client in that week
   rowCount: number;
 }
 
@@ -30,7 +29,6 @@ interface Props {
 
 export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek, defaultYear, onCreated }: Props) {
   const { user } = useAuth();
-  const [clientId, setClientId] = useState<string>('');
   const [week, setWeek] = useState<number>(defaultWeek);
   const [year, setYear] = useState<number>(defaultYear);
   const [startMode, setStartMode] = useState<'empty' | 'copy'>('empty');
@@ -40,102 +38,104 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
 
   useEffect(() => {
     if (open) {
-      setClientId(clients[0]?.id || '');
       setWeek(defaultWeek);
       setYear(defaultYear);
       setStartMode('empty');
       setPrevious(null);
     }
-  }, [open, clients, defaultWeek, defaultYear]);
+  }, [open, defaultWeek, defaultYear]);
 
-  // Look up the most recent previous week for selected client
+  // Find the most recent previous (year, week) across all clients (excluding the target week)
   useEffect(() => {
-    if (!open || !clientId) return;
+    if (!open) return;
     let cancelled = false;
     (async () => {
       setCheckingPrev(true);
       setPrevious(null);
       const { data: metas } = await supabase
         .from('briefings_meta' as any)
-        .select('id, week_number, year')
-        .eq('client_id', clientId)
+        .select('id, client_id, week_number, year')
         .order('year', { ascending: false })
         .order('week_number', { ascending: false })
-        .limit(5);
+        .limit(50);
       if (cancelled) return;
       const list = (metas as any[]) || [];
-      // Find first one that's not the same as the target week
       const candidate = list.find((m: any) => !(m.week_number === week && m.year === year));
       if (!candidate) {
         setCheckingPrev(false);
         return;
       }
+      const sameWeek = list.filter((m: any) => m.week_number === candidate.week_number && m.year === candidate.year);
+      const metaIds = sameWeek.map((m: any) => m.id);
       const { count } = await supabase
         .from('briefing_rows')
         .select('id', { count: 'exact', head: true })
-        .eq('meta_briefing_id', candidate.id);
+        .in('meta_briefing_id', metaIds);
       if (cancelled) return;
       setPrevious({
-        meta_id: candidate.id,
         week_number: candidate.week_number,
         year: candidate.year,
+        metaIds,
         rowCount: count || 0,
       });
       setCheckingPrev(false);
     })();
     return () => { cancelled = true; };
-  }, [open, clientId, week, year]);
+  }, [open, week, year]);
 
-  const canCopy = useMemo(() => previous && previous.rowCount > 0, [previous]);
+  const canCopy = useMemo(() => !!previous && previous.rowCount > 0, [previous]);
 
   const handleSubmit = async () => {
-    if (!clientId) {
-      toast({ title: 'Kies een klant', variant: 'destructive' });
+    if (clients.length === 0) {
+      toast({ title: 'Geen klanten', variant: 'destructive' });
       return;
     }
     setSubmitting(true);
     try {
-      // Check if week already exists for this client
-      const { data: existing } = await supabase
-        .from('briefings_meta' as any)
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('week_number', week)
-        .eq('year', year)
-        .maybeSingle();
-
-      let metaId: string;
-      if (existing) {
-        metaId = (existing as any).id;
-      } else {
-        const { data: created, error } = await supabase
+      // Create a meta row per client (skip if exists), collect (clientId -> metaId)
+      const clientMetaMap = new Map<string, string>();
+      for (const c of clients) {
+        const { data: existing } = await supabase
           .from('briefings_meta' as any)
-          .insert({
-            client_id: clientId,
-            week_number: week,
-            year,
-            status: 'draft',
-            created_by: user?.id,
-          })
           .select('id')
-          .single();
-        if (error) throw error;
-        metaId = (created as any).id;
+          .eq('client_id', c.id)
+          .eq('week_number', week)
+          .eq('year', year)
+          .maybeSingle();
+        if (existing) {
+          clientMetaMap.set(c.id, (existing as any).id);
+        } else {
+          const { data: created, error } = await supabase
+            .from('briefings_meta' as any)
+            .insert({
+              client_id: c.id,
+              week_number: week,
+              year,
+              status: 'draft',
+              created_by: user?.id,
+            })
+            .select('id')
+            .single();
+          if (error) throw error;
+          clientMetaMap.set(c.id, (created as any).id);
+        }
       }
 
-      // Copy previous week rows if requested
+      // Copy rows from previous week if requested
+      let copiedCount = 0;
       if (startMode === 'copy' && previous && canCopy) {
         const { data: prevRows, error: fetchErr } = await supabase
           .from('briefing_rows')
           .select('client_id, is_new, functie, locatie, hook, usps, omschrijving, creative_inspiratie, creative_image_path, creative_image_paths, functies, locaties, vacature_url, sort_order')
-          .eq('meta_briefing_id', previous.meta_id)
+          .in('meta_briefing_id', previous.metaIds)
           .order('sort_order', { ascending: true });
         if (fetchErr) throw fetchErr;
 
-        if (prevRows && prevRows.length > 0) {
-          const newRows = prevRows.map((r: any, idx: number) => ({
+        const newRows = (prevRows || [])
+          .filter((r: any) => clientMetaMap.has(r.client_id))
+          .map((r: any, idx: number) => ({
             client_id: r.client_id,
-            meta_briefing_id: metaId,
+            meta_briefing_id: clientMetaMap.get(r.client_id)!,
             is_new: r.is_new,
             functie: r.functie,
             locatie: r.locatie,
@@ -151,19 +151,22 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
             sort_order: r.sort_order ?? idx,
             status: 'draft',
           }));
+
+        if (newRows.length > 0) {
           const { error: insErr } = await supabase.from('briefing_rows').insert(newRows);
           if (insErr) throw insErr;
+          copiedCount = newRows.length;
         }
       }
 
       toast({
         title: 'Week aangemaakt',
-        description: startMode === 'copy' && canCopy
-          ? `Week ${week} aangemaakt met ${previous?.rowCount} gekopieerde rijen.`
+        description: copiedCount > 0
+          ? `Week ${week} aangemaakt met ${copiedCount} gekopieerde rij${copiedCount !== 1 ? 'en' : ''}.`
           : `Week ${week} aangemaakt.`,
       });
       onOpenChange(false);
-      onCreated({ week, year, clientId });
+      onCreated({ week, year, clientId: clients[0].id });
     } catch (e: any) {
       toast({ title: 'Kon week niet aanmaken', description: e.message, variant: 'destructive' });
     } finally {
@@ -176,20 +179,10 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Nieuwe week aanmaken</DialogTitle>
-          <DialogDescription>Kies een klant, week en hoe je wilt starten.</DialogDescription>
+          <DialogDescription>Kies week en hoe je wilt starten.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Klant</Label>
-            <Select value={clientId} onValueChange={setClientId}>
-              <SelectTrigger><SelectValue placeholder="Kies een klant" /></SelectTrigger>
-              <SelectContent>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Week</Label>
@@ -229,7 +222,7 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
                         ? canCopy
                           ? `Laatste week: W${previous.week_number} ${previous.year} · ${previous.rowCount} rij${previous.rowCount !== 1 ? 'en' : ''}`
                           : `Laatste week (W${previous.week_number}) heeft geen rijen.`
-                        : 'Geen vorige week gevonden voor deze klant.'}
+                        : 'Geen vorige week gevonden.'}
                   </p>
                 </div>
               </label>
@@ -239,7 +232,7 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Annuleren</Button>
-          <Button onClick={handleSubmit} disabled={submitting || !clientId}>
+          <Button onClick={handleSubmit} disabled={submitting}>
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Aanmaken
           </Button>
