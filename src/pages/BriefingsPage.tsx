@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, ChevronLeft, Calendar, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import BriefingTable from '@/components/briefings/BriefingTable';
+import NewWeekDialog from '@/components/briefings/NewWeekDialog';
 import { cn } from '@/lib/utils';
 
 interface Client { id: string; name: string; }
@@ -40,6 +41,7 @@ export default function BriefingsPage() {
   const [selectedWeek, setSelectedWeek] = useState<{ week: number; year: number } | null>(null);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [newWeekOpen, setNewWeekOpen] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -67,41 +69,18 @@ export default function BriefingsPage() {
       .sort((a, b) => b.year - a.year || b.week - a.week);
   }, [briefings]);
 
-  const createNewWeek = async () => {
+  const openNewWeekDialog = () => {
     if (clients.length === 0) {
       toast({ title: 'Geen klanten', description: 'Voeg eerst een klant toe.', variant: 'destructive' });
       return;
     }
-    setCreating(true);
-    const { week, year } = getCurrentWeek();
-    // create one row per client (or only first if many) — make for first client; user can add others later
-    const firstClient = clients[0];
-    try {
-      const { data: existing } = await supabase
-        .from('briefings_meta' as any)
-        .select('id')
-        .eq('client_id', firstClient.id)
-        .eq('week_number', week)
-        .eq('year', year)
-        .maybeSingle();
-      if (!existing) {
-        const { error } = await supabase.from('briefings_meta' as any).insert({
-          client_id: firstClient.id,
-          week_number: week,
-          year,
-          status: 'draft',
-          created_by: user?.id,
-        });
-        if (error) throw error;
-      }
-      await loadAll();
-      setSelectedWeek({ week, year });
-      setActiveClientId(firstClient.id);
-    } catch (e: any) {
-      toast({ title: 'Kon week niet aanmaken', description: e.message, variant: 'destructive' });
-    } finally {
-      setCreating(false);
-    }
+    setNewWeekOpen(true);
+  };
+
+  const handleWeekCreated = async ({ week, year, clientId }: { week: number; year: number; clientId: string }) => {
+    await loadAll();
+    setSelectedWeek({ week, year });
+    setActiveClientId(clientId);
   };
 
   const addClientToWeek = async (clientId: string) => {
@@ -199,7 +178,7 @@ export default function BriefingsPage() {
           <h1 className="text-2xl font-bold">Briefings</h1>
           <p className="text-sm text-muted-foreground">Wekelijkse briefings voor de grafisch vormgever</p>
         </div>
-        <Button onClick={createNewWeek} disabled={creating}>
+        <Button onClick={openNewWeekDialog} disabled={creating}>
           {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
           Nieuwe week
         </Button>
@@ -211,7 +190,7 @@ export default function BriefingsPage() {
         <div className="text-center py-16 border-2 border-dashed rounded-lg">
           <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground mb-4">Nog geen briefings</p>
-          <Button onClick={createNewWeek} variant="outline" size="sm">
+          <Button onClick={openNewWeekDialog} variant="outline" size="sm">
             <Plus className="h-4 w-4 mr-2" /> Maak eerste briefing
           </Button>
         </div>
@@ -246,6 +225,15 @@ export default function BriefingsPage() {
           ))}
         </div>
       )}
+
+      <NewWeekDialog
+        open={newWeekOpen}
+        onOpenChange={setNewWeekOpen}
+        clients={clients}
+        defaultWeek={getCurrentWeek().week}
+        defaultYear={getCurrentWeek().year}
+        onCreated={handleWeekCreated}
+      />
     </div>
   );
 }
