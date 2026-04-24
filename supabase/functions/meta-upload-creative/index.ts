@@ -1,4 +1,18 @@
 // Uploads creatives to Meta and creates ads under the chosen ad set.
+//
+// Flow per creative file:
+//   1) Inspect the chosen ad set (is_dynamic_creative + how many existing non-deleted ads).
+//   2) If the ad set supports Dynamic Creative AND is empty:
+//        -> create exactly ONE ad per file with all text variants bundled via asset_feed_spec.
+//      Limitation enforced by Meta: only ONE ad per dynamic creative ad set.
+//        -> If multiple files are uploaded into a dynamic ad set, only the first one is launched
+//           and the rest are blocked with a clear message instead of failing on Meta's side.
+//   3) If the ad set is a STANDARD ad set (not dynamic creative):
+//        -> create one ad per file using a normal link_data creative.
+//        -> only the first variant of each text field is used (Meta does not allow multiple
+//           text variants in a single standard ad).
+//
+// Either way: 1 file == 1 ad. We never create multiple ads from a single file's text variants.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -40,7 +54,6 @@ async function uploadImage(adAccount: string, token: string, blob: Blob, filenam
   const r = await fetch(`${META_API}/${adAccount}/adimages`, { method: 'POST', body: fd });
   const j = await r.json();
   if (j.error) throw new Error(`adimages: ${j.error.message}`);
-  // images keyed by filename
   const key = Object.keys(j.images || {})[0];
   return j.images[key].hash as string;
 }
@@ -88,10 +101,47 @@ async function postToMeta(path: string, token: string, payload: Record<string, u
 }
 
 function cleanVariants(values: string[]) {
-  return values.map((value) => value.trim()).filter(Boolean);
+  return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-function buildAssetFeedCreativePayload(opts: {
+async function inspectAdSet(adsetId: string, token: string) {
+  // Read the ad set itself
+  const setRes = await fetch(
+    `${META_API}/${adsetId}?fields=id,name,is_dynamic_creative&access_token=${token}`,
+  );
+  const setJson = await setRes.json();
+  if (setJson.error) {
+    throw new Error(metaErrorMessage('adset lookup', setJson.error));
+  }
+
+  // Count current non-deleted ads in this set (paged, lightweight)
+  let existingAds = 0;
+  let next: string | null =
+    `${META_API}/${adsetId}/ads?fields=id,effective_status&limit=200&access_token=${token}`;
+  let safety = 0;
+  while (next && safety < 20) {
+    const r = await fetch(next);
+    const j = await r.json();
+    if (j.error) {
+      throw new Error(metaErrorMessage('adset ads lookup', j.error));
+    }
+    for (const ad of j.data || []) {
+      if (ad.effective_status !== 'DELETED' && ad.effective_status !== 'ARCHIVED') {
+        existingAds += 1;
+      }
+    }
+    next = j.paging?.next || null;
+    safety += 1;
+  }
+
+  return {
+    is_dynamic_creative: !!setJson.is_dynamic_creative,
+    existing_ads: existingAds,
+    name: setJson.name as string | undefined,
+  };
+}
+
+function buildDynamicCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
   text: CreativeText;
@@ -102,14 +152,14 @@ function buildAssetFeedCreativePayload(opts: {
   const link = text.link_url || 'http://fb.me/';
   const ctaType = text.cta || 'SIGN_UP';
 
-  const bodies = cleanVariants(text.primary_texts).map((t) => ({ text: t }));
-  const titles = cleanVariants(text.headlines).map((t) => ({ text: t }));
-  const descriptions = cleanVariants(text.descriptions).map((t) => ({ text: t }));
+  // Meta limits: max 5 per text field
+  const bodies = cleanVariants(text.primary_texts).slice(0, 5).map((t) => ({ text: t }));
+  const titles = cleanVariants(text.headlines).slice(0, 5).map((t) => ({ text: t }));
+  const descriptions = cleanVariants(text.descriptions).slice(0, 5).map((t) => ({ text: t }));
 
-  // Meta requires at least 1 entry per field
-  if (bodies.length === 0) bodies.push({ text: '' });
-  if (titles.length === 0) titles.push({ text: '' });
-  if (descriptions.length === 0) descriptions.push({ text: '' });
+  if (bodies.length === 0) bodies.push({ text: ' ' });
+  if (titles.length === 0) titles.push({ text: ' ' });
+  if (descriptions.length === 0) descriptions.push({ text: ' ' });
 
   const asset_feed_spec: Record<string, unknown> = {
     bodies,
@@ -138,6 +188,56 @@ function buildAssetFeedCreativePayload(opts: {
   };
 }
 
+function buildStandardLeadCreativePayload(opts: {
+  pageId: string;
+  leadFormId: string;
+  text: CreativeText;
+  imageHash?: string;
+  videoId?: string;
+}) {
+  const { pageId, leadFormId, text, imageHash, videoId } = opts;
+  const link = text.link_url || 'http://fb.me/';
+  const ctaType = text.cta || 'SIGN_UP';
+
+  const message = cleanVariants(text.primary_texts)[0] || '';
+  const name = cleanVariants(text.headlines)[0] || '';
+  const description = cleanVariants(text.descriptions)[0] || '';
+
+  const call_to_action = {
+    type: ctaType,
+    value: { lead_gen_form_id: leadFormId, link },
+  };
+
+  if (videoId) {
+    return {
+      object_story_spec: {
+        page_id: pageId,
+        video_data: {
+          video_id: videoId,
+          message,
+          title: name,
+          link_description: description,
+          call_to_action,
+        },
+      },
+    };
+  }
+
+  return {
+    object_story_spec: {
+      page_id: pageId,
+      link_data: {
+        message,
+        link,
+        name,
+        description,
+        image_hash: imageHash,
+        call_to_action,
+      },
+    },
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -155,7 +255,12 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
+    // 1) Inspect the ad set ONCE to decide which payload shape to use.
+    const adsetInfo = await inspectAdSet(body.adset_id, token);
+    const useDynamic = adsetInfo.is_dynamic_creative;
+
     const results: any[] = [];
+    let dynamicSlotsLeft = useDynamic ? Math.max(0, 1 - adsetInfo.existing_ads) : Infinity;
 
     for (const c of body.creatives) {
       const launchRowBase: any = {
@@ -167,6 +272,15 @@ Deno.serve(async (req) => {
       };
 
       try {
+        // Hard block: dynamic creative ad set already has its 1 ad,
+        // OR multiple files were submitted into the same dynamic ad set.
+        if (useDynamic && dynamicSlotsLeft <= 0) {
+          throw new Error(
+            `Deze advertentieset gebruikt Dynamic Creative en mag maar 1 advertentie bevatten. ` +
+              `Kies een lege Dynamic Creative ad set of een standaard ad set om meerdere creatives te uploaden.`,
+          );
+        }
+
         const { data: fileData, error: dlErr } = await supabase.storage
           .from('ad-launcher-uploads')
           .download(c.storage_path);
@@ -181,13 +295,21 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const creativePayload = buildAssetFeedCreativePayload({
-          pageId: body.page_id,
-          leadFormId: body.lead_form_id,
-          text: c.texts,
-          imageHash,
-          videoId,
-        });
+        const creativePayload = useDynamic
+          ? buildDynamicCreativePayload({
+              pageId: body.page_id,
+              leadFormId: body.lead_form_id,
+              text: c.texts,
+              imageHash,
+              videoId,
+            })
+          : buildStandardLeadCreativePayload({
+              pageId: body.page_id,
+              leadFormId: body.lead_form_id,
+              text: c.texts,
+              imageHash,
+              videoId,
+            });
 
         const adName = c.file_name.replace(/\.[^.]+$/, '');
         const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
@@ -203,6 +325,8 @@ Deno.serve(async (req) => {
           status,
         });
 
+        if (useDynamic) dynamicSlotsLeft -= 1;
+
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
           creative_id: creativeId,
@@ -213,10 +337,12 @@ Deno.serve(async (req) => {
         results.push({
           file_name: c.file_name,
           ad_id: adJson.id,
-          variants_created:
-            cleanVariants(c.texts.primary_texts).length +
-            cleanVariants(c.texts.headlines).length +
-            cleanVariants(c.texts.descriptions).length,
+          mode: useDynamic ? 'dynamic_creative' : 'standard_lead',
+          variants_bundled: useDynamic
+            ? cleanVariants(c.texts.primary_texts).length +
+              cleanVariants(c.texts.headlines).length +
+              cleanVariants(c.texts.descriptions).length
+            : 1,
           success: true,
         });
       } catch (err) {
@@ -230,9 +356,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ results }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        results,
+        adset: {
+          is_dynamic_creative: useDynamic,
+          existing_ads_before: adsetInfo.existing_ads,
+        },
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   } catch (e) {
     console.error('meta-upload-creative error', e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
