@@ -87,79 +87,59 @@ async function postToMeta(path: string, token: string, payload: Record<string, u
   return json;
 }
 
-interface CreativeVariant {
-  primary_text: string;
-  headline: string;
-  description: string;
-  cta: string;
-  link_url: string;
-  suffix?: string;
-}
-
 function cleanVariants(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean);
 }
 
-function buildCreativeVariants(text: CreativeText): CreativeVariant[] {
-  const primaryTexts = cleanVariants(text.primary_texts);
-  const headlines = cleanVariants(text.headlines);
-  const descriptions = cleanVariants(text.descriptions);
-  const totalVariants = Math.max(primaryTexts.length, headlines.length, descriptions.length, 1);
-
-  return Array.from({ length: totalVariants }, (_, index) => ({
-    primary_text: primaryTexts[index] ?? primaryTexts[0] ?? '',
-    headline: headlines[index] ?? headlines[0] ?? '',
-    description: descriptions[index] ?? descriptions[0] ?? '',
-    cta: text.cta || 'SIGN_UP',
-    link_url: text.link_url || 'http://fb.me/',
-    suffix: totalVariants > 1 ? `V${index + 1}` : undefined,
-  }));
-}
-
-function buildStandardCreativePayload(opts: {
+function buildAssetFeedCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
-  variant: CreativeVariant;
+  text: CreativeText;
   imageHash?: string;
   videoId?: string;
 }) {
-  const { pageId, leadFormId, variant, imageHash, videoId } = opts;
-  const cta = {
-    type: variant.cta || 'SIGN_UP',
-    value: { lead_gen_form_id: leadFormId, link: variant.link_url || 'http://fb.me/' },
-  };
+  const { pageId, leadFormId, text, imageHash, videoId } = opts;
+  const link = text.link_url || 'http://fb.me/';
+  const ctaType = text.cta || 'SIGN_UP';
 
-  const link_data: Record<string, unknown> = {
-    message: variant.primary_text,
-    name: variant.headline,
-    description: variant.description,
-    link: variant.link_url || 'http://fb.me/',
-    call_to_action: cta,
-  };
+  const bodies = cleanVariants(text.primary_texts).map((t) => ({ text: t }));
+  const titles = cleanVariants(text.headlines).map((t) => ({ text: t }));
+  const descriptions = cleanVariants(text.descriptions).map((t) => ({ text: t }));
 
-  if (imageHash) {
-    link_data.image_hash = imageHash;
-  }
+  // Meta requires at least 1 entry per field
+  if (bodies.length === 0) bodies.push({ text: '' });
+  if (titles.length === 0) titles.push({ text: '' });
+  if (descriptions.length === 0) descriptions.push({ text: '' });
+
+  const asset_feed_spec: Record<string, unknown> = {
+    bodies,
+    titles,
+    descriptions,
+    link_urls: [{ website_url: link }],
+    ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+    call_to_action_types: [ctaType],
+    call_to_actions: [
+      {
+        type: ctaType,
+        value: { lead_gen_form_id: leadFormId, link },
+      },
+    ],
+  };
 
   if (videoId) {
-    return {
-      object_story_spec: {
-        page_id: pageId,
-        video_data: {
-          video_id: videoId,
-          message: variant.primary_text,
-          title: variant.headline,
-          link_description: variant.description,
-          call_to_action: cta,
-        },
-      },
-    };
+    asset_feed_spec.videos = [{ video_id: videoId }];
+  } else if (imageHash) {
+    asset_feed_spec.images = [{ hash: imageHash }];
   }
 
   return {
-    object_story_spec: {
-      page_id: pageId,
-      link_data,
+    object_story_spec: { page_id: pageId },
+    asset_feed_spec,
+    // Disable Advantage+ optimizations so Meta keeps our text variants intact
+    degrees_of_freedom_spec: {
+      creative_features_spec: {
+        standard_enhancements: { enroll_status: 'OPT_OUT' },
+      },
     },
   };
 }
