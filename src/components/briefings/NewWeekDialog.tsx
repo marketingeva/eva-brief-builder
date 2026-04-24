@@ -38,6 +38,8 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
   const [year, setYear] = useState<number>(defaultYear);
   const [startMode, setStartMode] = useState<'empty' | 'copy'>('empty');
   const [previous, setPrevious] = useState<PreviousWeekInfo | null>(null);
+  const [existing, setExisting] = useState<ExistingWeekInfo | null>(null);
+  const [wipeExisting, setWipeExisting] = useState(false);
   const [checkingPrev, setCheckingPrev] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
