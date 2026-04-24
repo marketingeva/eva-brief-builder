@@ -54,7 +54,7 @@ export default function BriefingTable({ briefing, clientName, onStatusChange }: 
   const load = useCallback(async () => {
     setLoading(true);
     const [{ data: rs }, { data: roles }, { data: locs }] = await Promise.all([
-      supabase.from('briefing_rows').select('*').eq('meta_briefing_id' as any, briefing.id).order('sort_order'),
+      (supabase.from('briefing_rows') as any).select('*').eq('meta_briefing_id', briefing.id).order('sort_order'),
       supabase.from('client_roles').select('role_title').eq('client_id', briefing.client_id),
       supabase.from('client_locations').select('name').eq('client_id', briefing.client_id),
     ]);
