@@ -178,7 +178,7 @@ export default function BriefingsPage() {
           <h1 className="text-2xl font-bold">Briefings</h1>
           <p className="text-sm text-muted-foreground">Wekelijkse briefings voor de grafisch vormgever</p>
         </div>
-        <Button onClick={createNewWeek} disabled={creating}>
+        <Button onClick={openNewWeekDialog} disabled={creating}>
           {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
           Nieuwe week
         </Button>
