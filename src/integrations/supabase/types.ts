@@ -240,48 +240,63 @@ export type Database = {
       }
       briefing_rows: {
         Row: {
-          briefing_id: string
+          briefing_id: string | null
           client_id: string
           created_at: string
           creative_image_path: string | null
+          creative_image_paths: string[] | null
           creative_inspiratie: string | null
           functie: string | null
+          functies: string[] | null
           hook: string | null
           id: string
           is_new: boolean | null
           locatie: string | null
+          locaties: string[] | null
+          meta_briefing_id: string | null
           omschrijving: string | null
           sort_order: number | null
+          status: string | null
           usps: string | null
         }
         Insert: {
-          briefing_id: string
+          briefing_id?: string | null
           client_id: string
           created_at?: string
           creative_image_path?: string | null
+          creative_image_paths?: string[] | null
           creative_inspiratie?: string | null
           functie?: string | null
+          functies?: string[] | null
           hook?: string | null
           id?: string
           is_new?: boolean | null
           locatie?: string | null
+          locaties?: string[] | null
+          meta_briefing_id?: string | null
           omschrijving?: string | null
           sort_order?: number | null
+          status?: string | null
           usps?: string | null
         }
         Update: {
-          briefing_id?: string
+          briefing_id?: string | null
           client_id?: string
           created_at?: string
           creative_image_path?: string | null
+          creative_image_paths?: string[] | null
           creative_inspiratie?: string | null
           functie?: string | null
+          functies?: string[] | null
           hook?: string | null
           id?: string
           is_new?: boolean | null
           locatie?: string | null
+          locaties?: string[] | null
+          meta_briefing_id?: string | null
           omschrijving?: string | null
           sort_order?: number | null
+          status?: string | null
           usps?: string | null
         }
         Relationships: [
@@ -294,6 +309,60 @@ export type Database = {
           },
           {
             foreignKeyName: "briefing_rows_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_rows_meta_briefing_id_fkey"
+            columns: ["meta_briefing_id"]
+            isOneToOne: false
+            referencedRelation: "briefings_meta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      briefings_meta: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          client_id: string
+          created_at: string
+          created_by: string
+          id: string
+          status: string
+          updated_at: string
+          week_number: number
+          year: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          client_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          status?: string
+          updated_at?: string
+          week_number: number
+          year?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          week_number?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefings_meta_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
