@@ -218,7 +218,7 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
 
     supabase.functions
       .invoke<MetaFunctionResponse>('meta-list-resources', {
-        body: { resource: 'leadforms', page_id: pageId, name_filter: nameFilter || '' },
+        body: { resource: 'leadforms', page_id: pageId },
       })
       .then(({ data, error }) => {
         if (!active) return;
@@ -236,7 +236,7 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
       });
 
     return () => { active = false; };
-  }, [pageId, nameFilter]);
+  }, [pageId]);
 
   return (
     <div className="space-y-4">
