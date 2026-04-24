@@ -1,58 +1,29 @@
 
 
-# Ad Launcher — Searchable dropdowns, status badges, layout polish
+# Fix: Alle ad sets onder een campagne laden
 
-## Wat ga ik bouwen
+## Probleem
+Het `name_filter` (clientnaam, bv. "Rivas") wordt nu ook toegepast op **ad sets** en **lead forms**. Ad sets onder de campagne "Rivas - Evergreen - Maart" heten echter "Algemeen", "Locatie - Sliedrecht", "Managementassistent" enz. — geen van die namen bevat "rivas", dus ze worden er allemaal uitgefilterd. Resultaat: veel ad sets ontbreken.
 
-Op basis van je RapidAds-screenshots maak ik de selectie-velden krachtiger en de layout strakker.
+Bewijs uit het Meta-screenshot: 28 ad sets in deze campagne, met namen die de clientnaam niet bevatten.
 
-### 1. Searchable dropdowns met status (campagnes + ad sets)
-- Vervang de standaard `Select` voor **Campagne** en **Ad set** door een **Combobox** (Popover + Command) met:
-  - Zoekveld bovenaan (`Search campaigns...` / `Search ad sets...`)
-  - **Groen bolletje** voor `ACTIVE` items, grijs voor `PAUSED`, rood voor andere statussen
-  - **Status-pill** naast de naam: `ABO` / `CBO` (afgeleid uit campagne `is_budget_optimized` / objective) of het ruwe statuslabel voor ad sets
-  - **Sortering**: actieve items altijd bovenaan, daarna alfabetisch
-- De geselecteerde optie toont in de trigger ook het bolletje + de naam
+## Oplossing
+Het `name_filter` is alleen bedoeld om de juiste **campagnes per klant** te identificeren. Zodra een campagne is gekozen, zijn ad sets en lead forms al gescoped (per `campaign_id` resp. `page_id`) en hoeven niet nogmaals op clientnaam gefilterd te worden.
 
-### 2. Edge function uitbreiding
-- `meta-list-resources` geeft extra velden mee:
-  - Campagnes: `daily_budget`, `lifetime_budget`, `bid_strategy` → om ABO/CBO af te leiden (als campagne een budget heeft = CBO, anders ABO)
-  - Ad sets: `daily_budget`, `lifetime_budget` (al via status zichtbaar)
-- Sorteer in de function: actief eerst, dan op naam
+## Wijzigingen
 
-### 3. Lead forms — zelfde behandeling
-- Ook searchable + status badge (`ACTIVE` lead forms bovenaan met groen bolletje)
+**`supabase/functions/meta-list-resources/index.ts`**
+- **Ad sets**: `matchesName(...)` filter verwijderen → álle 28 ad sets onder de campagne worden teruggegeven (alleen DELETED/ARCHIVED uitgesloten).
+- **Lead forms**: idem — geen naamfilter, alleen status-filter.
+- **Campaigns**: blijft ongewijzigd (filter op clientnaam blijft hier nodig).
+- Sortering "ACTIVE eerst" blijft staan voor alle drie.
 
-### 4. Website URL default
-- Initial `selection.link_url` wordt `'http://fb.me/'` (in plaats van leeg)
-- Het input-veld toont deze waarde direct na laden van de tab
+**`src/components/ad-launcher/MetaSelectors.tsx`**
+- Frontend stuurt geen `name_filter` meer mee bij ad sets en lead forms (kost niets, maar maakt het expliciet).
+- Effect-dependency `nameFilter` verwijderen uit ad set & lead form effects (voorkomt onnodig herladen).
 
-### 5. Visuele polish (op basis van screenshots)
-**Launcher-header rechtsboven** (Preview & Launch card):
-- "Uploading to **[KlantBadge]** / **[Campagne-badge]**" pill-rij bovenaan, met groene/paarse dot
-- Knoppen: `+ Create Ad Set` (outline, disabled placeholder), `▶ Launch Ads` (primary, prominent), tandwiel-icoon (settings shortcut)
-- Subtitel: "Preview {n} creatives ready to launch."
+## Verwacht resultaat
+Voor campagne "Rivas - Evergreen - Maart" worden alle 28 ad sets ingeladen, met "Managementassistent" en "Algemeen" (ACTIVE) bovenaan, gevolgd door "Locatie - Sliedrecht" (Learning limited / PAUSED) en de overige PAUSED/Off ad sets daaronder, alfabetisch gesorteerd. Zoeken in de combobox blijft client-side werken via het `CommandInput` zoekveld.
 
-**Creative-rijen** (zoals screenshot 2):
-- Grotere thumbnail (96px), bestandsnaam prominent
-- Onder de naam: `1.99 MB · PNG · ● Ready` met status-dot
-- Action-knoppen rechts als ronde icon-buttons: `P` (Primary text count), `H` (Headline count), `D` (Description count), bewerken (pen), verwijderen (prullenbak)
-
-**Editing panel** (zoals screenshot 3):
-- Header met thumbnail + bestandsnaam: "EDIT CREATIVE TEXTS"
-- Toolbar bovenaan: `Copy From` / `Copy to All` / `Import` / `✨ Generate`
-- Per veld een teller rechtsboven: `1 OF 5`
-- "+ Add Variation" als volle-breedte knop onder elk veld
-- Secties met uppercase labels: `PRIMARY TEXT`, `HEADLINE`, `DESCRIPTION`, `CALL TO ACTION`
-
-## Bestanden die wijzigen
-
-| Bestand | Wijziging |
-|---|---|
-| `supabase/functions/meta-list-resources/index.ts` | Extra velden, sortering actief-eerst, ABO/CBO afleiding |
-| `src/components/ad-launcher/MetaSelectors.tsx` | Vervang Select door Combobox met search + status-dot + badge |
-| `src/pages/client-workspace/AdLauncherTab.tsx` | Default `link_url='http://fb.me/'`, header-redesign, creative-rij styling |
-| `src/components/ad-launcher/CreativeTextsPanel.tsx` | Toolbar (Copy From/To All/Import/Generate), `1 OF 5` tellers, full-width "Add Variation" |
-
-Geen database-migraties nodig, geen nieuwe secrets.
+Geen DB-migraties, geen nieuwe secrets.
 
