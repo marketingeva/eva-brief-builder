@@ -187,7 +187,7 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
 
     supabase.functions
       .invoke<MetaFunctionResponse>('meta-list-resources', {
-        body: { resource: 'adsets', campaign_id: value.campaign_id, name_filter: nameFilter || '' },
+        body: { resource: 'adsets', campaign_id: value.campaign_id },
       })
       .then(({ data, error }) => {
         if (!active) return;
@@ -205,7 +205,7 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
       });
 
     return () => { active = false; };
-  }, [value.campaign_id, nameFilter]);
+  }, [value.campaign_id]);
 
   useEffect(() => {
     let active = true;
