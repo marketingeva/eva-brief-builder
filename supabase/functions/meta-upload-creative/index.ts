@@ -1,18 +1,12 @@
 // Uploads creatives to Meta and creates ads under the chosen ad set.
 //
-// Flow per creative file:
-//   1) Inspect the chosen ad set (is_dynamic_creative + how many existing non-deleted ads).
-//   2) If the ad set supports Dynamic Creative AND is empty:
-//        -> create exactly ONE ad per file with all text variants bundled via asset_feed_spec.
-//      Limitation enforced by Meta: only ONE ad per dynamic creative ad set.
-//        -> If multiple files are uploaded into a dynamic ad set, only the first one is launched
-//           and the rest are blocked with a clear message instead of failing on Meta's side.
-//   3) If the ad set is a STANDARD ad set (not dynamic creative):
-//        -> create one ad per file using a normal link_data creative.
-//        -> only the first variant of each text field is used (Meta does not allow multiple
-//           text variants in a single standard ad).
+// Per file -> 1 advertentie. De eerste tekstvariant van elk veld komt in
+// object_story_spec (de "main" tekst zichtbaar in feed). Als er MEERDERE
+// varianten zijn van primary_text / headline / description, dan wordt
+// asset_feed_spec toegevoegd met bodies/titles/descriptions arrays.
+// Dit activeert "Multiple Text Options" in Meta Ads Manager (1 of N).
 //
-// Either way: 1 file == 1 ad. We never create multiple ads from a single file's text variants.
+// Werkt op standaard ad sets (Lead Gen). Geen Dynamic Creative vereist.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
