@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, ChevronLeft, Calendar, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import BriefingTable from '@/components/briefings/BriefingTable';
+import NewWeekDialog from '@/components/briefings/NewWeekDialog';
 import { cn } from '@/lib/utils';
 
 interface Client { id: string; name: string; }
