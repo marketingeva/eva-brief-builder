@@ -94,6 +94,8 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       adset_id: selection.adset_id,
       lead_form_id: selection.lead_form_id,
       page_id: pageId!,
+      template_ad_id: selection.template_ad_id || undefined,
+      disable_enhancements: true,
       status: 'PAUSED',
       creatives: creatives.map((r) => ({
         storage_path: r.storage_path!,
