@@ -187,48 +187,42 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const variants = buildCreativeVariants(c.texts);
-        const variantResults: any[] = [];
+        const creativePayload = buildAssetFeedCreativePayload({
+          pageId: body.page_id,
+          leadFormId: body.lead_form_id,
+          text: c.texts,
+          imageHash,
+          videoId,
+        });
 
-        for (const variant of variants) {
-          const creativePayload = buildStandardCreativePayload({
-            pageId: body.page_id,
-            leadFormId: body.lead_form_id,
-            variant,
-            imageHash,
-            videoId,
-          });
+        const adName = c.file_name.replace(/\.[^.]+$/, '');
+        const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
+          name: adName,
+          ...creativePayload,
+        });
+        const creativeId = creativeJson.id;
 
-          const adName = [c.file_name.replace(/\.[^.]+$/, ''), variant.suffix].filter(Boolean).join(' - ');
-          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
-            name: adName,
-            ...creativePayload,
-          });
-          const creativeId = creativeJson.id;
+        const adJson = await postToMeta(`${adAccount}/ads`, token, {
+          name: adName,
+          adset_id: body.adset_id,
+          creative: { creative_id: creativeId },
+          status,
+        });
 
-          const adJson = await postToMeta(`${adAccount}/ads`, token, {
-            name: adName,
-            adset_id: body.adset_id,
-            creative: { creative_id: creativeId },
-            status,
-          });
-
-          const launchRow = {
-            ...launchRowBase,
-            creative_filename: variant.suffix ? `${c.file_name} (${variant.suffix})` : c.file_name,
-            creative_id: creativeId,
-            ad_id: adJson.id,
-            status: 'success',
-          };
-          await supabase.from('ad_launches').insert(launchRow);
-          variantResults.push({ ad_id: adJson.id, creative_id: creativeId, variant: variant.suffix ?? 'V1' });
-        }
+        await supabase.from('ad_launches').insert({
+          ...launchRowBase,
+          creative_id: creativeId,
+          ad_id: adJson.id,
+          status: 'success',
+        });
 
         results.push({
           file_name: c.file_name,
-          ad_id: variantResults[0]?.ad_id ?? null,
-          ad_ids: variantResults.map((entry) => entry.ad_id),
-          variants_created: variantResults.length,
+          ad_id: adJson.id,
+          variants_created:
+            cleanVariants(c.texts.primary_texts).length +
+            cleanVariants(c.texts.headlines).length +
+            cleanVariants(c.texts.descriptions).length,
           success: true,
         });
       } catch (err) {
