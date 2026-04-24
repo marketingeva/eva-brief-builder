@@ -18,6 +18,11 @@ interface PreviousWeekInfo {
   rowCount: number;
 }
 
+interface ExistingWeekInfo {
+  metaIds: string[];
+  rowCount: number;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
