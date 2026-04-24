@@ -190,12 +190,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
-    // 1) Inspect the ad set ONCE to decide which payload shape to use.
-    const adsetInfo = await inspectAdSet(body.adset_id, token);
-    const useDynamic = adsetInfo.is_dynamic_creative;
-
     const results: any[] = [];
-    let dynamicSlotsLeft = useDynamic ? Math.max(0, 1 - adsetInfo.existing_ads) : Infinity;
 
     for (const c of body.creatives) {
       const launchRowBase: any = {
@@ -207,15 +202,6 @@ Deno.serve(async (req) => {
       };
 
       try {
-        // Hard block: dynamic creative ad set already has its 1 ad,
-        // OR multiple files were submitted into the same dynamic ad set.
-        if (useDynamic && dynamicSlotsLeft <= 0) {
-          throw new Error(
-            `Deze advertentieset gebruikt Dynamic Creative en mag maar 1 advertentie bevatten. ` +
-              `Kies een lege Dynamic Creative ad set of een standaard ad set om meerdere creatives te uploaden.`,
-          );
-        }
-
         const { data: fileData, error: dlErr } = await supabase.storage
           .from('ad-launcher-uploads')
           .download(c.storage_path);
@@ -230,21 +216,13 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const creativePayload = useDynamic
-          ? buildDynamicCreativePayload({
-              pageId: body.page_id,
-              leadFormId: body.lead_form_id,
-              text: c.texts,
-              imageHash,
-              videoId,
-            })
-          : buildStandardLeadCreativePayload({
-              pageId: body.page_id,
-              leadFormId: body.lead_form_id,
-              text: c.texts,
-              imageHash,
-              videoId,
-            });
+        const creativePayload = buildLeadCreativePayload({
+          pageId: body.page_id,
+          leadFormId: body.lead_form_id,
+          text: c.texts,
+          imageHash,
+          videoId,
+        });
 
         const adName = c.file_name.replace(/\.[^.]+$/, '');
         const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
@@ -260,7 +238,10 @@ Deno.serve(async (req) => {
           status,
         });
 
-        if (useDynamic) dynamicSlotsLeft -= 1;
+        const variantsCount =
+          cleanVariants(c.texts.primary_texts).length +
+          cleanVariants(c.texts.headlines).length +
+          cleanVariants(c.texts.descriptions).length;
 
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
@@ -272,12 +253,7 @@ Deno.serve(async (req) => {
         results.push({
           file_name: c.file_name,
           ad_id: adJson.id,
-          mode: useDynamic ? 'dynamic_creative' : 'standard_lead',
-          variants_bundled: useDynamic
-            ? cleanVariants(c.texts.primary_texts).length +
-              cleanVariants(c.texts.headlines).length +
-              cleanVariants(c.texts.descriptions).length
-            : 1,
+          variants_bundled: variantsCount,
           success: true,
         });
       } catch (err) {
@@ -292,13 +268,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        results,
-        adset: {
-          is_dynamic_creative: useDynamic,
-          existing_ads_before: adsetInfo.existing_ads,
-        },
-      }),
+      JSON.stringify({ results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e) {
