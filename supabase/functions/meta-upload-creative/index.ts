@@ -1,18 +1,12 @@
 // Uploads creatives to Meta and creates ads under the chosen ad set.
 //
-// Flow per creative file:
-//   1) Inspect the chosen ad set (is_dynamic_creative + how many existing non-deleted ads).
-//   2) If the ad set supports Dynamic Creative AND is empty:
-//        -> create exactly ONE ad per file with all text variants bundled via asset_feed_spec.
-//      Limitation enforced by Meta: only ONE ad per dynamic creative ad set.
-//        -> If multiple files are uploaded into a dynamic ad set, only the first one is launched
-//           and the rest are blocked with a clear message instead of failing on Meta's side.
-//   3) If the ad set is a STANDARD ad set (not dynamic creative):
-//        -> create one ad per file using a normal link_data creative.
-//        -> only the first variant of each text field is used (Meta does not allow multiple
-//           text variants in a single standard ad).
+// Per file -> 1 advertentie. De eerste tekstvariant van elk veld komt in
+// object_story_spec (de "main" tekst zichtbaar in feed). Als er MEERDERE
+// varianten zijn van primary_text / headline / description, dan wordt
+// asset_feed_spec toegevoegd met bodies/titles/descriptions arrays.
+// Dit activeert "Multiple Text Options" in Meta Ads Manager (1 of N).
 //
-// Either way: 1 file == 1 ad. We never create multiple ads from a single file's text variants.
+// Werkt op standaard ad sets (Lead Gen). Geen Dynamic Creative vereist.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -104,44 +98,7 @@ function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-async function inspectAdSet(adsetId: string, token: string) {
-  // Read the ad set itself
-  const setRes = await fetch(
-    `${META_API}/${adsetId}?fields=id,name,is_dynamic_creative&access_token=${token}`,
-  );
-  const setJson = await setRes.json();
-  if (setJson.error) {
-    throw new Error(metaErrorMessage('adset lookup', setJson.error));
-  }
-
-  // Count current non-deleted ads in this set (paged, lightweight)
-  let existingAds = 0;
-  let next: string | null =
-    `${META_API}/${adsetId}/ads?fields=id,effective_status&limit=200&access_token=${token}`;
-  let safety = 0;
-  while (next && safety < 20) {
-    const r = await fetch(next);
-    const j = await r.json();
-    if (j.error) {
-      throw new Error(metaErrorMessage('adset ads lookup', j.error));
-    }
-    for (const ad of j.data || []) {
-      if (ad.effective_status !== 'DELETED' && ad.effective_status !== 'ARCHIVED') {
-        existingAds += 1;
-      }
-    }
-    next = j.paging?.next || null;
-    safety += 1;
-  }
-
-  return {
-    is_dynamic_creative: !!setJson.is_dynamic_creative,
-    existing_ads: existingAds,
-    name: setJson.name as string | undefined,
-  };
-}
-
-function buildDynamicCreativePayload(opts: {
+function buildLeadCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
   text: CreativeText;
@@ -152,90 +109,62 @@ function buildDynamicCreativePayload(opts: {
   const link = text.link_url || 'http://fb.me/';
   const ctaType = text.cta || 'SIGN_UP';
 
-  // Meta limits: max 5 per text field
-  const bodies = cleanVariants(text.primary_texts).slice(0, 5).map((t) => ({ text: t }));
-  const titles = cleanVariants(text.headlines).slice(0, 5).map((t) => ({ text: t }));
-  const descriptions = cleanVariants(text.descriptions).slice(0, 5).map((t) => ({ text: t }));
+  const primaryTexts = cleanVariants(text.primary_texts).slice(0, 5);
+  const headlines = cleanVariants(text.headlines).slice(0, 5);
+  const descriptions = cleanVariants(text.descriptions).slice(0, 5);
 
-  if (bodies.length === 0) bodies.push({ text: ' ' });
-  if (titles.length === 0) titles.push({ text: ' ' });
-  if (descriptions.length === 0) descriptions.push({ text: ' ' });
-
-  const asset_feed_spec: Record<string, unknown> = {
-    bodies,
-    titles,
-    descriptions,
-    link_urls: [{ website_url: link }],
-    ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-    call_to_action_types: [ctaType],
-    call_to_actions: [
-      {
-        type: ctaType,
-        value: { lead_gen_form_id: leadFormId, link },
-      },
-    ],
-  };
-
-  if (videoId) {
-    asset_feed_spec.videos = [{ video_id: videoId }];
-  } else if (imageHash) {
-    asset_feed_spec.images = [{ hash: imageHash }];
-  }
-
-  return {
-    object_story_spec: { page_id: pageId },
-    asset_feed_spec,
-  };
-}
-
-function buildStandardLeadCreativePayload(opts: {
-  pageId: string;
-  leadFormId: string;
-  text: CreativeText;
-  imageHash?: string;
-  videoId?: string;
-}) {
-  const { pageId, leadFormId, text, imageHash, videoId } = opts;
-  const link = text.link_url || 'http://fb.me/';
-  const ctaType = text.cta || 'SIGN_UP';
-
-  const message = cleanVariants(text.primary_texts)[0] || '';
-  const name = cleanVariants(text.headlines)[0] || '';
-  const description = cleanVariants(text.descriptions)[0] || '';
+  const mainPrimary = primaryTexts[0] || '';
+  const mainHeadline = headlines[0] || '';
+  const mainDescription = descriptions[0] || '';
 
   const call_to_action = {
     type: ctaType,
     value: { lead_gen_form_id: leadFormId, link },
   };
 
+  // Build object_story_spec with the main creative (image/video + first text variant)
+  const object_story_spec: Record<string, unknown> = { page_id: pageId };
+
   if (videoId) {
-    return {
-      object_story_spec: {
-        page_id: pageId,
-        video_data: {
-          video_id: videoId,
-          message,
-          title: name,
-          link_description: description,
-          call_to_action,
-        },
-      },
+    object_story_spec.video_data = {
+      video_id: videoId,
+      message: mainPrimary,
+      title: mainHeadline,
+      link_description: mainDescription,
+      call_to_action,
+    };
+  } else {
+    object_story_spec.link_data = {
+      message: mainPrimary,
+      link,
+      name: mainHeadline,
+      description: mainDescription,
+      image_hash: imageHash,
+      call_to_action,
     };
   }
 
-  return {
-    object_story_spec: {
-      page_id: pageId,
-      link_data: {
-        message,
-        link,
-        name,
-        description,
-        image_hash: imageHash,
-        call_to_action,
-      },
-    },
-  };
+  const payload: Record<string, unknown> = { object_story_spec };
+
+  // Only add asset_feed_spec if there are MULTIPLE variants in any field.
+  // This activates "Multiple Text Options" in Meta Ads Manager (1 of N).
+  const hasMultiple =
+    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+
+  if (hasMultiple) {
+    const bodies = (primaryTexts.length > 0 ? primaryTexts : [' ']).map((t) => ({ text: t }));
+    const titles = (headlines.length > 0 ? headlines : [' ']).map((t) => ({ text: t }));
+    const descs = (descriptions.length > 0 ? descriptions : [' ']).map((t) => ({ text: t }));
+
+    payload.asset_feed_spec = {
+      bodies,
+      titles,
+      descriptions: descs,
+      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+    };
+  }
+
+  return payload;
 }
 
 Deno.serve(async (req) => {
@@ -255,12 +184,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
-    // 1) Inspect the ad set ONCE to decide which payload shape to use.
-    const adsetInfo = await inspectAdSet(body.adset_id, token);
-    const useDynamic = adsetInfo.is_dynamic_creative;
-
     const results: any[] = [];
-    let dynamicSlotsLeft = useDynamic ? Math.max(0, 1 - adsetInfo.existing_ads) : Infinity;
 
     for (const c of body.creatives) {
       const launchRowBase: any = {
@@ -272,15 +196,6 @@ Deno.serve(async (req) => {
       };
 
       try {
-        // Hard block: dynamic creative ad set already has its 1 ad,
-        // OR multiple files were submitted into the same dynamic ad set.
-        if (useDynamic && dynamicSlotsLeft <= 0) {
-          throw new Error(
-            `Deze advertentieset gebruikt Dynamic Creative en mag maar 1 advertentie bevatten. ` +
-              `Kies een lege Dynamic Creative ad set of een standaard ad set om meerdere creatives te uploaden.`,
-          );
-        }
-
         const { data: fileData, error: dlErr } = await supabase.storage
           .from('ad-launcher-uploads')
           .download(c.storage_path);
@@ -295,21 +210,13 @@ Deno.serve(async (req) => {
           imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
         }
 
-        const creativePayload = useDynamic
-          ? buildDynamicCreativePayload({
-              pageId: body.page_id,
-              leadFormId: body.lead_form_id,
-              text: c.texts,
-              imageHash,
-              videoId,
-            })
-          : buildStandardLeadCreativePayload({
-              pageId: body.page_id,
-              leadFormId: body.lead_form_id,
-              text: c.texts,
-              imageHash,
-              videoId,
-            });
+        const creativePayload = buildLeadCreativePayload({
+          pageId: body.page_id,
+          leadFormId: body.lead_form_id,
+          text: c.texts,
+          imageHash,
+          videoId,
+        });
 
         const adName = c.file_name.replace(/\.[^.]+$/, '');
         const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
@@ -325,7 +232,10 @@ Deno.serve(async (req) => {
           status,
         });
 
-        if (useDynamic) dynamicSlotsLeft -= 1;
+        const variantsCount =
+          cleanVariants(c.texts.primary_texts).length +
+          cleanVariants(c.texts.headlines).length +
+          cleanVariants(c.texts.descriptions).length;
 
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
@@ -337,12 +247,7 @@ Deno.serve(async (req) => {
         results.push({
           file_name: c.file_name,
           ad_id: adJson.id,
-          mode: useDynamic ? 'dynamic_creative' : 'standard_lead',
-          variants_bundled: useDynamic
-            ? cleanVariants(c.texts.primary_texts).length +
-              cleanVariants(c.texts.headlines).length +
-              cleanVariants(c.texts.descriptions).length
-            : 1,
+          variants_bundled: variantsCount,
           success: true,
         });
       } catch (err) {
@@ -357,13 +262,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        results,
-        adset: {
-          is_dynamic_creative: useDynamic,
-          existing_ads_before: adsetInfo.existing_ads,
-        },
-      }),
+      JSON.stringify({ results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (e) {
