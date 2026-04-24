@@ -18,6 +18,11 @@ interface PreviousWeekInfo {
   rowCount: number;
 }
 
+interface ExistingWeekInfo {
+  metaIds: string[];
+  rowCount: number;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,6 +38,8 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
   const [year, setYear] = useState<number>(defaultYear);
   const [startMode, setStartMode] = useState<'empty' | 'copy'>('empty');
   const [previous, setPrevious] = useState<PreviousWeekInfo | null>(null);
+  const [existing, setExisting] = useState<ExistingWeekInfo | null>(null);
+  const [wipeExisting, setWipeExisting] = useState(false);
   const [checkingPrev, setCheckingPrev] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,16 +49,19 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
       setYear(defaultYear);
       setStartMode('empty');
       setPrevious(null);
+      setExisting(null);
+      setWipeExisting(false);
     }
   }, [open, defaultWeek, defaultYear]);
 
-  // Find the most recent previous (year, week) across all clients (excluding the target week)
+  // Detect: (a) existing rows for this exact week  (b) most recent previous week to copy from
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
       setCheckingPrev(true);
       setPrevious(null);
+      setExisting(null);
       const { data: metas } = await supabase
         .from('briefings_meta' as any)
         .select('id, client_id, week_number, year')
@@ -60,6 +70,20 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
         .limit(50);
       if (cancelled) return;
       const list = (metas as any[]) || [];
+
+      // (a) existing rows for the target week
+      const sameTarget = list.filter((m: any) => m.week_number === week && m.year === year);
+      if (sameTarget.length > 0) {
+        const ids = sameTarget.map((m: any) => m.id);
+        const { count } = await supabase
+          .from('briefing_rows')
+          .select('id', { count: 'exact', head: true })
+          .in('meta_briefing_id', ids);
+        if (cancelled) return;
+        if ((count || 0) > 0) setExisting({ metaIds: ids, rowCount: count || 0 });
+      }
+
+      // (b) previous week candidate (different than target)
       const candidate = list.find((m: any) => !(m.week_number === week && m.year === year));
       if (!candidate) {
         setCheckingPrev(false);
@@ -95,15 +119,15 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
       // Create a meta row per client (skip if exists), collect (clientId -> metaId)
       const clientMetaMap = new Map<string, string>();
       for (const c of clients) {
-        const { data: existing } = await supabase
+        const { data: existingMeta } = await supabase
           .from('briefings_meta' as any)
           .select('id')
           .eq('client_id', c.id)
           .eq('week_number', week)
           .eq('year', year)
           .maybeSingle();
-        if (existing) {
-          clientMetaMap.set(c.id, (existing as any).id);
+        if (existingMeta) {
+          clientMetaMap.set(c.id, (existingMeta as any).id);
         } else {
           const { data: created, error } = await supabase
             .from('briefings_meta' as any)
@@ -119,6 +143,15 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
           if (error) throw error;
           clientMetaMap.set(c.id, (created as any).id);
         }
+      }
+
+      // Wipe existing rows in this week if user opted in
+      if (existing && wipeExisting) {
+        const { error: delErr } = await supabase
+          .from('briefing_rows')
+          .delete()
+          .in('meta_briefing_id', Array.from(clientMetaMap.values()));
+        if (delErr) throw delErr;
       }
 
       // Copy rows from previous week if requested
@@ -193,6 +226,23 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
               <Input type="number" min={2024} max={2100} value={year} onChange={e => setYear(parseInt(e.target.value) || defaultYear)} />
             </div>
           </div>
+
+          {existing && (
+            <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-2">
+              <p className="text-xs font-medium text-foreground">
+                Week {week} bestaat al met {existing.rowCount} rij{existing.rowCount !== 1 ? 'en' : ''}.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={wipeExisting}
+                  onChange={(e) => setWipeExisting(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                <span className="text-xs text-muted-foreground">Bestaande rijen verwijderen</span>
+              </label>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-xs">Startpunt</Label>
