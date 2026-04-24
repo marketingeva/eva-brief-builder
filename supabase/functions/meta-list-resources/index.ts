@@ -132,6 +132,8 @@ Deno.serve(async (req) => {
     const resource = asTrimmedString(body.resource) as MetaResource;
     const nameFilter = asTrimmedString(body.name_filter);
     const campaignId = asTrimmedString(body.campaign_id);
+    const adsetId = asTrimmedString(body.adset_id);
+    const adId = asTrimmedString(body.ad_id);
     const pageId = asTrimmedString(body.page_id);
 
     if (!VALID_RESOURCES.has(resource)) {
