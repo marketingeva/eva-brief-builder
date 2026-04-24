@@ -225,6 +225,15 @@ export default function BriefingsPage() {
           ))}
         </div>
       )}
+
+      <NewWeekDialog
+        open={newWeekOpen}
+        onOpenChange={setNewWeekOpen}
+        clients={clients}
+        defaultWeek={getCurrentWeek().week}
+        defaultYear={getCurrentWeek().year}
+        onCreated={handleWeekCreated}
+      />
     </div>
   );
 }
