@@ -143,9 +143,11 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
   const [campaigns, setCampaigns] = useState<Item[]>([]);
   const [adsets, setAdsets] = useState<Item[]>([]);
   const [leadForms, setLeadForms] = useState<Item[]>([]);
+  const [templateAds, setTemplateAds] = useState<Item[]>([]);
   const [loadingC, setLoadingC] = useState(false);
   const [loadingA, setLoadingA] = useState(false);
   const [loadingL, setLoadingL] = useState(false);
+  const [loadingT, setLoadingT] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
