@@ -11,7 +11,6 @@ export interface MetaSelection {
   campaign_id: string;
   adset_id: string;
   lead_form_id: string;
-  template_ad_id: string;
 }
 
 interface Props {
