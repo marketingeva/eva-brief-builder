@@ -69,41 +69,18 @@ export default function BriefingsPage() {
       .sort((a, b) => b.year - a.year || b.week - a.week);
   }, [briefings]);
 
-  const createNewWeek = async () => {
+  const openNewWeekDialog = () => {
     if (clients.length === 0) {
       toast({ title: 'Geen klanten', description: 'Voeg eerst een klant toe.', variant: 'destructive' });
       return;
     }
-    setCreating(true);
-    const { week, year } = getCurrentWeek();
-    // create one row per client (or only first if many) — make for first client; user can add others later
-    const firstClient = clients[0];
-    try {
-      const { data: existing } = await supabase
-        .from('briefings_meta' as any)
-        .select('id')
-        .eq('client_id', firstClient.id)
-        .eq('week_number', week)
-        .eq('year', year)
-        .maybeSingle();
-      if (!existing) {
-        const { error } = await supabase.from('briefings_meta' as any).insert({
-          client_id: firstClient.id,
-          week_number: week,
-          year,
-          status: 'draft',
-          created_by: user?.id,
-        });
-        if (error) throw error;
-      }
-      await loadAll();
-      setSelectedWeek({ week, year });
-      setActiveClientId(firstClient.id);
-    } catch (e: any) {
-      toast({ title: 'Kon week niet aanmaken', description: e.message, variant: 'destructive' });
-    } finally {
-      setCreating(false);
-    }
+    setNewWeekOpen(true);
+  };
+
+  const handleWeekCreated = async ({ week, year, clientId }: { week: number; year: number; clientId: string }) => {
+    await loadAll();
+    setSelectedWeek({ week, year });
+    setActiveClientId(clientId);
   };
 
   const addClientToWeek = async (clientId: string) => {
