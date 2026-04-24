@@ -255,6 +255,10 @@ Deno.serve(async (req) => {
       if (j.error) throw new Error(j.error.message || 'template_ad_detail error');
       return jsonResponse({ data: j });
     }
+
+    return jsonResponse({
+      data,
+      meta: {
         normalized_filter: normalizeMetaName(nameFilter),
         total: data.length,
       },
