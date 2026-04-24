@@ -227,6 +227,23 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
             </div>
           </div>
 
+          {existing && (
+            <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-2">
+              <p className="text-xs font-medium text-foreground">
+                Week {week} bestaat al met {existing.rowCount} rij{existing.rowCount !== 1 ? 'en' : ''}.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={wipeExisting}
+                  onChange={(e) => setWipeExisting(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border"
+                />
+                <span className="text-xs text-muted-foreground">Bestaande rijen verwijderen</span>
+              </label>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label className="text-xs">Startpunt</Label>
             <RadioGroup value={startMode} onValueChange={(v) => setStartMode(v as 'empty' | 'copy')} className="gap-2">
