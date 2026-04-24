@@ -1,12 +1,10 @@
 // Uploads creatives to Meta and creates ads under the chosen ad set.
 //
-// Per file -> 1 advertentie. De eerste tekstvariant van elk veld komt in
-// object_story_spec (de "main" tekst zichtbaar in feed). Als er MEERDERE
-// varianten zijn van primary_text / headline / description, dan wordt
-// asset_feed_spec toegevoegd met bodies/titles/descriptions arrays.
-// Dit activeert "Multiple Text Options" in Meta Ads Manager (1 of N).
-//
-// Werkt op standaard ad sets (Lead Gen). Geen Dynamic Creative vereist.
+// Per file -> 1 advertentie met optioneel meerdere tekstvarianten
+// (Multiple Text Options / Standard Enhancements). Werkt op normale
+// (non-DCO) Lead Gen ad sets door asset_feed_spec te combineren met
+// degrees_of_freedom_spec.creative_features_spec.standard_enhancements
+// (enroll_status: OPT_IN). Dit is de officieel ondersteunde route.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -27,7 +25,7 @@ interface CreativeText {
 interface CreativeItem {
   storage_path: string;
   file_name: string;
-  file_type: string; // image/* or video/*
+  file_type: string;
   texts: CreativeText;
 }
 
@@ -74,23 +72,19 @@ function metaErrorMessage(prefix: string, error: any) {
 async function postToMeta(path: string, token: string, payload: Record<string, unknown>) {
   const params = new URLSearchParams();
   params.set('access_token', token);
-
   for (const [key, value] of Object.entries(payload)) {
     if (value === undefined || value === null) continue;
     params.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
   }
-
   const response = await fetch(`${META_API}/${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params,
   });
   const json = await response.json();
-
   if (json.error) {
     throw new Error(metaErrorMessage(path.split('/').pop() || 'meta', json.error));
   }
-
   return json;
 }
 
@@ -125,11 +119,7 @@ function buildLeadCreativePayload(opts: {
     value: { lead_gen_form_id: leadFormId, link },
   };
 
-  // Always include a valid object_story_spec as the base / fallback creative.
-  // For Lead Ads on standard (non-Dynamic-Creative) ad sets this is what Meta
-  // validates against. The "Multiple Text Options" feature is layered on top
-  // via creative_asset_groups_spec (Flexible Ad Format), which does NOT
-  // require the ad set to be Dynamic Creative.
+  // Base object_story_spec — fallback creative shown when only 1 variant exists.
   const object_story_spec: Record<string, unknown> = { page_id: pageId };
   if (videoId) {
     object_story_spec.video_data = {
@@ -150,30 +140,37 @@ function buildLeadCreativePayload(opts: {
     };
   }
 
-  const payload: Record<string, unknown> = { object_story_spec };
-
-  if (hasMultiple) {
-    // Flexible Ad Format: bundle multiple text variants under a single ad
-    // without requiring Dynamic Creative on the ad set.
-    const texts: Array<Record<string, string>> = [];
-    for (const t of primaryTexts) texts.push({ text: t, text_type: 'primary_text' });
-    for (const t of headlines) texts.push({ text: t, text_type: 'headline' });
-    for (const t of descriptions) texts.push({ text: t, text_type: 'description' });
-
-    const group: Record<string, unknown> = {
-      texts,
-      call_to_action,
-    };
-    if (videoId) {
-      group.videos = [{ video_id: videoId }];
-    } else if (imageHash) {
-      group.images = [{ hash: imageHash }];
-    }
-
-    payload.creative_asset_groups_spec = { groups: [group] };
+  if (!hasMultiple) {
+    return { object_story_spec };
   }
 
-  return payload;
+  // Multiple text options via asset_feed_spec.
+  // This is the documented path that works on standard (non-DCO) ad sets
+  // when combined with standard_enhancements OPT_IN.
+  const asset_feed_spec: Record<string, unknown> = {
+    ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+    bodies: primaryTexts.map((t) => ({ text: t })),
+    titles: headlines.map((t) => ({ text: t })),
+    descriptions: descriptions.map((t) => ({ text: t })),
+    link_urls: [{ website_url: link }],
+    call_to_action_types: [ctaType],
+    call_to_actions: [call_to_action],
+  };
+  if (videoId) {
+    asset_feed_spec.videos = [{ video_id: videoId }];
+  } else if (imageHash) {
+    asset_feed_spec.images = [{ hash: imageHash }];
+  }
+
+  return {
+    object_story_spec,
+    asset_feed_spec,
+    degrees_of_freedom_spec: {
+      creative_features_spec: {
+        standard_enhancements: { enroll_status: 'OPT_IN' },
+      },
+    },
+  };
 }
 
 Deno.serve(async (req) => {

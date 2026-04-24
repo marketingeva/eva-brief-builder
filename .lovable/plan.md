@@ -1,64 +1,35 @@
-# Fix: tekstvarianten alleen bundelen onder één advertentie als de gekozen advertentieset dat echt ondersteunt
-
-## Probleem
-De huidige flow probeert meerdere `primary_texts`, `headlines` en `descriptions` in één advertentie te stoppen via `asset_feed_spec`. Dat hoort bij Meta Dynamic Creative. Voor zulke advertentiesets geldt:
-- er mag maar één advertentie in de set zitten
-- de set moet in de praktijk leeg zijn voor deze aanmaakflow
-
-De fout `100/1885553` komt dus niet door de UI, maar doordat de gekozen advertentieset nog steeds als Dynamic Creative wordt behandeld. Daardoor mislukt de upload zodra er al een advertentie in zit of zodra de set niet geschikt is voor deze flow.
-
 ## Plan
 
-### 1. Ad set-capability check toevoegen vóór upload
-Ik voeg een extra check toe in de backend die eerst de gekozen advertentieset uitleest en bepaalt:
-- of de set Dynamic Creative gebruikt
-- of er al advertenties in die set bestaan
-- of de set geschikt is voor “één advertentie met meerdere tekstvarianten”
+1. Verify the created ad creative against the backend API
+- Read back one of the newly created creatives/ad IDs after launch and inspect the stored fields that matter for bundled text variants: `object_story_spec`, `creative_asset_groups_spec`, `asset_feed_spec`, and any delivery/enrollment fields related to flexible ads.
+- Confirm whether Meta is actually saving the extra text variants or silently falling back to the first variant only.
 
-Zo stopt de flow niet meer pas ná het uploaden, maar meteen met een duidelijke reden.
+2. Correct the ad creative payload for Meta’s accepted flexible-ad structure
+- Update `supabase/functions/meta-upload-creative/index.ts` so the multiple-text path uses the exact payload shape Meta persists for standard lead ads.
+- Keep the single-variant fallback path intact.
+- If required by Meta for this ad type, add the missing creative enrollment/config fields so the ad is treated as a flexible ad instead of a plain single-text creative.
 
-### 2. Uploadlogica opsplitsen in ondersteunde paden
-Ik maak de uploadflow expliciet:
-- **Ondersteund pad:** per creativebestand precies **één advertentie** aanmaken met alle tekstvarianten gebundeld
-- **Niet ondersteund pad:** de flow hard blokkeren met een concrete foutmelding in plaats van een misleidende “launch mislukt” na afloop
+3. Add launch-time diagnostics so failures stop being guesswork
+- Expand the function response and server logs to capture the created creative ID plus the important returned creative fields from Meta.
+- Record a compact debug snapshot in the launch history table when a launch succeeds or fails, so it’s clear whether the issue is payload acceptance, silent field stripping, or UI rendering.
 
-Belangrijk: ik haal de impliciete aanname weg dat elke advertentieset `asset_feed_spec` accepteert voor lead ads. De functie kiest alleen nog het single-ad-variant pad als de advertentiesetconfiguratie dat daadwerkelijk toelaat.
+4. Update the ad detail reader so the app reflects bundled variants correctly
+- Update `supabase/functions/fetch-meta-ads/index.ts` to parse `creative_asset_groups_spec` in addition to `object_story_spec` and `asset_feed_spec`.
+- Return all available text variants, not just the first visible fallback text, so internal previews and debugging match what was actually created.
 
-### 3. UI-feedback verbeteren in Ad Launcher
-In de launcher laat ik vóór het klikken op “Launch Ads” zien wanneer de geselecteerde advertentieset ongeschikt is voor deze variant-flow, inclusief boodschap zoals:
-- deze advertentieset gebruikt Dynamic Creative
-- er staat al een advertentie in deze set
-- kies een lege geschikte advertentieset om tekstvarianten onder één advertentie te uploaden
+5. Validate the full flow end-to-end
+- Relaunch a test ad with 3 primary texts, 3 headlines, and 3 descriptions.
+- Confirm the created creative contains the bundled variants and that Meta shows them as extra options in the editor, not only the first fallback text.
+- Confirm the app’s own readback/debug views show the same variant counts.
 
-Daardoor weet je vooraf waarom het niet kan, in plaats van pas na een mislukte upload.
+## Technical details
+- Files involved:
+  - `supabase/functions/meta-upload-creative/index.ts`
+  - `supabase/functions/fetch-meta-ads/index.ts`
+  - likely one new migration to extend `ad_launches` with debug columns such as returned creative payload / variant counts
+- Current finding: the launch function is succeeding and returning ad IDs, but the current implementation only proves the ad was created, not that Meta persisted the bundled text options.
+- Current code also only reads `asset_feed_spec` and `object_story_spec` in the ad detail fetcher, so even valid flexible-ad variants would currently be under-reported inside the app.
+- I’ll preserve the existing one-ad-per-file behavior and only change the creative payload path for multi-variant launches.
 
-### 4. Resultaatmapping en logging aanscherpen
-Ik zorg dat de response en status per creativebestand duidelijk maken:
-- 1 bestand => 1 advertentie
-- hoeveel tekstvarianten zijn meegestuurd
-- waarom een bestand eventueel is geblokkeerd
-
-Zo blijft de preview in de app overeenkomen met wat Meta daadwerkelijk accepteert.
-
-## Verwacht resultaat
-- Als de gekozen advertentieset geschikt is, worden je **tekstvarianten onder één advertentie** aangemaakt.
-- Als de advertentieset dat niet ondersteunt, krijg je **direct een duidelijke blokkade** in de app in plaats van de generieke Meta-fout achteraf.
-- De app doet dan dus niet meer alsof dit “gewoon zou moeten werken” terwijl Meta het voor die set afwijst.
-
-## Technische details
-- Bestanden: `supabase/functions/meta-upload-creative/index.ts`, `src/pages/client-workspace/AdLauncherTab.tsx`, mogelijk `src/components/ad-launcher/MetaSelectors.tsx` en/of `supabase/functions/meta-list-resources/index.ts`
-- Geen database-migraties
-- Geen nieuwe secrets
-- De fix richt zich op correcte detectie van advertentieset-type + veilige branching van de creative payload
-
-```text
-UI selecteert campagne + ad set
-        ↓
-backend leest ad set details
-        ↓
-[geschikt]  -> 1 ad per bestand, met alle tekstvarianten gebundeld
-[niet geschikt] -> duidelijke foutmelding vóór launch
-```
-
-## Belangrijke nuance
-De echte fix is dus niet “blind opnieuw proberen”, maar de flow laten aansluiten op wat Meta voor dit type advertentieset toestaat. Zonder die check blijf je in dezelfde foutlus hangen.
+## Expected result
+Launching one creative with multiple primary texts/headlines/descriptions will still create one ad, but that ad will genuinely contain the bundled text options and those options will be verifiable both in Meta and inside the app.
