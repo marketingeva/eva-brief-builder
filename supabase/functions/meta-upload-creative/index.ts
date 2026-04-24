@@ -55,6 +55,38 @@ async function uploadVideo(adAccount: string, token: string, blob: Blob, filenam
   return j.id as string;
 }
 
+function metaErrorMessage(prefix: string, error: any) {
+  if (!error) return prefix;
+  const parts = [error.message, error.error_user_title, error.error_user_msg]
+    .filter(Boolean)
+    .join(' — ');
+  const codes = [error.code, error.error_subcode].filter(Boolean).join('/');
+  return `${prefix}: ${parts || 'Onbekende Meta fout'}${codes ? ` (code ${codes})` : ''}`;
+}
+
+async function postToMeta(path: string, token: string, payload: Record<string, unknown>) {
+  const params = new URLSearchParams();
+  params.set('access_token', token);
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue;
+    params.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+  }
+
+  const response = await fetch(`${META_API}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+  });
+  const json = await response.json();
+
+  if (json.error) {
+    throw new Error(metaErrorMessage(path.split('/').pop() || 'meta', json.error));
+  }
+
+  return json;
+}
+
 function buildCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
@@ -173,34 +205,21 @@ Deno.serve(async (req) => {
           videoId,
         });
 
-        const creativeRes = await fetch(`${META_API}/${adAccount}/adcreatives`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            access_token: token,
-            name: c.file_name,
-            ...creativePayload,
-          }),
+        const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, {
+          name: c.file_name,
+          ...creativePayload,
         });
-        const creativeJson = await creativeRes.json();
-        if (creativeJson.error) throw new Error(`adcreative: ${creativeJson.error.message}`);
         const creativeId = creativeJson.id;
 
-        const adRes = await fetch(`${META_API}/${adAccount}/ads`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            access_token: token,
-            name: c.file_name,
-            adset_id: body.adset_id,
-            creative: { creative_id: creativeId },
-            status,
-          }),
-        });
-        const adJson = await adRes.json();
-        if (adJson.error) throw new Error(`ad: ${adJson.error.message}`);
-
         launchRow.creative_id = creativeId;
+
+        const adJson = await postToMeta(`${adAccount}/ads`, token, {
+          name: c.file_name,
+          adset_id: body.adset_id,
+          creative: { creative_id: creativeId },
+          status,
+        });
+
         launchRow.ad_id = adJson.id;
         launchRow.status = 'success';
         results.push({ file_name: c.file_name, ad_id: adJson.id, success: true });
