@@ -4,13 +4,15 @@ const corsHeaders = {
 };
 
 const META_API = 'https://graph.facebook.com/v21.0';
-const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms']);
+const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms', 'template_ads', 'template_ad_detail']);
 
-type MetaResource = 'campaigns' | 'adsets' | 'leadforms';
+type MetaResource = 'campaigns' | 'adsets' | 'leadforms' | 'template_ads' | 'template_ad_detail';
 
 type RequestBody = {
   resource?: unknown;
   campaign_id?: unknown;
+  adset_id?: unknown;
+  ad_id?: unknown;
   name_filter?: unknown;
   page_id?: unknown;
 };
