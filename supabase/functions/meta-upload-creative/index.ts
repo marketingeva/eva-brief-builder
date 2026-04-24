@@ -135,12 +135,6 @@ function buildAssetFeedCreativePayload(opts: {
   return {
     object_story_spec: { page_id: pageId },
     asset_feed_spec,
-    // Disable Advantage+ optimizations so Meta keeps our text variants intact
-    degrees_of_freedom_spec: {
-      creative_features_spec: {
-        standard_enhancements: { enroll_status: 'OPT_OUT' },
-      },
-    },
   };
 }
 
