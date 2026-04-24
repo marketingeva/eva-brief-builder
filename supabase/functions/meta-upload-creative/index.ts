@@ -104,44 +104,7 @@ function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-async function inspectAdSet(adsetId: string, token: string) {
-  // Read the ad set itself
-  const setRes = await fetch(
-    `${META_API}/${adsetId}?fields=id,name,is_dynamic_creative&access_token=${token}`,
-  );
-  const setJson = await setRes.json();
-  if (setJson.error) {
-    throw new Error(metaErrorMessage('adset lookup', setJson.error));
-  }
-
-  // Count current non-deleted ads in this set (paged, lightweight)
-  let existingAds = 0;
-  let next: string | null =
-    `${META_API}/${adsetId}/ads?fields=id,effective_status&limit=200&access_token=${token}`;
-  let safety = 0;
-  while (next && safety < 20) {
-    const r = await fetch(next);
-    const j = await r.json();
-    if (j.error) {
-      throw new Error(metaErrorMessage('adset ads lookup', j.error));
-    }
-    for (const ad of j.data || []) {
-      if (ad.effective_status !== 'DELETED' && ad.effective_status !== 'ARCHIVED') {
-        existingAds += 1;
-      }
-    }
-    next = j.paging?.next || null;
-    safety += 1;
-  }
-
-  return {
-    is_dynamic_creative: !!setJson.is_dynamic_creative,
-    existing_ads: existingAds,
-    name: setJson.name as string | undefined,
-  };
-}
-
-function buildDynamicCreativePayload(opts: {
+function buildLeadCreativePayload(opts: {
   pageId: string;
   leadFormId: string;
   text: CreativeText;
@@ -152,90 +115,62 @@ function buildDynamicCreativePayload(opts: {
   const link = text.link_url || 'http://fb.me/';
   const ctaType = text.cta || 'SIGN_UP';
 
-  // Meta limits: max 5 per text field
-  const bodies = cleanVariants(text.primary_texts).slice(0, 5).map((t) => ({ text: t }));
-  const titles = cleanVariants(text.headlines).slice(0, 5).map((t) => ({ text: t }));
-  const descriptions = cleanVariants(text.descriptions).slice(0, 5).map((t) => ({ text: t }));
+  const primaryTexts = cleanVariants(text.primary_texts).slice(0, 5);
+  const headlines = cleanVariants(text.headlines).slice(0, 5);
+  const descriptions = cleanVariants(text.descriptions).slice(0, 5);
 
-  if (bodies.length === 0) bodies.push({ text: ' ' });
-  if (titles.length === 0) titles.push({ text: ' ' });
-  if (descriptions.length === 0) descriptions.push({ text: ' ' });
-
-  const asset_feed_spec: Record<string, unknown> = {
-    bodies,
-    titles,
-    descriptions,
-    link_urls: [{ website_url: link }],
-    ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-    call_to_action_types: [ctaType],
-    call_to_actions: [
-      {
-        type: ctaType,
-        value: { lead_gen_form_id: leadFormId, link },
-      },
-    ],
-  };
-
-  if (videoId) {
-    asset_feed_spec.videos = [{ video_id: videoId }];
-  } else if (imageHash) {
-    asset_feed_spec.images = [{ hash: imageHash }];
-  }
-
-  return {
-    object_story_spec: { page_id: pageId },
-    asset_feed_spec,
-  };
-}
-
-function buildStandardLeadCreativePayload(opts: {
-  pageId: string;
-  leadFormId: string;
-  text: CreativeText;
-  imageHash?: string;
-  videoId?: string;
-}) {
-  const { pageId, leadFormId, text, imageHash, videoId } = opts;
-  const link = text.link_url || 'http://fb.me/';
-  const ctaType = text.cta || 'SIGN_UP';
-
-  const message = cleanVariants(text.primary_texts)[0] || '';
-  const name = cleanVariants(text.headlines)[0] || '';
-  const description = cleanVariants(text.descriptions)[0] || '';
+  const mainPrimary = primaryTexts[0] || '';
+  const mainHeadline = headlines[0] || '';
+  const mainDescription = descriptions[0] || '';
 
   const call_to_action = {
     type: ctaType,
     value: { lead_gen_form_id: leadFormId, link },
   };
 
+  // Build object_story_spec with the main creative (image/video + first text variant)
+  const object_story_spec: Record<string, unknown> = { page_id: pageId };
+
   if (videoId) {
-    return {
-      object_story_spec: {
-        page_id: pageId,
-        video_data: {
-          video_id: videoId,
-          message,
-          title: name,
-          link_description: description,
-          call_to_action,
-        },
-      },
+    object_story_spec.video_data = {
+      video_id: videoId,
+      message: mainPrimary,
+      title: mainHeadline,
+      link_description: mainDescription,
+      call_to_action,
+    };
+  } else {
+    object_story_spec.link_data = {
+      message: mainPrimary,
+      link,
+      name: mainHeadline,
+      description: mainDescription,
+      image_hash: imageHash,
+      call_to_action,
     };
   }
 
-  return {
-    object_story_spec: {
-      page_id: pageId,
-      link_data: {
-        message,
-        link,
-        name,
-        description,
-        image_hash: imageHash,
-        call_to_action,
-      },
-    },
-  };
+  const payload: Record<string, unknown> = { object_story_spec };
+
+  // Only add asset_feed_spec if there are MULTIPLE variants in any field.
+  // This activates "Multiple Text Options" in Meta Ads Manager (1 of N).
+  const hasMultiple =
+    primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+
+  if (hasMultiple) {
+    const bodies = (primaryTexts.length > 0 ? primaryTexts : [' ']).map((t) => ({ text: t }));
+    const titles = (headlines.length > 0 ? headlines : [' ']).map((t) => ({ text: t }));
+    const descs = (descriptions.length > 0 ? descriptions : [' ']).map((t) => ({ text: t }));
+
+    payload.asset_feed_spec = {
+      bodies,
+      titles,
+      descriptions: descs,
+      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+    };
+  }
+
+  return payload;
 }
 
 Deno.serve(async (req) => {
