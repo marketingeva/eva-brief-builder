@@ -250,7 +250,6 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
           searchPlaceholder="Zoek campagne..."
           emptyText="Geen campagnes gevonden"
           loading={loadingC}
-          showBudgetPill
         />
       </div>
 

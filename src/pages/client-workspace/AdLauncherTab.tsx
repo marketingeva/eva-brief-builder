@@ -253,9 +253,23 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-full bg-muted text-[10px] font-semibold" title="Primary texts">P{pCount}</span>
-                      <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-full bg-muted text-[10px] font-semibold" title="Headlines">H{hCount}</span>
-                      <span className="inline-flex items-center justify-center h-7 min-w-7 px-1.5 rounded-full bg-muted text-[10px] font-semibold" title="Descriptions">D{dCount}</span>
+                      {([
+                        ['P', pCount, 'Primary texts'],
+                        ['H', hCount, 'Headlines'],
+                        ['D', dCount, 'Descriptions'],
+                      ] as const).map(([label, count, title]) => (
+                        <span
+                          key={label}
+                          title={`${title}: ${count}`}
+                          className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-[11px] font-semibold border ${
+                            count > 0
+                              ? 'bg-success/15 text-success border-success/30'
+                              : 'bg-muted text-muted-foreground border-transparent'
+                          }`}
+                        >
+                          {label}
+                        </span>
+                      ))}
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingId(row.id)} title="Teksten bewerken">
                         <Pencil className="h-4 w-4" />
                       </Button>
