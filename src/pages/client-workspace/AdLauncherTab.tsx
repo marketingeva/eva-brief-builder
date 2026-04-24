@@ -32,7 +32,7 @@ const defaultText = (): CreativeText => ({
   headlines: [''],
   descriptions: [''],
   cta: 'SIGN_UP',
-  link_url: '',
+  link_url: 'http://fb.me/',
 });
 
 export default function AdLauncherTab({ clientId, clientName }: Props) {
@@ -40,7 +40,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [nameFilter, setNameFilter] = useState<string | null>(null);
   const [pageId, setPageId] = useState<string | null>(null);
   const [selection, setSelection] = useState<MetaSelection>({
-    campaign_id: '', adset_id: '', lead_form_id: '', link_url: 'http://fb.me/',
+    campaign_id: '', adset_id: '', lead_form_id: '',
   });
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
         storage_path: r.storage_path!,
         file_name: r.file.name,
         file_type: r.file.type,
-        texts: { ...r.texts, link_url: r.texts.link_url || selection.link_url || 'http://fb.me/' },
+        texts: { ...r.texts, link_url: r.texts.link_url || 'http://fb.me/' },
       })),
     };
 
