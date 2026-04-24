@@ -258,6 +258,7 @@ export type Database = {
           sort_order: number | null
           status: string | null
           usps: string | null
+          vacature_url: string | null
         }
         Insert: {
           briefing_id?: string | null
@@ -278,6 +279,7 @@ export type Database = {
           sort_order?: number | null
           status?: string | null
           usps?: string | null
+          vacature_url?: string | null
         }
         Update: {
           briefing_id?: string | null
@@ -298,6 +300,7 @@ export type Database = {
           sort_order?: number | null
           status?: string | null
           usps?: string | null
+          vacature_url?: string | null
         }
         Relationships: [
           {
