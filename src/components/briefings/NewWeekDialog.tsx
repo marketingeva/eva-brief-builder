@@ -119,15 +119,15 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
       // Create a meta row per client (skip if exists), collect (clientId -> metaId)
       const clientMetaMap = new Map<string, string>();
       for (const c of clients) {
-        const { data: existing } = await supabase
+        const { data: existingMeta } = await supabase
           .from('briefings_meta' as any)
           .select('id')
           .eq('client_id', c.id)
           .eq('week_number', week)
           .eq('year', year)
           .maybeSingle();
-        if (existing) {
-          clientMetaMap.set(c.id, (existing as any).id);
+        if (existingMeta) {
+          clientMetaMap.set(c.id, (existingMeta as any).id);
         } else {
           const { data: created, error } = await supabase
             .from('briefings_meta' as any)
@@ -143,6 +143,15 @@ export default function NewWeekDialog({ open, onOpenChange, clients, defaultWeek
           if (error) throw error;
           clientMetaMap.set(c.id, (created as any).id);
         }
+      }
+
+      // Wipe existing rows in this week if user opted in
+      if (existing && wipeExisting) {
+        const { error: delErr } = await supabase
+          .from('briefing_rows')
+          .delete()
+          .in('meta_briefing_id', Array.from(clientMetaMap.values()));
+        if (delErr) throw delErr;
       }
 
       // Copy rows from previous week if requested
