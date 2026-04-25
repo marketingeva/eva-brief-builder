@@ -335,28 +335,37 @@ function drawRowCard(
   doc.setFontSize(8);
   doc.text(String(r.index + 1), circleX, circleY + 1.5, { align: 'center' });
 
-  // Functie (bold, dark)
-  const cx = circleX + circleR + 4;
+  // Compute available width for functie + chip
+  const headerStartX = circleX + circleR + 4;
+  const headerAvailW = contentW - (headerStartX - x) - padX;
+
+  // Locatie chip — measure full text first (no truncation)
+  const locText = r.locaties.join(', ') || 'Geen locatie';
+  const chipPadX = 3;
+  const iconGap = 1.6;
+  const iconSize = 3.2;
+  const chipH = 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  const locTextWFull = doc.getTextWidth(locText);
+  // Cap chip text width so chip never exceeds 55% of header row
+  const locTextWMax = Math.max(20, headerAvailW * 0.55 - iconSize - iconGap - chipPadX * 2);
+  const locTextW = Math.min(locTextWFull, locTextWMax);
+  const chipW = iconSize + iconGap + locTextW + chipPadX * 2;
+
+  // Functie (bold, dark) — gets remaining space, may wrap
   setText(doc, C.ink);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   const functieText = r.functies.join(', ') || 'Geen functie';
-  const maxFunctieW = contentW * 0.45;
-  const functieFit = doc.splitTextToSize(functieText, maxFunctieW)[0];
-  doc.text(functieFit, cx, circleY + 2);
-  const functieW = doc.getTextWidth(functieFit);
+  const functieMaxW = headerAvailW - chipW - 5;
+  const functieLines = doc.splitTextToSize(functieText, Math.max(20, functieMaxW));
+  const functieFirst = functieLines[0];
+  doc.text(functieFirst, headerStartX, circleY + 2);
+  const functieW = doc.getTextWidth(functieFirst);
 
-  // Locatie chip — directly next to functie with a real map-pin icon
-  const locText = r.locaties.join(', ') || 'Geen locatie';
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  const locTextW = Math.min(doc.getTextWidth(locText), contentW * 0.4);
-  const chipPadX = 3;
-  const iconGap = 1.6;
-  const iconSize = 3.2;
-  const chipW = iconSize + iconGap + locTextW + chipPadX * 2;
-  const chipH = 6;
-  const chipX = cx + functieW + 5;
+  // Chip placed right after functie text on the same line
+  const chipX = headerStartX + functieW + 5;
   const chipY = circleY - chipH / 2 + 0.4;
 
   setFill(doc, C.brandLight);
@@ -368,8 +377,15 @@ function drawRowCard(
   setText(doc, C.brand);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  const locFit = doc.splitTextToSize(locText, locTextW)[0];
-  doc.text(locFit, chipX + chipPadX + iconSize + iconGap, chipY + chipH - 2);
+  // Truncate with ellipsis only if it exceeds the cap
+  let locDisplay = locText;
+  if (locTextWFull > locTextWMax) {
+    while (locDisplay.length > 1 && doc.getTextWidth(locDisplay + '…') > locTextW) {
+      locDisplay = locDisplay.slice(0, -1);
+    }
+    locDisplay += '…';
+  }
+  doc.text(locDisplay, chipX + chipPadX + iconSize + iconGap, chipY + chipH - 2);
 
   // Vacature link (second line, small)
   if (r.vacature_url) {
