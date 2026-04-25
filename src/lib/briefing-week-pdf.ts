@@ -82,6 +82,25 @@ function paintBackground(doc: jsPDF) {
   doc.rect(0, 0, PAGE.w, PAGE.h, 'F');
 }
 
+// Map-pin icon — vector approximation of Lucide MapPin, drawn at (cx, baselineY)
+// `size` is the icon height in mm.
+function drawMapPin(doc: jsPDF, cx: number, cy: number, size: number, color: [number, number, number]) {
+  setDraw(doc, color);
+  setFill(doc, color);
+  doc.setLineWidth(size * 0.12);
+  // Teardrop body (circle on top + triangle to tip)
+  const r = size * 0.34;
+  const topY = cy - size * 0.5 + r;       // center of circle
+  const tipY = cy + size * 0.5;
+  doc.circle(cx, topY, r, 'F');
+  // Triangle from circle bottom to tip
+  const baseY = topY + r * 0.55;
+  doc.triangle(cx - r * 0.85, baseY, cx + r * 0.85, baseY, cx, tipY, 'F');
+  // Inner dot (cut-out look)
+  setFill(doc, C.white);
+  doc.circle(cx, topY, r * 0.42, 'F');
+}
+
 function drawPageChrome(doc: jsPDF, week: number, year: number, clientName?: string) {
   // Slim deep-purple top bar (no yellow)
   setFill(doc, C.brand);
