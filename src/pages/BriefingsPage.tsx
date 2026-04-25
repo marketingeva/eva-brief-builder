@@ -43,6 +43,48 @@ export default function BriefingsPage() {
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newWeekOpen, setNewWeekOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportWeek = async () => {
+    if (!selectedWeek) return;
+    const { week, year } = selectedWeek;
+    const weekBriefings = briefings.filter(b => b.week_number === week && b.year === year);
+    if (weekBriefings.length === 0) {
+      toast({ title: 'Geen briefings', description: 'Deze week bevat geen klanten.', variant: 'destructive' });
+      return;
+    }
+    setExporting(true);
+    try {
+      const ids = weekBriefings.map(b => b.id);
+      const { data: rowsData, error } = await supabase
+        .from('briefing_rows')
+        .select('*')
+        .in('meta_briefing_id', ids)
+        .order('sort_order');
+      if (error) throw error;
+      const rows = (rowsData as any[]) || [];
+      const blocks = weekBriefings
+        .map(b => ({
+          clientName: clients.find(c => c.id === b.client_id)?.name || 'Onbekende klant',
+          status: b.status,
+          rows: rows
+            .filter(r => r.meta_briefing_id === b.id)
+            .map(r => ({
+              ...r,
+              functies: r.functies || (r.functie ? [r.functie] : []),
+              locaties: r.locaties || (r.locatie ? [r.locatie] : []),
+              creative_image_paths: r.creative_image_paths || (r.creative_image_path ? [r.creative_image_path] : []),
+            })),
+        }))
+        .sort((a, b) => a.clientName.localeCompare(b.clientName));
+      await exportWeekToPDF({ week, year, clientBlocks: blocks });
+      toast({ title: 'PDF geëxporteerd ✓', description: `Week ${week} · ${year}` });
+    } catch (e: any) {
+      toast({ title: 'Export mislukt', description: e?.message || 'Onbekende fout', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadAll = async () => {
     setLoading(true);
