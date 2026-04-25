@@ -168,6 +168,10 @@ export default function BriefingsPage() {
               <p className="text-xs text-muted-foreground">Briefing voor de grafisch vormgever</p>
             </div>
           </div>
+          <Button size="sm" variant="outline" onClick={handleExportWeek} disabled={exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+            Exporteer hele week (PDF)
+          </Button>
         </div>
 
         {activeBriefing && (
