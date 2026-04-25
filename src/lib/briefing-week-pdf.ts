@@ -83,11 +83,9 @@ function paintBackground(doc: jsPDF) {
 }
 
 function drawPageChrome(doc: jsPDF, week: number, year: number, clientName?: string) {
-  // Top thin accent line
-  setFill(doc, C.primary);
+  // Slim deep-purple top bar (no yellow)
+  setFill(doc, C.brand);
   doc.rect(0, 0, PAGE.w, 4, 'F');
-  setFill(doc, C.accent);
-  doc.rect(0, 4, PAGE.w, 0.6, 'F');
 
   // Header text
   setText(doc, C.muted);
@@ -108,14 +106,12 @@ function drawPageChrome(doc: jsPDF, week: number, year: number, clientName?: str
 
 function drawCover(doc: jsPDF, week: number, year: number, clientCount: number, rowCount: number) {
   paintBackground(doc);
-  // Big brand block
-  setFill(doc, C.primary);
-  doc.rect(0, 0, PAGE.w, 110, 'F');
-  setFill(doc, C.accent);
-  doc.rect(0, 110, PAGE.w, 2, 'F');
+  // Deep-purple brand block (sidebar color)
+  setFill(doc, C.brand);
+  doc.rect(0, 0, PAGE.w, 112, 'F');
 
   // Eyebrow
-  setText(doc, C.accent);
+  setText(doc, C.brandLight);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.text('WEEKBRIEFING', PAGE.margin, 38);
@@ -128,7 +124,7 @@ function drawCover(doc: jsPDF, week: number, year: number, clientCount: number, 
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(16);
-  setText(doc, [220, 210, 245]);
+  setText(doc, C.brandLight);
   doc.text(`${year}`, PAGE.margin, 88);
 
   // Stats card on the right
@@ -160,7 +156,7 @@ function drawCover(doc: jsPDF, week: number, year: number, clientCount: number, 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setText(doc, C.muted);
-  doc.text(rowCount === 1 ? 'briefing-rij' : 'briefing-rijen', cardX + 60, cardY + 39);
+  doc.text('totaal aantal advertenties', cardX + 60, cardY + 39);
 
   // Divider
   setDraw(doc, [230, 230, 230]);
