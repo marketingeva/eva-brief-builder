@@ -212,7 +212,7 @@ function drawClientHeader(doc: jsPDF, name: string, status: string, rowCount: nu
   doc.roundedRect(PAGE.margin, y, PAGE.w - PAGE.margin * 2, h, 2, 2, 'FD');
 
   // Accent bar
-  setFill(doc, C.primary);
+  setFill(doc, C.brand);
   doc.roundedRect(PAGE.margin, y, 1.6, h, 0.8, 0.8, 'F');
 
   setText(doc, C.ink);
