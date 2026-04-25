@@ -317,22 +317,40 @@ function drawRowCard(
   doc.text(String(r.index + 1), circleX, circleY + 1.5, { align: 'center' });
 
   // Functie (bold, dark)
-  let cx = circleX + circleR + 4;
+  const cx = circleX + circleR + 4;
   setText(doc, C.ink);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   const functieText = r.functies.join(', ') || 'Geen functie';
-  // truncate if too long for header
-  const maxFunctieW = contentW * 0.55;
+  const maxFunctieW = contentW * 0.45;
   const functieFit = doc.splitTextToSize(functieText, maxFunctieW)[0];
   doc.text(functieFit, cx, circleY + 2);
+  const functieW = doc.getTextWidth(functieFit);
 
-  // Locatie (right-aligned within content area)
+  // Locatie chip — directly next to functie with a real map-pin icon
   const locText = r.locaties.join(', ') || 'Geen locatie';
-  setText(doc, C.muted);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`📍 ${locText}`.replace('📍 ', '· '), x + contentW - padX, circleY + 2, { align: 'right' });
+  doc.setFontSize(8.5);
+  const locTextW = Math.min(doc.getTextWidth(locText), contentW * 0.4);
+  const chipPadX = 3;
+  const iconGap = 1.6;
+  const iconSize = 3.2;
+  const chipW = iconSize + iconGap + locTextW + chipPadX * 2;
+  const chipH = 6;
+  const chipX = cx + functieW + 5;
+  const chipY = circleY - chipH / 2 + 0.4;
+
+  setFill(doc, C.brandLight);
+  doc.roundedRect(chipX, chipY, chipW, chipH, chipH / 2, chipH / 2, 'F');
+
+  // Map-pin icon (vector path)
+  drawMapPin(doc, chipX + chipPadX + iconSize / 2, chipY + chipH / 2, iconSize, C.brand);
+
+  setText(doc, C.brand);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  const locFit = doc.splitTextToSize(locText, locTextW)[0];
+  doc.text(locFit, chipX + chipPadX + iconSize + iconGap, chipY + chipH - 2);
 
   // Vacature link (second line, small)
   if (r.vacature_url) {
