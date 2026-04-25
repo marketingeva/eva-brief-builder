@@ -237,10 +237,10 @@ function drawClientHeader(doc: jsPDF, name: string, status: string, rowCount: nu
   const pillX = PAGE.w - PAGE.margin - pillW - 4;
   const pillY = y + (h - pillH) / 2;
 
-  let pillFill: [number, number, number] = C.primarySoft;
-  let pillText: [number, number, number] = C.primary;
+  let pillFill: [number, number, number] = C.brandLight;
+  let pillText: [number, number, number] = C.brand;
   if (status === 'approved') { pillFill = [223, 245, 232]; pillText = C.success; }
-  if (status === 'in_review') { pillFill = [255, 243, 215]; pillText = [165, 115, 20]; }
+  if (status === 'in_review') { pillFill = [235, 230, 240]; pillText = C.brand; }
   if (status === 'draft') { pillFill = [235, 232, 226]; pillText = C.muted; }
 
   setFill(doc, pillFill);
