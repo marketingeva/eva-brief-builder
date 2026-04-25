@@ -3,11 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronLeft, Calendar, Loader2 } from 'lucide-react';
+import { Plus, ChevronLeft, Calendar, Loader2, FileDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import BriefingTable from '@/components/briefings/BriefingTable';
 import NewWeekDialog from '@/components/briefings/NewWeekDialog';
 import { cn } from '@/lib/utils';
+import { exportWeekToPDF } from '@/lib/briefing-week-pdf';
 
 interface Client { id: string; name: string; }
 interface MetaBriefing {
@@ -42,6 +43,48 @@ export default function BriefingsPage() {
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newWeekOpen, setNewWeekOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportWeek = async () => {
+    if (!selectedWeek) return;
+    const { week, year } = selectedWeek;
+    const weekBriefings = briefings.filter(b => b.week_number === week && b.year === year);
+    if (weekBriefings.length === 0) {
+      toast({ title: 'Geen briefings', description: 'Deze week bevat geen klanten.', variant: 'destructive' });
+      return;
+    }
+    setExporting(true);
+    try {
+      const ids = weekBriefings.map(b => b.id);
+      const { data: rowsData, error } = await supabase
+        .from('briefing_rows')
+        .select('*')
+        .in('meta_briefing_id', ids)
+        .order('sort_order');
+      if (error) throw error;
+      const rows = (rowsData as any[]) || [];
+      const blocks = weekBriefings
+        .map(b => ({
+          clientName: clients.find(c => c.id === b.client_id)?.name || 'Onbekende klant',
+          status: b.status,
+          rows: rows
+            .filter(r => r.meta_briefing_id === b.id)
+            .map(r => ({
+              ...r,
+              functies: r.functies || (r.functie ? [r.functie] : []),
+              locaties: r.locaties || (r.locatie ? [r.locatie] : []),
+              creative_image_paths: r.creative_image_paths || (r.creative_image_path ? [r.creative_image_path] : []),
+            })),
+        }))
+        .sort((a, b) => a.clientName.localeCompare(b.clientName));
+      await exportWeekToPDF({ week, year, clientBlocks: blocks });
+      toast({ title: 'PDF geëxporteerd ✓', description: `Week ${week} · ${year}` });
+    } catch (e: any) {
+      toast({ title: 'Export mislukt', description: e?.message || 'Onbekende fout', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadAll = async () => {
     setLoading(true);
@@ -125,6 +168,10 @@ export default function BriefingsPage() {
               <p className="text-xs text-muted-foreground">Briefing voor de grafisch vormgever</p>
             </div>
           </div>
+          <Button size="sm" variant="outline" onClick={handleExportWeek} disabled={exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+            Exporteer hele week (PDF)
+          </Button>
         </div>
 
         {activeBriefing && (
