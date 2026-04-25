@@ -309,9 +309,9 @@ function drawRowCard(
   const circleR = 3.4;
   const circleX = x + padX + circleR;
   const circleY = headerY + circleR + 0.5;
-  setFill(doc, C.primarySoft);
+  setFill(doc, C.brand);
   doc.circle(circleX, circleY, circleR, 'F');
-  setText(doc, C.primary);
+  setText(doc, C.white);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.text(String(r.index + 1), circleX, circleY + 1.5, { align: 'center' });
