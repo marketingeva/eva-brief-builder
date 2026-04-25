@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
   approved: 'Goedgekeurd',
 };
 
-// Match app palette (warm off-white, brand purple, yellow accent)
+// Match app palette — sidebar deep purple as brand anchor (no yellow)
 const C = {
   ink: [24, 22, 32] as [number, number, number],
   body: [60, 58, 70] as [number, number, number],
@@ -35,9 +35,10 @@ const C = {
   divider: [240, 236, 230] as [number, number, number],
   bg: [251, 249, 245] as [number, number, number],       // warm off-white
   card: [255, 254, 251] as [number, number, number],
-  primary: [88, 56, 184] as [number, number, number],    // brand purple
-  primarySoft: [241, 236, 252] as [number, number, number],
-  accent: [245, 197, 66] as [number, number, number],    // yellow
+  brand: [42, 24, 57] as [number, number, number],       // sidebar deep purple
+  brandLight: [225, 215, 234] as [number, number, number],
+  primary: [101, 43, 151] as [number, number, number],   // primary purple
+  primarySoft: [240, 234, 246] as [number, number, number],
   white: [255, 255, 255] as [number, number, number],
   success: [34, 139, 92] as [number, number, number],
 };
@@ -81,12 +82,29 @@ function paintBackground(doc: jsPDF) {
   doc.rect(0, 0, PAGE.w, PAGE.h, 'F');
 }
 
+// Map-pin icon — vector approximation of Lucide MapPin, drawn at (cx, baselineY)
+// `size` is the icon height in mm.
+function drawMapPin(doc: jsPDF, cx: number, cy: number, size: number, color: [number, number, number]) {
+  setDraw(doc, color);
+  setFill(doc, color);
+  doc.setLineWidth(size * 0.12);
+  // Teardrop body (circle on top + triangle to tip)
+  const r = size * 0.34;
+  const topY = cy - size * 0.5 + r;       // center of circle
+  const tipY = cy + size * 0.5;
+  doc.circle(cx, topY, r, 'F');
+  // Triangle from circle bottom to tip
+  const baseY = topY + r * 0.55;
+  doc.triangle(cx - r * 0.85, baseY, cx + r * 0.85, baseY, cx, tipY, 'F');
+  // Inner dot (cut-out look)
+  setFill(doc, C.white);
+  doc.circle(cx, topY, r * 0.42, 'F');
+}
+
 function drawPageChrome(doc: jsPDF, week: number, year: number, clientName?: string) {
-  // Top thin accent line
-  setFill(doc, C.primary);
+  // Slim deep-purple top bar (no yellow)
+  setFill(doc, C.brand);
   doc.rect(0, 0, PAGE.w, 4, 'F');
-  setFill(doc, C.accent);
-  doc.rect(0, 4, PAGE.w, 0.6, 'F');
 
   // Header text
   setText(doc, C.muted);
@@ -107,14 +125,12 @@ function drawPageChrome(doc: jsPDF, week: number, year: number, clientName?: str
 
 function drawCover(doc: jsPDF, week: number, year: number, clientCount: number, rowCount: number) {
   paintBackground(doc);
-  // Big brand block
-  setFill(doc, C.primary);
-  doc.rect(0, 0, PAGE.w, 110, 'F');
-  setFill(doc, C.accent);
-  doc.rect(0, 110, PAGE.w, 2, 'F');
+  // Deep-purple brand block (sidebar color)
+  setFill(doc, C.brand);
+  doc.rect(0, 0, PAGE.w, 112, 'F');
 
   // Eyebrow
-  setText(doc, C.accent);
+  setText(doc, C.brandLight);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.text('WEEKBRIEFING', PAGE.margin, 38);
@@ -127,7 +143,7 @@ function drawCover(doc: jsPDF, week: number, year: number, clientCount: number, 
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(16);
-  setText(doc, [220, 210, 245]);
+  setText(doc, C.brandLight);
   doc.text(`${year}`, PAGE.margin, 88);
 
   // Stats card on the right
@@ -159,7 +175,7 @@ function drawCover(doc: jsPDF, week: number, year: number, clientCount: number, 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   setText(doc, C.muted);
-  doc.text(rowCount === 1 ? 'briefing-rij' : 'briefing-rijen', cardX + 60, cardY + 39);
+  doc.text('totaal aantal advertenties', cardX + 60, cardY + 39);
 
   // Divider
   setDraw(doc, [230, 230, 230]);
@@ -196,7 +212,7 @@ function drawClientHeader(doc: jsPDF, name: string, status: string, rowCount: nu
   doc.roundedRect(PAGE.margin, y, PAGE.w - PAGE.margin * 2, h, 2, 2, 'FD');
 
   // Accent bar
-  setFill(doc, C.primary);
+  setFill(doc, C.brand);
   doc.roundedRect(PAGE.margin, y, 1.6, h, 0.8, 0.8, 'F');
 
   setText(doc, C.ink);
@@ -221,10 +237,10 @@ function drawClientHeader(doc: jsPDF, name: string, status: string, rowCount: nu
   const pillX = PAGE.w - PAGE.margin - pillW - 4;
   const pillY = y + (h - pillH) / 2;
 
-  let pillFill: [number, number, number] = C.primarySoft;
-  let pillText: [number, number, number] = C.primary;
+  let pillFill: [number, number, number] = C.brandLight;
+  let pillText: [number, number, number] = C.brand;
   if (status === 'approved') { pillFill = [223, 245, 232]; pillText = C.success; }
-  if (status === 'in_review') { pillFill = [255, 243, 215]; pillText = [165, 115, 20]; }
+  if (status === 'in_review') { pillFill = [235, 230, 240]; pillText = C.brand; }
   if (status === 'draft') { pillFill = [235, 232, 226]; pillText = C.muted; }
 
   setFill(doc, pillFill);
@@ -312,34 +328,52 @@ function drawRowCard(
   const circleR = 3.4;
   const circleX = x + padX + circleR;
   const circleY = headerY + circleR + 0.5;
-  setFill(doc, C.primarySoft);
+  setFill(doc, C.brand);
   doc.circle(circleX, circleY, circleR, 'F');
-  setText(doc, C.primary);
+  setText(doc, C.white);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.text(String(r.index + 1), circleX, circleY + 1.5, { align: 'center' });
 
   // Functie (bold, dark)
-  let cx = circleX + circleR + 4;
+  const cx = circleX + circleR + 4;
   setText(doc, C.ink);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   const functieText = r.functies.join(', ') || 'Geen functie';
-  // truncate if too long for header
-  const maxFunctieW = contentW * 0.55;
+  const maxFunctieW = contentW * 0.45;
   const functieFit = doc.splitTextToSize(functieText, maxFunctieW)[0];
   doc.text(functieFit, cx, circleY + 2);
+  const functieW = doc.getTextWidth(functieFit);
 
-  // Locatie (right-aligned within content area)
+  // Locatie chip — directly next to functie with a real map-pin icon
   const locText = r.locaties.join(', ') || 'Geen locatie';
-  setText(doc, C.muted);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`📍 ${locText}`.replace('📍 ', '· '), x + contentW - padX, circleY + 2, { align: 'right' });
+  doc.setFontSize(8.5);
+  const locTextW = Math.min(doc.getTextWidth(locText), contentW * 0.4);
+  const chipPadX = 3;
+  const iconGap = 1.6;
+  const iconSize = 3.2;
+  const chipW = iconSize + iconGap + locTextW + chipPadX * 2;
+  const chipH = 6;
+  const chipX = cx + functieW + 5;
+  const chipY = circleY - chipH / 2 + 0.4;
+
+  setFill(doc, C.brandLight);
+  doc.roundedRect(chipX, chipY, chipW, chipH, chipH / 2, chipH / 2, 'F');
+
+  // Map-pin icon (vector path)
+  drawMapPin(doc, chipX + chipPadX + iconSize / 2, chipY + chipH / 2, iconSize, C.brand);
+
+  setText(doc, C.brand);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  const locFit = doc.splitTextToSize(locText, locTextW)[0];
+  doc.text(locFit, chipX + chipPadX + iconSize + iconGap, chipY + chipH - 2);
 
   // Vacature link (second line, small)
   if (r.vacature_url) {
-    setText(doc, C.primary);
+    setText(doc, C.brand);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     const linkY = headerY + 12;
