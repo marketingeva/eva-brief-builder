@@ -3,11 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronLeft, Calendar, Loader2 } from 'lucide-react';
+import { Plus, ChevronLeft, Calendar, Loader2, FileDown } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import BriefingTable from '@/components/briefings/BriefingTable';
 import NewWeekDialog from '@/components/briefings/NewWeekDialog';
 import { cn } from '@/lib/utils';
+import { exportWeekToPDF } from '@/lib/briefing-week-pdf';
 
 interface Client { id: string; name: string; }
 interface MetaBriefing {
