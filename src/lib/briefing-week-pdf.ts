@@ -373,7 +373,7 @@ function drawRowCard(
 
   // Vacature link (second line, small)
   if (r.vacature_url) {
-    setText(doc, C.primary);
+    setText(doc, C.brand);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     const linkY = headerY + 12;
