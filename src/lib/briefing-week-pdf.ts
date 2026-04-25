@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
   approved: 'Goedgekeurd',
 };
 
-// Match app palette (warm off-white, brand purple, yellow accent)
+// Match app palette — sidebar deep purple as brand anchor (no yellow)
 const C = {
   ink: [24, 22, 32] as [number, number, number],
   body: [60, 58, 70] as [number, number, number],
@@ -35,9 +35,10 @@ const C = {
   divider: [240, 236, 230] as [number, number, number],
   bg: [251, 249, 245] as [number, number, number],       // warm off-white
   card: [255, 254, 251] as [number, number, number],
-  primary: [88, 56, 184] as [number, number, number],    // brand purple
-  primarySoft: [241, 236, 252] as [number, number, number],
-  accent: [245, 197, 66] as [number, number, number],    // yellow
+  brand: [42, 24, 57] as [number, number, number],       // sidebar deep purple
+  brandLight: [225, 215, 234] as [number, number, number],
+  primary: [101, 43, 151] as [number, number, number],   // primary purple
+  primarySoft: [240, 234, 246] as [number, number, number],
   white: [255, 255, 255] as [number, number, number],
   success: [34, 139, 92] as [number, number, number],
 };
