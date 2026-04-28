@@ -84,7 +84,9 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-200 lg:relative',
+          'fixed inset-y-0 left-0 z-50 flex flex-col text-sidebar-foreground transition-all duration-200 lg:relative',
+          'bg-gradient-to-b from-[hsl(272_55%_22%/0.72)] via-[hsl(272_50%_18%/0.68)] to-[hsl(272_60%_14%/0.78)]',
+          'backdrop-blur-2xl backdrop-saturate-150 border-r border-white/10 shadow-[inset_-1px_0_0_0_hsl(0_0%_100%/0.06),0_8px_30px_-12px_hsl(272_60%_10%/0.5)]',
           collapsed ? 'w-14' : 'w-64',
           mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
         )}
