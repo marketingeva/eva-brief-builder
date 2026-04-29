@@ -26,24 +26,24 @@ export default function AdLauncherPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b bg-card px-6 py-4 shadow-sm">
+      <div className="bg-card px-8 pt-7 pb-6 border-b">
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-soft">
               <Rocket className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground">Ad Launcher</h1>
-              <p className="text-xs text-muted-foreground">Upload creatives en lanceer direct naar Meta</p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Ad Launcher</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Upload creatives en lanceer direct naar Meta</p>
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Klant:</span>
+          <div className="ml-auto flex items-center gap-2 rounded-full bg-muted/60 p-1.5">
+            <span className="text-xs text-muted-foreground pl-3">Klant</span>
             <Select
               value={selectedId}
               onValueChange={(v) => setSearchParams(v ? { client: v } : {})}
             >
-              <SelectTrigger className="w-[240px]">
+              <SelectTrigger className="w-[220px] h-9 rounded-full border-0 bg-card shadow-soft text-sm">
                 <SelectValue placeholder="Selecteer klant" />
               </SelectTrigger>
               <SelectContent>
@@ -52,16 +52,15 @@ export default function AdLauncherPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               disabled={!selected}
               onClick={() => setSettingsOpen(true)}
               title="Meta-instellingen voor deze klant"
+              className="flex items-center gap-1.5 h-9 px-4 rounded-full bg-card text-sm font-medium text-foreground shadow-soft hover:bg-card/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <Settings className="h-4 w-4 mr-1" />
+              <Settings className="h-4 w-4" />
               Meta-instellingen
-            </Button>
+            </button>
           </div>
         </div>
       </div>

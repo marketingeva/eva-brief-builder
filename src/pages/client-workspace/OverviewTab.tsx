@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BookOpen, FileText, Upload, ExternalLink } from 'lucide-react';
+import { BookOpen, FileText, Upload, ExternalLink, Palette, Radio, Bot, Rocket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Props {
   client: {
     id: string;
     name: string;
+    slug?: string | null;
     description: string | null;
     care_type: string | null;
     website_url: string | null;
@@ -20,6 +21,8 @@ interface Props {
 export default function OverviewTab({ client, learningScore }: Props) {
   const [briefingCount, setBriefingCount] = useState(0);
   const [uploadCount, setUploadCount] = useState(0);
+  const navigate = useNavigate();
+  const slug = (client as any).slug || client.id;
 
   useEffect(() => {
     Promise.all([
@@ -31,87 +34,104 @@ export default function OverviewTab({ client, learningScore }: Props) {
     });
   }, [client.id]);
 
+  const quickActions = [
+    { label: 'Learning', icon: BookOpen, path: `/client/${slug}/learning`, tint: 'bg-primary/10 text-primary' },
+    { label: 'Briefings', icon: FileText, path: `/client/${slug}/briefings`, tint: 'bg-accent/15 text-accent-foreground' },
+    { label: 'Creatives', icon: Palette, path: `/client/${slug}/creatives`, tint: 'bg-primary/10 text-primary' },
+    { label: 'Live Ads', icon: Radio, path: `/client/${slug}/live-ads`, tint: 'bg-success/15 text-success' },
+    { label: 'AI Team', icon: Bot, path: `/client/${slug}/ai-team`, tint: 'bg-primary/10 text-primary' },
+  ];
+
   return (
-    <div className="p-6 max-w-4xl mx-auto animate-fade-in space-y-6">
-      {/* Stats row */}
+    <div className="p-8 max-w-5xl mx-auto animate-fade-in space-y-6">
+      {/* Quick actions row — pill-stijl uit referentie */}
+      <div className="flex flex-wrap gap-3">
+        {quickActions.map(({ label, icon: Icon, path, tint }) => (
+          <button
+            key={label}
+            onClick={() => navigate(path)}
+            className="group flex flex-col items-center gap-2 w-[88px]"
+          >
+            <span className={cn('flex h-14 w-14 items-center justify-center rounded-2xl shadow-soft bg-card group-hover:-translate-y-0.5 transition-transform', tint)}>
+              <Icon className="h-5 w-5" />
+            </span>
+            <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Stats row — display-getallen */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-lg',
-              learningScore >= 80 ? 'bg-success/10' : learningScore >= 40 ? 'bg-warning/10' : 'bg-muted'
-            )}>
-              <BookOpen className={cn('h-4 w-4', learningScore >= 80 ? 'text-success' : learningScore >= 40 ? 'text-warning' : 'text-muted-foreground')} />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-foreground">{learningScore}%</p>
-              <p className="text-xs text-muted-foreground">Learning score</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-              <FileText className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-foreground">{briefingCount}</p>
-              <p className="text-xs text-muted-foreground">Briefings</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10">
-              <Upload className="h-4 w-4 text-accent" />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-foreground">{uploadCount}</p>
-              <p className="text-xs text-muted-foreground">Uploads</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-3xl bg-card shadow-soft p-6">
+          <div className={cn(
+            'flex h-11 w-11 items-center justify-center rounded-2xl mb-4',
+            learningScore >= 80 ? 'bg-success/15 text-success' :
+            learningScore >= 40 ? 'bg-warning/15 text-warning' :
+            'bg-muted text-muted-foreground'
+          )}>
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <p className="text-3xl font-bold tracking-tight text-foreground leading-none">{learningScore}<span className="text-xl text-muted-foreground">%</span></p>
+          <p className="text-xs text-muted-foreground mt-2">Learning score</p>
+        </div>
+
+        <div className="rounded-3xl bg-card shadow-soft p-6">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4">
+            <FileText className="h-5 w-5" />
+          </div>
+          <p className="text-3xl font-bold tracking-tight text-foreground leading-none">{briefingCount}</p>
+          <p className="text-xs text-muted-foreground mt-2">Briefings</p>
+        </div>
+
+        <div className="rounded-3xl bg-card shadow-soft p-6">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/15 text-accent-foreground mb-4">
+            <Upload className="h-5 w-5" />
+          </div>
+          <p className="text-3xl font-bold tracking-tight text-foreground leading-none">{uploadCount}</p>
+          <p className="text-xs text-muted-foreground mt-2">Uploads</p>
+        </div>
       </div>
 
       {/* Client info */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Over {client.name}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <div className="rounded-3xl bg-card shadow-soft p-7">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold tracking-tight">Over {client.name}</h2>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Profiel</span>
+        </div>
+        <div className="space-y-5">
           {client.description && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Omschrijving</p>
-              <p className="text-sm text-foreground">{client.description}</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">Omschrijving</p>
+              <p className="text-sm text-foreground leading-relaxed">{client.description}</p>
             </div>
           )}
           {client.mission && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Missie</p>
-              <p className="text-sm text-foreground">{client.mission}</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">Missie</p>
+              <p className="text-sm text-foreground leading-relaxed">{client.mission}</p>
             </div>
           )}
           {client.vision && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Visie</p>
-              <p className="text-sm text-foreground">{client.vision}</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">Visie</p>
+              <p className="text-sm text-foreground leading-relaxed">{client.vision}</p>
             </div>
           )}
           {client.website_url && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Website</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1.5">Website</p>
               <a href={client.website_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline inline-flex items-center gap-1">
                 {client.website_url} <ExternalLink className="h-3 w-3" />
               </a>
             </div>
           )}
           {!client.description && !client.mission && !client.vision && !client.website_url && (
-            <p className="text-sm text-muted-foreground py-4 text-center">
+            <p className="text-sm text-muted-foreground py-6 text-center">
               Nog geen client informatie ingevuld. Ga naar het <span className="font-medium text-foreground">Learning</span> tabblad om te beginnen.
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
