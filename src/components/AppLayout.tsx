@@ -247,6 +247,7 @@ export default function AppLayout() {
             'rounded-2xl bg-sidebar-accent/40 p-2',
             collapsed && 'bg-transparent p-0'
           )}>
+            <ThemeToggle collapsed={collapsed} />
             {!collapsed && (
               <div className="mb-1 truncate px-2 pt-1 text-[10px] text-sidebar-foreground/50">
                 {user?.email}
