@@ -52,6 +52,50 @@
 
     font-family: 'DM Sans', system-ui, sans-serif;
   }
+
+  .dark {
+    --background: 272 25% 8%;
+    --foreground: 270 15% 92%;
+
+    --card: 272 22% 12%;
+    --card-foreground: 270 15% 92%;
+
+    --popover: 272 22% 12%;
+    --popover-foreground: 270 15% 92%;
+
+    --primary: 272 70% 70%;
+    --primary-foreground: 272 25% 10%;
+
+    --secondary: 272 18% 18%;
+    --secondary-foreground: 270 15% 92%;
+
+    --muted: 272 18% 16%;
+    --muted-foreground: 270 10% 65%;
+
+    --accent: 38 92% 60%;
+    --accent-foreground: 38 92% 12%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 272 15% 22%;
+    --input: 272 15% 22%;
+    --ring: 272 70% 65%;
+
+    --sidebar-background: 272 30% 6%;
+    --sidebar-foreground: 270 12% 86%;
+    --sidebar-primary: 38 92% 60%;
+    --sidebar-primary-foreground: 38 92% 12%;
+    --sidebar-accent: 272 25% 14%;
+    --sidebar-accent-foreground: 270 12% 92%;
+    --sidebar-border: 272 20% 16%;
+    --sidebar-ring: 272 70% 65%;
+
+    --success: 152 55% 55%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 38 92% 12%;
+  }
 }
 
 @layer base {
