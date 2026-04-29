@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import AddClientDialog from '@/components/AddClientDialog';
 import evaLogo from '@/assets/eva-logo.png';
 import evaIcon from '@/assets/eva-icon.png';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface ClientListItem {
   id: string;
@@ -247,6 +248,7 @@ export default function AppLayout() {
             'rounded-2xl bg-sidebar-accent/40 p-2',
             collapsed && 'bg-transparent p-0'
           )}>
+            <ThemeToggle collapsed={collapsed} />
             {!collapsed && (
               <div className="mb-1 truncate px-2 pt-1 text-[10px] text-sidebar-foreground/50">
                 {user?.email}
@@ -270,7 +272,7 @@ export default function AppLayout() {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="flex h-14 items-center gap-3 border-b border-white/40 px-4 lg:hidden glass">
+        <header className="flex h-14 items-center gap-3 border-b border-border/60 px-4 lg:hidden glass">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>

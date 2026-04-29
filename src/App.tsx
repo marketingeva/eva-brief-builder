@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,25 +30,27 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
-            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/" element={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Select a client from the sidebar to get started</div>} />
-              <Route path="/ad-launcher" element={<AdLauncherPage />} />
-              <Route path="/briefings" element={<BriefingsPage />} />
-              <Route path="/client/:slug" element={<ClientWorkspace />} />
-              <Route path="/client/:slug/:tab" element={<ClientWorkspace />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route path="/" element={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">Select a client from the sidebar to get started</div>} />
+                <Route path="/ad-launcher" element={<AdLauncherPage />} />
+                <Route path="/briefings" element={<BriefingsPage />} />
+                <Route path="/client/:slug" element={<ClientWorkspace />} />
+                <Route path="/client/:slug/:tab" element={<ClientWorkspace />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

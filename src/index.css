@@ -52,6 +52,50 @@
 
     font-family: 'DM Sans', system-ui, sans-serif;
   }
+
+  .dark {
+    --background: 272 25% 8%;
+    --foreground: 270 15% 92%;
+
+    --card: 272 22% 12%;
+    --card-foreground: 270 15% 92%;
+
+    --popover: 272 22% 12%;
+    --popover-foreground: 270 15% 92%;
+
+    --primary: 272 70% 70%;
+    --primary-foreground: 272 25% 10%;
+
+    --secondary: 272 18% 18%;
+    --secondary-foreground: 270 15% 92%;
+
+    --muted: 272 18% 16%;
+    --muted-foreground: 270 10% 65%;
+
+    --accent: 38 92% 60%;
+    --accent-foreground: 38 92% 12%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 272 15% 22%;
+    --input: 272 15% 22%;
+    --ring: 272 70% 65%;
+
+    --sidebar-background: 272 30% 6%;
+    --sidebar-foreground: 270 12% 86%;
+    --sidebar-primary: 38 92% 60%;
+    --sidebar-primary-foreground: 38 92% 12%;
+    --sidebar-accent: 272 25% 14%;
+    --sidebar-accent-foreground: 270 12% 92%;
+    --sidebar-border: 272 20% 16%;
+    --sidebar-ring: 272 70% 65%;
+
+    --success: 152 55% 55%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 38 92% 12%;
+  }
 }
 
 @layer base {
@@ -131,5 +175,55 @@
       radial-gradient(at 78% 92%, hsl(272 70% 60% / 0.14) 0px, transparent 55%),
       radial-gradient(at 8% 88%, hsl(38 92% 65% / 0.10) 0px, transparent 55%);
     background-attachment: fixed;
+  }
+
+  /* ===== Dark mode liquid glass overrides ===== */
+  .dark .glass {
+    background: rgba(30, 22, 45, 0.55);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 10px 30px -12px rgba(0, 0, 0, 0.5);
+  }
+  .dark .glass-strong {
+    background: rgba(38, 28, 58, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 2px 6px rgba(0, 0, 0, 0.35),
+      0 18px 50px -16px rgba(0, 0, 0, 0.6);
+  }
+  .dark .glass-subtle {
+    background: rgba(30, 22, 45, 0.4);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .dark .glass-pill {
+    background: rgba(30, 22, 45, 0.5);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .dark .glass-dark {
+    background: hsl(var(--sidebar-background) / 0.85);
+    border-color: hsl(var(--sidebar-border) / 0.6);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 18px 50px -16px rgba(0, 0, 0, 0.7);
+  }
+  .dark .glass-hover:hover { background: rgba(50, 38, 75, 0.7); }
+
+  .dark .bg-aurora {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 12% 8%, hsl(272 70% 50% / 0.22) 0px, transparent 55%),
+      radial-gradient(at 88% 12%, hsl(38 92% 50% / 0.10) 0px, transparent 55%),
+      radial-gradient(at 78% 92%, hsl(272 80% 45% / 0.18) 0px, transparent 55%),
+      radial-gradient(at 8% 88%, hsl(38 90% 50% / 0.06) 0px, transparent 55%);
+  }
+
+  .dark .shadow-soft {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  }
+  .dark .shadow-soft-lg {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 16px 40px -12px rgba(0, 0, 0, 0.6);
   }
 }

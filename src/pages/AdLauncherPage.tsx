@@ -26,7 +26,7 @@ export default function AdLauncherPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="glass-strong px-8 pt-7 pb-6 border-b border-white/40">
+      <div className="glass-strong px-8 pt-7 pb-6 border-b border-border/60">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-soft-lg">
