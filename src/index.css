@@ -161,15 +161,9 @@
   .glass-hover { transition: background-color .25s ease, transform .25s ease, box-shadow .25s ease; }
   .glass-hover:hover { background: rgba(255, 255, 255, 0.78); }
 
-  /* Aurora background for app shell */
+  /* Plain background for app shell (no gradient) */
   .bg-aurora {
     background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(at 12% 8%, hsl(var(--primary) / 0.18) 0px, transparent 55%),
-      radial-gradient(at 88% 12%, hsl(var(--accent) / 0.16) 0px, transparent 55%),
-      radial-gradient(at 78% 92%, hsl(272 70% 60% / 0.14) 0px, transparent 55%),
-      radial-gradient(at 8% 88%, hsl(38 92% 65% / 0.10) 0px, transparent 55%);
-    background-attachment: fixed;
   }
 
   /* ===== Dark mode liquid glass overrides ===== */
