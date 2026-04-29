@@ -190,7 +190,7 @@ export default function BriefingsPage() {
         )}
 
         {/* Client tabs at bottom — pill-stijl */}
-        <div className="border-t bg-muted/40 px-4 py-3 flex items-center gap-2 overflow-x-auto">
+        <div className="border-t border-white/40 glass px-4 py-3 flex items-center gap-2 overflow-x-auto">
           {clientsInWeek.map(c => {
             const b = weekBriefings.find(x => x.client_id === c.id)!;
             const active = activeBriefing?.id === b.id;
@@ -202,8 +202,8 @@ export default function BriefingsPage() {
                 className={cn(
                   'flex items-center gap-2 px-4 h-9 text-xs rounded-full transition-all whitespace-nowrap',
                   active
-                    ? 'bg-card font-semibold text-foreground shadow-soft'
-                    : 'bg-transparent hover:bg-card/60 text-muted-foreground'
+                    ? 'glass-strong font-semibold text-foreground'
+                    : 'bg-transparent hover:glass-pill text-muted-foreground'
                 )}
               >
                 <span>{c.name}</span>
@@ -214,7 +214,7 @@ export default function BriefingsPage() {
           {clientsNotInWeek.length > 0 && (
             <select
               onChange={(e) => { if (e.target.value) addClientToWeek(e.target.value); e.target.value = ''; }}
-              className="ml-2 text-xs h-9 px-3 rounded-full border-0 bg-card text-muted-foreground shadow-soft cursor-pointer"
+              className="ml-2 text-xs h-9 px-3 rounded-full border-0 glass-pill text-muted-foreground cursor-pointer"
               defaultValue=""
             >
               <option value="" disabled>+ Klant toevoegen</option>
