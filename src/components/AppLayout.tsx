@@ -75,7 +75,7 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-aurora">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
@@ -84,7 +84,7 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 lg:relative lg:my-3 lg:ml-3 lg:rounded-3xl lg:shadow-soft-lg',
+          'fixed inset-y-0 left-0 z-50 flex flex-col glass-dark text-sidebar-foreground transition-all duration-300 lg:relative lg:my-3 lg:ml-3 lg:rounded-3xl',
           collapsed ? 'w-16' : 'w-64',
           mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
         )}
