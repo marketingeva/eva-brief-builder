@@ -50,7 +50,11 @@
     --warning: 38 92% 50%;
     --warning-foreground: 38 92% 15%;
 
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    letter-spacing: -0.01em;
   }
 
   .dark {
