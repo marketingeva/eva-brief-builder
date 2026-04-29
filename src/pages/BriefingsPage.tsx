@@ -247,14 +247,14 @@ export default function BriefingsPage() {
       {loading ? (
         <div className="text-center py-16 text-muted-foreground text-sm"><Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />Laden...</div>
       ) : weeks.length === 0 ? (
-        <div className="text-center py-20 rounded-3xl bg-card shadow-soft">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
+        <div className="text-center py-20 rounded-3xl glass">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl glass-pill mb-4">
             <Calendar className="h-6 w-6 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground mb-4">Nog geen briefings</p>
           <button
             onClick={openNewWeekDialog}
-            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow-soft transition-all"
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow-soft-lg transition-all"
           >
             <Plus className="h-4 w-4" /> Maak eerste briefing
           </button>
@@ -265,7 +265,7 @@ export default function BriefingsPage() {
             <button
               key={w.key}
               onClick={() => { setSelectedWeek({ week: w.week, year: w.year }); setActiveClientId(w.items[0].client_id); }}
-              className="text-left rounded-3xl bg-card shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all p-6 group"
+              className="text-left rounded-3xl glass glass-hover hover:-translate-y-0.5 transition-all p-6 group"
             >
               <div className="flex items-start justify-between mb-5">
                 <div>
@@ -277,7 +277,7 @@ export default function BriefingsPage() {
                   <Calendar className="h-4 w-4" />
                 </div>
               </div>
-              <div className="space-y-2 pt-4 border-t border-border/60">
+              <div className="space-y-2 pt-4 border-t border-white/50">
                 {w.items.map(b => {
                   const c = clients.find(cl => cl.id === b.client_id);
                   const cfg = STATUS_LABEL[b.status];
