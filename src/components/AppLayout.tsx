@@ -270,7 +270,7 @@ export default function AppLayout() {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <header className="flex h-14 items-center gap-3 border-b px-4 lg:hidden bg-card">
+        <header className="flex h-14 items-center gap-3 border-b border-white/40 px-4 lg:hidden glass">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
