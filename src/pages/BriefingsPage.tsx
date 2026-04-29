@@ -158,7 +158,7 @@ export default function BriefingsPage() {
 
     return (
       <div className="flex flex-col h-full">
-        <div className="glass-strong px-6 py-5 flex items-center justify-between border-b border-border/60">
+        <div className="glass-strong px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setSelectedWeek(null); setActiveClientId(null); }}
