@@ -158,11 +158,11 @@ export default function BriefingsPage() {
 
     return (
       <div className="flex flex-col h-full">
-        <div className="bg-card px-6 py-5 flex items-center justify-between border-b">
+        <div className="glass-strong px-6 py-5 flex items-center justify-between border-b border-white/40">
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setSelectedWeek(null); setActiveClientId(null); }}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-muted hover:bg-muted/70 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-sm text-muted-foreground hover:text-foreground"
             >
               <ChevronLeft className="h-4 w-4" /> Terug
             </button>
@@ -174,7 +174,7 @@ export default function BriefingsPage() {
           <button
             onClick={handleExportWeek}
             disabled={exporting}
-            className="flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 shadow-soft transition-all"
+            className="flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 shadow-soft-lg transition-all"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
             Exporteer hele week (PDF)
