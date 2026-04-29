@@ -199,11 +199,6 @@
 
   .dark .bg-aurora {
     background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(at 12% 8%, hsl(272 70% 50% / 0.22) 0px, transparent 55%),
-      radial-gradient(at 88% 12%, hsl(38 92% 50% / 0.10) 0px, transparent 55%),
-      radial-gradient(at 78% 92%, hsl(272 80% 45% / 0.18) 0px, transparent 55%),
-      radial-gradient(at 8% 88%, hsl(38 90% 50% / 0.06) 0px, transparent 55%);
   }
 
   .dark .shadow-soft {
