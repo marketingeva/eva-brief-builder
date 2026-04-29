@@ -158,7 +158,7 @@ export default function BriefingsPage() {
 
     return (
       <div className="flex flex-col h-full">
-        <div className="glass-strong px-6 py-5 flex items-center justify-between border-b border-white/40">
+        <div className="glass-strong px-6 py-5 flex items-center justify-between border-b border-border/60">
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setSelectedWeek(null); setActiveClientId(null); }}
@@ -190,7 +190,7 @@ export default function BriefingsPage() {
         )}
 
         {/* Client tabs at bottom — pill-stijl */}
-        <div className="border-t border-white/40 glass px-4 py-3 flex items-center gap-2 overflow-x-auto">
+        <div className="border-t border-border/60 glass px-4 py-3 flex items-center gap-2 overflow-x-auto">
           {clientsInWeek.map(c => {
             const b = weekBriefings.find(x => x.client_id === c.id)!;
             const active = activeBriefing?.id === b.id;
@@ -277,7 +277,7 @@ export default function BriefingsPage() {
                   <Calendar className="h-4 w-4" />
                 </div>
               </div>
-              <div className="space-y-2 pt-4 border-t border-white/50">
+              <div className="space-y-2 pt-4 border-t border-border/60">
                 {w.items.map(b => {
                   const c = clients.find(cl => cl.id === b.client_id);
                   const cfg = STATUS_LABEL[b.status];
