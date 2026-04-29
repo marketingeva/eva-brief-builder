@@ -58,25 +58,25 @@
   }
 
   .dark {
-    /* Neutral dark grey base with subtle purple undertone */
-    --background: 264 8% 10%;
-    --foreground: 260 10% 92%;
+    /* Neutral dark grey base, very faint purple hint */
+    --background: 240 4% 10%;
+    --foreground: 240 6% 92%;
 
-    --card: 264 8% 13%;
-    --card-foreground: 260 10% 92%;
+    --card: 240 4% 13%;
+    --card-foreground: 240 6% 92%;
 
-    --popover: 264 10% 13%;
-    --popover-foreground: 260 10% 92%;
+    --popover: 240 5% 13%;
+    --popover-foreground: 240 6% 92%;
 
-    /* Deep purple primary for accents, buttons, active states */
+    /* Purple kept as accent for buttons/active states */
     --primary: 270 50% 62%;
     --primary-foreground: 270 30% 10%;
 
-    --secondary: 264 8% 18%;
-    --secondary-foreground: 260 10% 92%;
+    --secondary: 240 4% 18%;
+    --secondary-foreground: 240 6% 92%;
 
-    --muted: 264 8% 16%;
-    --muted-foreground: 260 6% 65%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 4% 65%;
 
     --accent: 38 92% 60%;
     --accent-foreground: 38 92% 12%;
@@ -84,18 +84,18 @@
     --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 268 10% 22%;
-    --input: 268 10% 22%;
+    --border: 240 5% 22%;
+    --input: 240 5% 22%;
     --ring: 270 50% 60%;
 
-    /* Sidebar leans more purple for richer feel */
-    --sidebar-background: 268 18% 8%;
-    --sidebar-foreground: 260 10% 86%;
+    /* Sidebar: mostly grey with a whisper of purple */
+    --sidebar-background: 250 8% 9%;
+    --sidebar-foreground: 240 6% 86%;
     --sidebar-primary: 270 55% 65%;
     --sidebar-primary-foreground: 270 30% 10%;
-    --sidebar-accent: 268 14% 16%;
-    --sidebar-accent-foreground: 260 10% 92%;
-    --sidebar-border: 268 14% 18%;
+    --sidebar-accent: 250 6% 16%;
+    --sidebar-accent-foreground: 240 6% 92%;
+    --sidebar-border: 250 6% 18%;
     --sidebar-ring: 270 55% 60%;
 
     --success: 152 55% 55%;
