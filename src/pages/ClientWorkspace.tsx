@@ -82,44 +82,57 @@ export default function ClientWorkspace() {
   return (
     <div className="flex flex-col h-full">
       {/* Client header */}
-      <div className="border-b bg-card px-6 pt-5 pb-0 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">
+      <div className="bg-card px-8 pt-6 pb-3 border-b">
+        <div className="flex items-center gap-4 mb-5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-lg font-bold shadow-soft ring-4 ring-primary/10">
             {client.name.charAt(0)}
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">{client.name}</h1>
-            {client.care_type && <p className="text-xs text-muted-foreground">{client.care_type}</p>}
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground leading-tight">{client.name}</h1>
+            {client.care_type && (
+              <span className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full bg-muted text-[11px] text-muted-foreground font-medium">
+                {client.care_type}
+              </span>
+            )}
           </div>
-          {/* Learning status badge */}
+          {/* Learning status pill */}
           <div className={cn(
-            'ml-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border',
-            learningScore >= 80 ? 'bg-success/10 text-success border-success/20' :
-            learningScore >= 40 ? 'bg-warning/10 text-warning border-warning/20' :
-            'bg-muted text-muted-foreground border-border'
+            'ml-auto flex items-center gap-2 rounded-full pl-3 pr-4 py-1.5 text-xs font-medium shadow-soft',
+            learningScore >= 80 ? 'bg-success/15 text-success' :
+            learningScore >= 40 ? 'bg-warning/15 text-warning' :
+            'bg-muted text-muted-foreground'
           )}>
+            <span className={cn(
+              'h-2 w-2 rounded-full',
+              learningScore >= 80 ? 'bg-success' :
+              learningScore >= 40 ? 'bg-warning' :
+              'bg-muted-foreground/40'
+            )} />
             <BookOpen className="h-3 w-3" />
             {learningScore >= 80 ? 'Getraind' : learningScore >= 40 ? 'In opbouw' : 'Incompleet'}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0 -mb-px overflow-x-auto">
-          {tabs.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap',
-                activeTab === key
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-primary/30'
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </button>
-          ))}
+        {/* Pill segmented tabs */}
+        <div className="flex gap-1 p-1 rounded-full bg-muted/60 w-fit max-w-full overflow-x-auto">
+          {tabs.map(({ key, label, icon: Icon }) => {
+            const active = activeTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-full transition-all whitespace-nowrap',
+                  active
+                    ? 'bg-card text-foreground shadow-soft'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
