@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import AddClientDialog from '@/components/AddClientDialog';
 import evaLogo from '@/assets/eva-logo.png';
 import evaIcon from '@/assets/eva-icon.png';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface ClientListItem {
   id: string;
