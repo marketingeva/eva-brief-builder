@@ -52,7 +52,7 @@ export default function OverviewTab({ client, learningScore }: Props) {
             onClick={() => navigate(path)}
             className="group flex flex-col items-center gap-2 w-[88px]"
           >
-            <span className={cn('flex h-14 w-14 items-center justify-center rounded-2xl shadow-soft bg-card group-hover:-translate-y-0.5 transition-transform', tint)}>
+            <span className={cn('flex h-14 w-14 items-center justify-center rounded-2xl glass glass-hover group-hover:-translate-y-0.5 transition-transform', tint)}>
               <Icon className="h-5 w-5" />
             </span>
             <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{label}</span>
@@ -62,7 +62,7 @@ export default function OverviewTab({ client, learningScore }: Props) {
 
       {/* Stats row — display-getallen */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-3xl bg-card shadow-soft p-6">
+        <div className="rounded-3xl glass p-6">
           <div className={cn(
             'flex h-11 w-11 items-center justify-center rounded-2xl mb-4',
             learningScore >= 80 ? 'bg-success/15 text-success' :
@@ -75,7 +75,7 @@ export default function OverviewTab({ client, learningScore }: Props) {
           <p className="text-xs text-muted-foreground mt-2">Learning score</p>
         </div>
 
-        <div className="rounded-3xl bg-card shadow-soft p-6">
+        <div className="rounded-3xl glass p-6">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4">
             <FileText className="h-5 w-5" />
           </div>
@@ -83,7 +83,7 @@ export default function OverviewTab({ client, learningScore }: Props) {
           <p className="text-xs text-muted-foreground mt-2">Briefings</p>
         </div>
 
-        <div className="rounded-3xl bg-card shadow-soft p-6">
+        <div className="rounded-3xl glass p-6">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/15 text-accent-foreground mb-4">
             <Upload className="h-5 w-5" />
           </div>
@@ -93,7 +93,7 @@ export default function OverviewTab({ client, learningScore }: Props) {
       </div>
 
       {/* Client info */}
-      <div className="rounded-3xl bg-card shadow-soft p-7">
+      <div className="rounded-3xl glass-strong p-7">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold tracking-tight">Over {client.name}</h2>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Profiel</span>
