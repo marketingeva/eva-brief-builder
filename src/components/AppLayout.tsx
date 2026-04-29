@@ -81,25 +81,14 @@ export default function AppLayout() {
         <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar — iOS liquid glass */}
+      {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col text-sidebar-foreground transition-all duration-200 lg:relative isolate overflow-hidden',
-          'bg-[hsl(272_40%_10%/0.55)] backdrop-blur-3xl backdrop-saturate-200',
-          'border-r border-white/10',
-          'shadow-[inset_1px_0_0_0_hsl(0_0%_100%/0.08),inset_-1px_0_0_0_hsl(0_0%_100%/0.04),0_20px_60px_-20px_hsl(272_60%_3%/0.7)]',
+          'fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-200 lg:relative',
           collapsed ? 'w-14' : 'w-64',
           mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
         )}
       >
-        {/* Liquid glass highlights */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
-          <div className="absolute -top-32 -left-16 h-72 w-72 rounded-full bg-[hsl(280_90%_60%/0.18)] blur-3xl" />
-          <div className="absolute top-1/3 -right-20 h-80 w-80 rounded-full bg-[hsl(260_90%_55%/0.14)] blur-3xl" />
-          <div className="absolute -bottom-24 -left-10 h-72 w-72 rounded-full bg-[hsl(290_80%_45%/0.12)] blur-3xl" />
-          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-transparent to-black/20" />
-        </div>
         {/* Header with Eva logo */}
         <div className={cn('flex h-16 items-center border-b border-sidebar-border', collapsed ? 'justify-center px-2' : 'justify-between px-4')}>
           {!collapsed && (
