@@ -20,9 +20,9 @@ interface MetaBriefing {
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  draft: { label: 'Concept', cls: 'bg-muted text-muted-foreground border-border' },
-  in_review: { label: 'In Review', cls: 'bg-warning/10 text-warning border-warning/30' },
-  approved: { label: 'Goedgekeurd', cls: 'bg-success/10 text-success border-success/30' },
+  draft: { label: 'Concept', cls: 'bg-muted text-muted-foreground border-transparent' },
+  in_review: { label: 'In Review', cls: 'bg-warning/15 text-warning border-transparent' },
+  approved: { label: 'Goedgekeurd', cls: 'bg-success/15 text-success border-transparent' },
 };
 
 function getCurrentWeek(): { week: number; year: number } {
@@ -158,20 +158,27 @@ export default function BriefingsPage() {
 
     return (
       <div className="flex flex-col h-full">
-        <div className="border-b bg-card px-6 py-4 flex items-center justify-between">
+        <div className="bg-card px-6 py-5 flex items-center justify-between border-b">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => { setSelectedWeek(null); setActiveClientId(null); }}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Terug
-            </Button>
-            <div>
-              <h1 className="text-lg font-semibold">Week {selectedWeek.week} · {selectedWeek.year}</h1>
-              <p className="text-xs text-muted-foreground">Briefing voor de grafisch vormgever</p>
+            <button
+              onClick={() => { setSelectedWeek(null); setActiveClientId(null); }}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-muted hover:bg-muted/70 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" /> Terug
+            </button>
+            <div className="ml-1">
+              <h1 className="text-2xl font-bold tracking-tight">Week {selectedWeek.week} <span className="text-muted-foreground font-medium">· {selectedWeek.year}</span></h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Briefing voor de grafisch vormgever</p>
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={handleExportWeek} disabled={exporting}>
-            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+          <button
+            onClick={handleExportWeek}
+            disabled={exporting}
+            className="flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 shadow-soft transition-all"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
             Exporteer hele week (PDF)
-          </Button>
+          </button>
         </div>
 
         {activeBriefing && (
@@ -182,8 +189,8 @@ export default function BriefingsPage() {
           />
         )}
 
-        {/* Client tabs at bottom (Sheets-stijl) */}
-        <div className="border-t bg-muted/30 px-4 py-2 flex items-center gap-1 overflow-x-auto">
+        {/* Client tabs at bottom — pill-stijl */}
+        <div className="border-t bg-muted/40 px-4 py-3 flex items-center gap-2 overflow-x-auto">
           {clientsInWeek.map(c => {
             const b = weekBriefings.find(x => x.client_id === c.id)!;
             const active = activeBriefing?.id === b.id;
@@ -193,19 +200,21 @@ export default function BriefingsPage() {
                 key={c.id}
                 onClick={() => setActiveClientId(c.id)}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 text-xs rounded-t-md border border-b-0 transition-colors',
-                  active ? 'bg-background border-border font-medium' : 'bg-muted/50 border-transparent hover:bg-muted text-muted-foreground'
+                  'flex items-center gap-2 px-4 h-9 text-xs rounded-full transition-all whitespace-nowrap',
+                  active
+                    ? 'bg-card font-semibold text-foreground shadow-soft'
+                    : 'bg-transparent hover:bg-card/60 text-muted-foreground'
                 )}
               >
                 <span>{c.name}</span>
-                <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', cfg.cls)}>{cfg.label}</Badge>
+                <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0 h-4 rounded-full', cfg.cls)}>{cfg.label}</Badge>
               </button>
             );
           })}
           {clientsNotInWeek.length > 0 && (
             <select
               onChange={(e) => { if (e.target.value) addClientToWeek(e.target.value); e.target.value = ''; }}
-              className="ml-2 text-xs h-7 px-2 rounded border bg-background text-muted-foreground"
+              className="ml-2 text-xs h-9 px-3 rounded-full border-0 bg-card text-muted-foreground shadow-soft cursor-pointer"
               defaultValue=""
             >
               <option value="" disabled>+ Klant toevoegen</option>
@@ -219,51 +228,63 @@ export default function BriefingsPage() {
 
   // ===== Overview =====
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-8 max-w-6xl mx-auto animate-fade-in">
+      <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Briefings</h1>
-          <p className="text-sm text-muted-foreground">Wekelijkse briefings voor de grafisch vormgever</p>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">Briefings</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">Wekelijkse briefings voor de grafisch vormgever</p>
         </div>
-        <Button onClick={openNewWeekDialog} disabled={creating}>
-          {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+        <button
+          onClick={openNewWeekDialog}
+          disabled={creating}
+          className="flex items-center gap-2 h-11 px-6 rounded-full bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 shadow-soft transition-all hover:-translate-y-0.5"
+        >
+          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           Nieuwe week
-        </Button>
+        </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm"><Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />Laden...</div>
+        <div className="text-center py-16 text-muted-foreground text-sm"><Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />Laden...</div>
       ) : weeks.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed rounded-lg">
-          <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+        <div className="text-center py-20 rounded-3xl bg-card shadow-soft">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
+            <Calendar className="h-6 w-6 text-muted-foreground" />
+          </div>
           <p className="text-sm text-muted-foreground mb-4">Nog geen briefings</p>
-          <Button onClick={openNewWeekDialog} variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-2" /> Maak eerste briefing
-          </Button>
+          <button
+            onClick={openNewWeekDialog}
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow-soft transition-all"
+          >
+            <Plus className="h-4 w-4" /> Maak eerste briefing
+          </button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {weeks.map(w => (
             <button
               key={w.key}
               onClick={() => { setSelectedWeek({ week: w.week, year: w.year }); setActiveClientId(w.items[0].client_id); }}
-              className="text-left rounded-lg border bg-card hover:border-primary hover:shadow-sm transition-all p-4"
+              className="text-left rounded-3xl bg-card shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all p-6 group"
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-start justify-between mb-5">
                 <div>
-                  <h3 className="font-semibold text-sm">Week {w.week}</h3>
-                  <p className="text-[10px] text-muted-foreground">{w.year}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Week</p>
+                  <h3 className="text-4xl font-bold tracking-tight text-foreground leading-none mt-1">{w.week}</h3>
+                  <p className="text-xs text-muted-foreground mt-1.5">{w.year}</p>
                 </div>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <Calendar className="h-4 w-4" />
+                </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2 pt-4 border-t border-border/60">
                 {w.items.map(b => {
                   const c = clients.find(cl => cl.id === b.client_id);
                   const cfg = STATUS_LABEL[b.status];
                   return (
-                    <div key={b.id} className="flex items-center justify-between text-xs">
-                      <span className="truncate">{c?.name || 'Onbekend'}</span>
-                      <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0', cfg.cls)}>{cfg.label}</Badge>
+                    <div key={b.id} className="flex items-center justify-between text-xs gap-2">
+                      <span className="truncate text-foreground/80">{c?.name || 'Onbekend'}</span>
+                      <Badge variant="outline" className={cn('text-[9px] px-2 py-0 h-5 rounded-full shrink-0', cfg.cls)}>{cfg.label}</Badge>
                     </div>
                   );
                 })}
