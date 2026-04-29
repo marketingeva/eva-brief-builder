@@ -158,11 +158,11 @@ export default function BriefingsPage() {
 
     return (
       <div className="flex flex-col h-full">
-        <div className="bg-card px-6 py-5 flex items-center justify-between border-b">
+        <div className="glass-strong px-6 py-5 flex items-center justify-between border-b border-white/40">
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setSelectedWeek(null); setActiveClientId(null); }}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-muted hover:bg-muted/70 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-sm text-muted-foreground hover:text-foreground"
             >
               <ChevronLeft className="h-4 w-4" /> Terug
             </button>
@@ -174,7 +174,7 @@ export default function BriefingsPage() {
           <button
             onClick={handleExportWeek}
             disabled={exporting}
-            className="flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 shadow-soft transition-all"
+            className="flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 shadow-soft-lg transition-all"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
             Exporteer hele week (PDF)
@@ -190,7 +190,7 @@ export default function BriefingsPage() {
         )}
 
         {/* Client tabs at bottom — pill-stijl */}
-        <div className="border-t bg-muted/40 px-4 py-3 flex items-center gap-2 overflow-x-auto">
+        <div className="border-t border-white/40 glass px-4 py-3 flex items-center gap-2 overflow-x-auto">
           {clientsInWeek.map(c => {
             const b = weekBriefings.find(x => x.client_id === c.id)!;
             const active = activeBriefing?.id === b.id;
@@ -202,8 +202,8 @@ export default function BriefingsPage() {
                 className={cn(
                   'flex items-center gap-2 px-4 h-9 text-xs rounded-full transition-all whitespace-nowrap',
                   active
-                    ? 'bg-card font-semibold text-foreground shadow-soft'
-                    : 'bg-transparent hover:bg-card/60 text-muted-foreground'
+                    ? 'glass-strong font-semibold text-foreground'
+                    : 'bg-transparent hover:glass-pill text-muted-foreground'
                 )}
               >
                 <span>{c.name}</span>
@@ -214,7 +214,7 @@ export default function BriefingsPage() {
           {clientsNotInWeek.length > 0 && (
             <select
               onChange={(e) => { if (e.target.value) addClientToWeek(e.target.value); e.target.value = ''; }}
-              className="ml-2 text-xs h-9 px-3 rounded-full border-0 bg-card text-muted-foreground shadow-soft cursor-pointer"
+              className="ml-2 text-xs h-9 px-3 rounded-full border-0 glass-pill text-muted-foreground cursor-pointer"
               defaultValue=""
             >
               <option value="" disabled>+ Klant toevoegen</option>
@@ -247,14 +247,14 @@ export default function BriefingsPage() {
       {loading ? (
         <div className="text-center py-16 text-muted-foreground text-sm"><Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />Laden...</div>
       ) : weeks.length === 0 ? (
-        <div className="text-center py-20 rounded-3xl bg-card shadow-soft">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
+        <div className="text-center py-20 rounded-3xl glass">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl glass-pill mb-4">
             <Calendar className="h-6 w-6 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground mb-4">Nog geen briefings</p>
           <button
             onClick={openNewWeekDialog}
-            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow-soft transition-all"
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow-soft-lg transition-all"
           >
             <Plus className="h-4 w-4" /> Maak eerste briefing
           </button>
@@ -265,7 +265,7 @@ export default function BriefingsPage() {
             <button
               key={w.key}
               onClick={() => { setSelectedWeek({ week: w.week, year: w.year }); setActiveClientId(w.items[0].client_id); }}
-              className="text-left rounded-3xl bg-card shadow-soft hover:shadow-soft-lg hover:-translate-y-0.5 transition-all p-6 group"
+              className="text-left rounded-3xl glass glass-hover hover:-translate-y-0.5 transition-all p-6 group"
             >
               <div className="flex items-start justify-between mb-5">
                 <div>
@@ -277,7 +277,7 @@ export default function BriefingsPage() {
                   <Calendar className="h-4 w-4" />
                 </div>
               </div>
-              <div className="space-y-2 pt-4 border-t border-border/60">
+              <div className="space-y-2 pt-4 border-t border-white/50">
                 {w.items.map(b => {
                   const c = clients.find(cl => cl.id === b.client_id);
                   const cfg = STATUS_LABEL[b.status];

@@ -82,25 +82,25 @@ export default function ClientWorkspace() {
   return (
     <div className="flex flex-col h-full">
       {/* Client header */}
-      <div className="bg-card px-8 pt-6 pb-3 border-b">
+      <div className="glass-strong px-8 pt-6 pb-3 border-b border-white/40">
         <div className="flex items-center gap-4 mb-5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-lg font-bold shadow-soft ring-4 ring-primary/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-lg font-bold shadow-soft-lg ring-4 ring-primary/10">
             {client.name.charAt(0)}
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-foreground leading-tight">{client.name}</h1>
             {client.care_type && (
-              <span className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full bg-muted text-[11px] text-muted-foreground font-medium">
+              <span className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full glass-pill text-[11px] text-muted-foreground font-medium">
                 {client.care_type}
               </span>
             )}
           </div>
           {/* Learning status pill */}
           <div className={cn(
-            'ml-auto flex items-center gap-2 rounded-full pl-3 pr-4 py-1.5 text-xs font-medium shadow-soft',
-            learningScore >= 80 ? 'bg-success/15 text-success' :
-            learningScore >= 40 ? 'bg-warning/15 text-warning' :
-            'bg-muted text-muted-foreground'
+            'ml-auto flex items-center gap-2 rounded-full pl-3 pr-4 py-1.5 text-xs font-medium glass-pill',
+            learningScore >= 80 ? 'text-success' :
+            learningScore >= 40 ? 'text-warning' :
+            'text-muted-foreground'
           )}>
             <span className={cn(
               'h-2 w-2 rounded-full',
@@ -114,7 +114,7 @@ export default function ClientWorkspace() {
         </div>
 
         {/* Pill segmented tabs */}
-        <div className="flex gap-1 p-1 rounded-full bg-muted/60 w-fit max-w-full overflow-x-auto">
+        <div className="flex gap-1 p-1 rounded-full glass-pill w-fit max-w-full overflow-x-auto">
           {tabs.map(({ key, label, icon: Icon }) => {
             const active = activeTab === key;
             return (
@@ -124,7 +124,7 @@ export default function ClientWorkspace() {
                 className={cn(
                   'flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-full transition-all whitespace-nowrap',
                   active
-                    ? 'bg-card text-foreground shadow-soft'
+                    ? 'glass-strong text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
