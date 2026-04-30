@@ -292,6 +292,15 @@ export default function AdsManagerPage() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
+          <Link to="/ads-manager/dashboards">
+            <button
+              className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-xs text-foreground"
+              title="Open dashboards"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Dashboards
+            </button>
+          </Link>
           <Select
             value={dateMode === 'preset' ? preset : 'custom'}
             onValueChange={(v) => {
