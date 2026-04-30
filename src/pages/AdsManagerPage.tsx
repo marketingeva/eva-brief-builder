@@ -97,6 +97,7 @@ export default function AdsManagerPage() {
   const [selectedAdset, setSelectedAdset] = useState<MetricRow | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Ad detail
   const [adDetail, setAdDetail] = useState<AdDetail | null>(null);
