@@ -155,6 +155,34 @@ export default function AdsDashboardsPage() {
     short: c.name.length > 22 ? c.name.slice(0, 22) + '…' : c.name,
   })), [perCampaign]);
 
+  // Top campaigns by leads, used as the series for multi-line charts
+  const leadSeriesCampaigns = useMemo(() => {
+    return [...perCampaign]
+      .sort((a, b) => b.meta_leads - a.meta_leads)
+      .slice(0, 6)
+      .filter((c) => c.meta_leads > 0 || c.spend > 0);
+  }, [perCampaign]);
+
+  // Wide-format daily data: one row per date, one column per campaign
+  const leadsPerCampaignDaily = useMemo(() => {
+    if (days.length === 0 || leadSeriesCampaigns.length === 0) return [];
+    const dateOrder = days.map((d) => d.date);
+    const idToName = new Map(leadSeriesCampaigns.map((c) => [c.id, c.name]));
+
+    const byDate = new Map<string, Record<string, any>>();
+    for (const d of dateOrder) {
+      byDate.set(d, { date: d, label: fmtDate(d) });
+    }
+    for (const row of perCampaignDaily) {
+      if (!idToName.has(row.campaign_id)) continue;
+      const bucket = byDate.get(row.date);
+      if (!bucket) continue;
+      bucket[`leads_${row.campaign_id}`] = row.meta_leads;
+      bucket[`cpl_${row.campaign_id}`] = row.cost_per_meta_lead || null;
+    }
+    return dateOrder.map((d) => byDate.get(d)!);
+  }, [days, perCampaignDaily, leadSeriesCampaigns]);
+
   if (loading) {
     return (
       <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
