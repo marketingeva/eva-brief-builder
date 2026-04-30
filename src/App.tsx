@@ -11,6 +11,7 @@ import ClientWorkspace from "@/pages/ClientWorkspace";
 import AdLauncherPage from "@/pages/AdLauncherPage";
 import BriefingsPage from "@/pages/BriefingsPage";
 import AdsManagerPage from "@/pages/AdsManagerPage";
+import AdsDashboardsPage from "@/pages/AdsDashboardsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
                 <Route path="/ad-launcher" element={<AdLauncherPage />} />
                 <Route path="/briefings" element={<BriefingsPage />} />
                 <Route path="/ads-manager" element={<AdsManagerPage />} />
+                <Route path="/ads-manager/dashboards" element={<AdsDashboardsPage />} />
                 <Route path="/client/:slug" element={<ClientWorkspace />} />
                 <Route path="/client/:slug/:tab" element={<ClientWorkspace />} />
               </Route>

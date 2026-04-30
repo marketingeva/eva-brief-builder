@@ -78,6 +78,43 @@ serve(async (req) => {
     const actId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
     const timeRange = encodeURIComponent(JSON.stringify({ since, until }));
 
+    // ── Daily breakdown for dashboards ──
+    if (body.daily) {
+      const breakdownRes = await fetch(
+        `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,ctr,reach,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&time_increment=1&level=account&limit=500&access_token=${accessToken}`
+      );
+      if (!breakdownRes.ok) {
+        const err = await breakdownRes.text();
+        return new Response(JSON.stringify({ error: "Failed daily insights", detail: err }), {
+          status: breakdownRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const dailyData = await breakdownRes.json();
+      const days = (dailyData.data || []).map((d: any) => ({
+        date: d.date_start,
+        ...extractMetrics(d),
+      }));
+
+      // Also fetch per-campaign totals for breakdown charts
+      const campRes = await fetch(
+        `${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=campaign&limit=200&access_token=${accessToken}`
+      );
+      const campData = campRes.ok ? await campRes.json() : { data: [] };
+      const perCampaign = (campData.data || []).map((c: any) => ({
+        id: c.campaign_id,
+        name: c.campaign_name,
+        ...extractMetrics(c),
+      }));
+
+      return new Response(JSON.stringify({
+        type: "daily",
+        days,
+        per_campaign: perCampaign,
+        date_range: { since, until },
+        fetched_at: new Date().toISOString(),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // ── Ad detail: fetch creative info (image, text, CTA, lead form) ──
     if (adDetailId) {
       // Fetch ad with nested creative fields via field expansion

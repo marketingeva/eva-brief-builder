@@ -20,8 +20,9 @@ import {
 } from '@/components/ui/dialog';
 import {
   RefreshCw, ChevronRight, ArrowLeft, CalendarDays, Eye, ExternalLink,
-  Image as ImageIcon, Search,
+  Image as ImageIcon, Search, BarChart3,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -291,6 +292,15 @@ export default function AdsManagerPage() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
+          <Link to="/ads-manager/dashboards">
+            <button
+              className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-xs text-foreground"
+              title="Open dashboards"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Dashboards
+            </button>
+          </Link>
           <Select
             value={dateMode === 'preset' ? preset : 'custom'}
             onValueChange={(v) => {
