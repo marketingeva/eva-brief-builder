@@ -2,7 +2,7 @@ import { Outlet, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText, BarChart3 } from 'lucide-react';
+import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText, BarChart3, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,8 @@ import AddClientDialog from '@/components/AddClientDialog';
 import evaLogo from '@/assets/eva-logo.png';
 import evaIcon from '@/assets/eva-icon.png';
 import ThemeToggle from '@/components/ThemeToggle';
+import { EvaProvider, useEva } from '@/contexts/EvaContext';
+import EvaOverlay from '@/components/eva/EvaOverlay';
 
 interface ClientListItem {
   id: string;
