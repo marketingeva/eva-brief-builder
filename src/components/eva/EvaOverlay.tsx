@@ -14,7 +14,7 @@ const SUGGESTIONS = [
 ];
 
 export default function EvaPanel() {
-  const { open, setOpen, messages, state, toolStatus, sendMessage, clearConversation } = useEva();
+  const { open, setOpen, messages, state, toolStatus, suggestions, sendMessage, clearConversation } = useEva();
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
