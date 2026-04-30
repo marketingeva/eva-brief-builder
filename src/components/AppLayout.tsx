@@ -21,6 +21,7 @@ interface ClientListItem {
 }
 
 function AppLayoutInner() {
+  const { open: evaOpen } = useEva();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { slug } = useParams();
@@ -277,8 +278,11 @@ function AppLayoutInner() {
       {/* Eva side panel — sits next to the sidebar */}
       <EvaOverlay />
 
-      {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      {/* Main — hidden on desktop when Eva is open so Eva takes full width */}
+      <div className={cn(
+        'flex flex-1 flex-col overflow-hidden min-w-0',
+        evaOpen && 'hidden lg:hidden'
+      )}>
         {/* Mobile header */}
         <header className="flex h-14 items-center gap-3 border-b border-border/60 px-4 lg:hidden glass">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
