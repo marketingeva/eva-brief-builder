@@ -2,13 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { BookOpen, FileText, Palette, Radio, LayoutDashboard, Bot } from 'lucide-react';
+import { BookOpen, Radio, LayoutDashboard } from 'lucide-react';
 import OverviewTab from '@/pages/client-workspace/OverviewTab';
 import LearningTab from '@/pages/client-workspace/LearningTab';
-import BriefingsTab from '@/pages/client-workspace/BriefingsTab';
-import CreativesCopyTab from '@/pages/client-workspace/CreativesCopyTab';
 import LiveAdsTab from '@/pages/client-workspace/LiveAdsTab';
-import AITeamTab from '@/pages/client-workspace/AITeamTab';
 
 interface Client {
   id: string;
@@ -24,10 +21,7 @@ interface Client {
 const tabs = [
   { key: 'overview', label: 'Overzicht', icon: LayoutDashboard },
   { key: 'learning', label: 'Learning', icon: BookOpen },
-  { key: 'briefings', label: 'Briefings', icon: FileText },
-  { key: 'creatives', label: 'Creatives & Copy', icon: Palette },
   { key: 'live-ads', label: 'Live Ads', icon: Radio },
-  { key: 'ai-team', label: 'AI Team', icon: Bot },
 ] as const;
 
 type TabKey = typeof tabs[number]['key'];
@@ -89,7 +83,7 @@ export default function ClientWorkspace() {
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-foreground leading-tight">{client.name}</h1>
-            {client.care_type && (
+            {client.care_type && client.name.toLowerCase() !== 'wijdezorg' && (
               <span className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full glass-pill text-[11px] text-muted-foreground font-medium">
                 {client.care_type}
               </span>
@@ -140,10 +134,7 @@ export default function ClientWorkspace() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'overview' && <OverviewTab client={client} learningScore={learningScore} />}
         {activeTab === 'learning' && <LearningTab clientId={client.id} onScoreChange={setLearningScore} />}
-        {activeTab === 'briefings' && <BriefingsTab clientId={client.id} clientName={client.name} />}
-        {activeTab === 'creatives' && <CreativesCopyTab clientId={client.id} />}
         {activeTab === 'live-ads' && <LiveAdsTab clientName={client.name} clientId={client.id} />}
-        {activeTab === 'ai-team' && <AITeamTab clientId={client.id} clientName={client.name} />}
       </div>
     </div>
   );

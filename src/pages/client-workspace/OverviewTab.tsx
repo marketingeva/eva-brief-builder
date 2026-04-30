@@ -36,10 +36,7 @@ export default function OverviewTab({ client, learningScore }: Props) {
 
   const quickActions = [
     { label: 'Learning', icon: BookOpen, path: `/client/${slug}/learning`, tint: 'bg-primary/10 text-primary' },
-    { label: 'Briefings', icon: FileText, path: `/client/${slug}/briefings`, tint: 'bg-accent/15 text-accent-foreground' },
-    { label: 'Creatives', icon: Palette, path: `/client/${slug}/creatives`, tint: 'bg-primary/10 text-primary' },
     { label: 'Live Ads', icon: Radio, path: `/client/${slug}/live-ads`, tint: 'bg-success/15 text-success' },
-    { label: 'AI Team', icon: Bot, path: `/client/${slug}/ai-team`, tint: 'bg-primary/10 text-primary' },
   ];
 
   return (

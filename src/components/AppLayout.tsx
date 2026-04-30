@@ -2,7 +2,7 @@ import { Outlet, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText, BarChart3 } from 'lucide-react';
+import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText, BarChart3, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,8 @@ import AddClientDialog from '@/components/AddClientDialog';
 import evaLogo from '@/assets/eva-logo.png';
 import evaIcon from '@/assets/eva-icon.png';
 import ThemeToggle from '@/components/ThemeToggle';
+import { EvaProvider, useEva } from '@/contexts/EvaContext';
+import EvaOverlay from '@/components/eva/EvaOverlay';
 
 interface ClientListItem {
   id: string;
@@ -18,7 +20,7 @@ interface ClientListItem {
   care_type: string | null;
 }
 
-export default function AppLayout() {
+function AppLayoutInner() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { slug } = useParams();
@@ -245,7 +247,8 @@ export default function AppLayout() {
         </nav>
 
         {/* Footer */}
-        <div className="mt-auto p-3">
+        <div className="mt-auto p-3 space-y-2">
+          <EvaButton collapsed={collapsed} />
           <div className={cn(
             'rounded-2xl bg-sidebar-accent/40 p-2',
             collapsed && 'bg-transparent p-0'
@@ -288,6 +291,46 @@ export default function AppLayout() {
       </div>
 
       <AddClientDialog open={addOpen} onOpenChange={setAddOpen} onCreated={handleClientCreated} />
+      <EvaOverlay />
     </div>
   );
 }
+
+function EvaButton({ collapsed }: { collapsed: boolean }) {
+  const { setOpen } = useEva();
+  return (
+    <button
+      onClick={() => setOpen(true)}
+      title="Praat met Eva"
+      className={cn(
+        'group relative flex w-full items-center rounded-2xl transition-all overflow-hidden',
+        'bg-gradient-to-br from-primary/20 via-primary/10 to-accent/20 hover:from-primary/30 hover:via-primary/20 hover:to-accent/30',
+        'ring-1 ring-primary/20 hover:ring-primary/40 shadow-soft',
+        collapsed ? 'justify-center p-2' : 'gap-3 p-2.5'
+      )}
+    >
+      <span className={cn(
+        'relative flex shrink-0 items-center justify-center rounded-xl bg-primary/90 text-primary-foreground shadow-soft',
+        collapsed ? 'h-8 w-8' : 'h-9 w-9'
+      )}>
+        <Sparkles className="h-4 w-4" />
+        <span className="absolute inset-0 rounded-xl bg-primary/40 animate-ping opacity-50" />
+      </span>
+      {!collapsed && (
+        <div className="flex flex-col items-start min-w-0">
+          <span className="text-sm font-semibold text-sidebar-foreground leading-tight">Eva</span>
+          <span className="text-[10px] text-sidebar-foreground/60 leading-tight">AI assistant</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
+export default function AppLayout() {
+  return (
+    <EvaProvider>
+      <AppLayoutInner />
+    </EvaProvider>
+  );
+}
+
