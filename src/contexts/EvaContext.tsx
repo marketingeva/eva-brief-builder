@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { EvaState } from '@/components/eva/EvaOrb';
@@ -14,6 +15,7 @@ interface EvaContextValue {
   messages: EvaMessage[];
   state: EvaState;
   toolStatus: string | null;
+  suggestions: string[];
   sendMessage: (text: string) => Promise<void>;
   clearConversation: () => Promise<void>;
 }
@@ -31,7 +33,18 @@ export function EvaProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<EvaMessage[]>([]);
   const [state, setState] = useState<EvaState>('idle');
   const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const loadedRef = useRef(false);
+  const location = useLocation();
+  const lastPathRef = useRef(location.pathname);
+
+  // Auto-close Eva when navigating to a different route
+  useEffect(() => {
+    if (location.pathname !== lastPathRef.current) {
+      lastPathRef.current = location.pathname;
+      setOpen(false);
+    }
+  }, [location.pathname]);
 
   // Load saved conversation once
   useEffect(() => {
@@ -69,6 +82,7 @@ export function EvaProvider({ children }: { children: ReactNode }) {
     setMessages([...baseHistory, { role: 'assistant', content: '' }]);
     setState('thinking');
     setToolStatus(null);
+    setSuggestions([]);
 
     let assistantSoFar = '';
     const updateAssistant = (full: string) => {
@@ -108,7 +122,6 @@ export function EvaProvider({ children }: { children: ReactNode }) {
         if (done) break;
         buf += decoder.decode(value, { stream: true });
 
-        // Parse SSE events: blocks separated by \n\n
         let sep;
         while ((sep = buf.indexOf('\n\n')) !== -1) {
           const block = buf.slice(0, sep);
@@ -132,8 +145,9 @@ export function EvaProvider({ children }: { children: ReactNode }) {
           } else if (event === 'tool_done') {
             setToolStatus(null);
           } else if (event === 'done') {
-            // final flush — payload.text is the canonical full text
             if (payload.text) updateAssistant(payload.text);
+          } else if (event === 'suggestions') {
+            if (Array.isArray(payload.items)) setSuggestions(payload.items.slice(0, 3));
           } else if (event === 'error') {
             throw new Error(payload.message || 'Onbekende fout');
           }
@@ -142,7 +156,6 @@ export function EvaProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(msg);
-      // remove empty assistant placeholder if nothing came back
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         if (last?.role === 'assistant' && !last.content) {
@@ -165,10 +178,11 @@ export function EvaProvider({ children }: { children: ReactNode }) {
       );
     }
     setMessages([]);
+    setSuggestions([]);
   }, []);
 
   return (
-    <EvaContext.Provider value={{ open, setOpen, messages, state, toolStatus, sendMessage, clearConversation }}>
+    <EvaContext.Provider value={{ open, setOpen, messages, state, toolStatus, suggestions, sendMessage, clearConversation }}>
       {children}
     </EvaContext.Provider>
   );

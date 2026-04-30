@@ -16,7 +16,7 @@ const SYSTEM_PROMPT = `Je bent Eva — de centrale AI-assistent binnen Eva AI Ma
 Persona:
 - Je bent een grounded, ervaren recruitment-marketing strategist. Geen marketing-fluff, geen hype-taal.
 - Je antwoordt **altijd** in helder, professioneel Nederlands.
-- Wees beknopt en direct. Korte alinea's, lijstjes waar nuttig, geen overdreven beleefdheidsformules.
+- Wees beknopt en direct. Geen overdreven beleefdheidsformules.
 
 Wat je kunt:
 - Je hebt tools om data uit de hele app op te halen: klanten, learning profielen, live Meta-campagnes en metrics, en je kunt advertenties pauzeren/activeren of nieuwe ad sets/ads aanmaken.
@@ -27,7 +27,18 @@ Veiligheid voor destructieve acties:
 - Voor **toggle_campaign_status**, **create_adset** of **launch_ad** vraag je **altijd eerst expliciet** om bevestiging in de chat ("Zal ik X pauzeren? Ja/nee") en wacht je op een duidelijke ja van de gebruiker voor je de tool draait.
 - Voor lees-tools (data ophalen) heb je geen bevestiging nodig — gewoon doen.
 
-Bij twijfel over welke klant of welke periode: stel één korte vraag.`;
+Bij twijfel over welke klant of welke periode: stel één korte vraag.
+
+OPMAAK — DIT IS BELANGRIJK:
+Schrijf antwoorden altijd met markdown en duidelijke visuele structuur:
+- Begin met een **korte intro-zin** van max 1 regel.
+- Gebruik **lege regels tussen alinea's** — nooit één lange lap tekst.
+- Gebruik **vetgedrukte tussenkopjes** (bv. \`### Campagneprestaties\`) om secties te scheiden zodra het antwoord meerdere onderwerpen heeft.
+- Gebruik **bullet lists** (\`- \`) voor opsommingen van 2+ items, nooit komma-lijstjes.
+- Voor key-value data gebruik je een bullet met **vetgedrukte label**: \`- **Spend:** € 2.769,92\`.
+- Cijfers altijd Nederlands geformatteerd: \`€ 1.234,56\` en \`12,3%\`.
+- Sluit af met **één korte vervolg-zin** of vraag (max 1 regel).
+- Geen overbodige inleidingen ("Hier is een overzicht..."), kom direct ter zake.`;
 
 const TOOLS = [
   {
@@ -379,12 +390,72 @@ serve(async (req) => {
 
             // Done — finalize
             send("done", { text: assistantText });
+
             // Persist conversation (excluding system)
             const finalMessages = [...messages, { role: "assistant", content: assistantText }];
             await sb.from("eva_conversations").upsert(
               { user_id: user.id, messages: finalMessages, updated_at: new Date().toISOString() },
               { onConflict: "user_id" }
             );
+
+            // Generate 3 follow-up question suggestions based on the conversation
+            try {
+              const suggResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash-lite",
+                  messages: [
+                    {
+                      role: "system",
+                      content:
+                        "Je genereert exact 3 korte, logische vervolgvragen in het Nederlands die de gebruiker zou kunnen stellen op basis van het laatste antwoord van Eva. Vragen mogen max ~8 woorden zijn, geen herhaling van wat al gevraagd is, en concreet/actiegericht. Gebruik enkel de tool.",
+                    },
+                    ...messages.slice(-4),
+                    { role: "assistant", content: assistantText },
+                  ],
+                  tools: [
+                    {
+                      type: "function",
+                      function: {
+                        name: "return_suggestions",
+                        description: "Geef exact 3 vervolgvragen terug.",
+                        parameters: {
+                          type: "object",
+                          properties: {
+                            suggestions: {
+                              type: "array",
+                              minItems: 3,
+                              maxItems: 3,
+                              items: { type: "string" },
+                            },
+                          },
+                          required: ["suggestions"],
+                          additionalProperties: false,
+                        },
+                      },
+                    },
+                  ],
+                  tool_choice: { type: "function", function: { name: "return_suggestions" } },
+                }),
+              });
+              if (suggResp.ok) {
+                const sd = await suggResp.json();
+                const args = sd.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+                if (args) {
+                  const parsed = JSON.parse(args);
+                  if (Array.isArray(parsed.suggestions)) {
+                    send("suggestions", { items: parsed.suggestions.slice(0, 3) });
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("suggestions error:", e);
+            }
+
             break;
           }
         } catch (e) {
