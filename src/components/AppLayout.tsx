@@ -20,7 +20,7 @@ interface ClientListItem {
   care_type: string | null;
 }
 
-export default function AppLayout() {
+function AppLayoutInner() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { slug } = useParams();
