@@ -349,11 +349,11 @@ export default function AdsManagerPage() {
           <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmt(totalSpend)}</p>
         </div>
         <div className="p-5">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Meta leads</p>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Leads</p>
           <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmtNum(totalMetaLeads)}</p>
         </div>
         <div className="p-5">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Per Meta lead</p>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Kost per lead</p>
           <p className="text-2xl font-semibold mt-1.5 tabular-nums">
             {avgCostPerMetaLead > 0 ? fmt(avgCostPerMetaLead) : '—'}
           </p>
