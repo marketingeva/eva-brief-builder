@@ -22,6 +22,7 @@ import {
   RefreshCw, ChevronRight, ArrowLeft, CalendarDays, Eye, ExternalLink,
   Image as ImageIcon, Search,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -96,6 +97,7 @@ export default function AdsManagerPage() {
   const [selectedAdset, setSelectedAdset] = useState<MetricRow | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Ad detail
   const [adDetail, setAdDetail] = useState<AdDetail | null>(null);
@@ -196,6 +198,38 @@ export default function AdsManagerPage() {
       setShowAdDetail(false);
     } finally {
       setAdDetailLoading(false);
+    }
+  };
+
+  const toggleStatus = async (row: MetricRow, level: 'campaign' | 'adset' | 'ad', nextActive: boolean) => {
+    const newStatus = nextActive ? 'ACTIVE' : 'PAUSED';
+    const prevStatus = row.status;
+    setTogglingId(row.id);
+
+    const updateRow = (list: MetricRow[]) =>
+      list.map((r) => (r.id === row.id ? { ...r, status: newStatus } : r));
+    if (level === 'campaign') setCampaigns(updateRow);
+    else if (level === 'adset') setAdsets(updateRow);
+    else setAds(updateRow);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('toggle-meta-status', {
+        body: { id: row.id, level, status: newStatus },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(newStatus === 'ACTIVE' ? 'Geactiveerd in Meta' : 'Gepauzeerd in Meta');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Kon status niet wijzigen: ${err?.message || 'onbekende fout'}`);
+      // revert
+      const revert = (list: MetricRow[]) =>
+        list.map((r) => (r.id === row.id ? { ...r, status: prevStatus } : r));
+      if (level === 'campaign') setCampaigns(revert);
+      else if (level === 'adset') setAdsets(revert);
+      else setAds(revert);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -315,11 +349,11 @@ export default function AdsManagerPage() {
           <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmt(totalSpend)}</p>
         </div>
         <div className="p-5">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Meta leads</p>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Leads</p>
           <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmtNum(totalMetaLeads)}</p>
         </div>
         <div className="p-5">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Per Meta lead</p>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Kost per lead</p>
           <p className="text-2xl font-semibold mt-1.5 tabular-nums">
             {avgCostPerMetaLead > 0 ? fmt(avgCostPerMetaLead) : '—'}
           </p>
@@ -394,10 +428,11 @@ export default function AdsManagerPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-border/40 hover:bg-transparent">
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide h-10 w-[68px]">Status</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide h-10">Naam</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Spend</TableHead>
-                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Meta leads</TableHead>
-                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Per Meta lead</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Leads</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Kost per lead</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">CTR</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Unique clicks</TableHead>
                   <TableHead className="w-10 h-10"></TableHead>
@@ -416,6 +451,16 @@ export default function AdsManagerPage() {
                       else if (drillLevel === 'adsets') drillIntoAds(row);
                     }}
                   >
+                    <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={row.status === 'ACTIVE'}
+                        disabled={togglingId === row.id}
+                        onCheckedChange={(checked) => {
+                          const lvl = drillLevel === 'campaigns' ? 'campaign' : drillLevel === 'adsets' ? 'adset' : 'ad';
+                          toggleStatus(row, lvl, checked);
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="text-sm font-medium max-w-[320px] truncate py-3">{row.name}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums py-3">{fmt(row.spend)}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums py-3">{row.meta_leads > 0 ? fmtNum(row.meta_leads) : '—'}</TableCell>
