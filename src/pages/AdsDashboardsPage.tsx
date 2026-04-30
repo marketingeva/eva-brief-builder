@@ -389,96 +389,126 @@ export default function AdsDashboardsPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <CartesianGrid stroke="hsl(var(--border) / 0.5)" strokeDasharray="2 4" vertical={false} />
+                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} dy={6} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} dx={-4} />
                   <Tooltip
-                    contentStyle={tooltipStyle}
-                    formatter={(v: number, name: string) => [fmtNum(v), name]}
+                    cursor={{ stroke: 'hsl(var(--border))', strokeDasharray: '2 4' }}
+                    content={(p: any) => (
+                      <CampaignTooltip
+                        active={p.active}
+                        payload={p.payload}
+                        label={p.label}
+                        valueFormatter={(v) => fmtNum(v)}
+                      />
+                    )}
                   />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                    iconType="circle"
-                  />
-                  {leadSeriesCampaigns.map((c, i) => (
-                    <Line
-                      key={c.id}
-                      type="monotone"
-                      dataKey={`leads_${c.id}`}
-                      name={c.name}
-                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                      strokeWidth={2}
-                      dot={{ r: 2.5 }}
-                      connectNulls
-                    />
-                  ))}
+                  {leadSeriesCampaigns.map((c, i) => {
+                    const color = SERIES_COLORS[i % SERIES_COLORS.length];
+                    return (
+                      <Line
+                        key={c.id}
+                        type="monotone"
+                        dataKey={`leads_${c.id}`}
+                        name={c.name}
+                        stroke={color}
+                        strokeWidth={2.25}
+                        dot={false}
+                        activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--background))', fill: color }}
+                        connectNulls
+                      />
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             )}
           </div>
+          {leadSeriesCampaigns.length > 0 && <PillLegend series={leadSeriesCampaigns} />}
         </CardContent>
       </Card>
 
-      {/* Kost per Meta lead per dag — per campagne + Spend per dag */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-6">
-            <h3 className="text-sm font-semibold">Kost per Meta lead per dag — per campagne</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Lager is beter • top {leadSeriesCampaigns.length} campagnes</p>
-            <div className="h-64">
-              {leadSeriesCampaigns.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                  Geen leaddata in deze periode
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
-                      tickFormatter={(v) => `€${v}`} />
-                    <Tooltip contentStyle={tooltipStyle}
-                      formatter={(v: number, name: string) => [fmtEUR2(v), name]} />
-                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
-                    {leadSeriesCampaigns.map((c, i) => (
+      {/* Kost per Meta lead per dag — per campagne (full width) */}
+      <Card className="glass border-0 rounded-2xl shadow-none">
+        <CardContent className="p-6">
+          <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">Kost per Meta lead per dag — per campagne</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Lager is beter • top {leadSeriesCampaigns.length} campagnes
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {totals.cpl > 0 ? `${fmtEUR2(totals.cpl)} gemiddeld` : '—'}
+            </span>
+          </div>
+          <div className="h-72">
+            {leadSeriesCampaigns.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Geen leaddata in deze periode
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="hsl(var(--border) / 0.5)" strokeDasharray="2 4" vertical={false} />
+                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} dy={6} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
+                    tickFormatter={(v) => `€${v}`} dx={-4} />
+                  <Tooltip
+                    cursor={{ stroke: 'hsl(var(--border))', strokeDasharray: '2 4' }}
+                    content={(p: any) => (
+                      <CampaignTooltip
+                        active={p.active}
+                        payload={p.payload}
+                        label={p.label}
+                        valueFormatter={(v) => fmtEUR2(v)}
+                      />
+                    )}
+                  />
+                  {leadSeriesCampaigns.map((c, i) => {
+                    const color = SERIES_COLORS[i % SERIES_COLORS.length];
+                    return (
                       <Line
                         key={c.id}
                         type="monotone"
                         dataKey={`cpl_${c.id}`}
                         name={c.name}
-                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                        strokeWidth={2}
-                        dot={{ r: 2.5 }}
+                        stroke={color}
+                        strokeWidth={2.25}
+                        dot={false}
+                        activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--background))', fill: color }}
                         connectNulls
                       />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-6">
-            <h3 className="text-sm font-semibold">Spend per dag</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Dagelijkse advertentie-uitgaven</p>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartDays} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
-                    tickFormatter={(v) => `€${v}`} />
-                  <Tooltip contentStyle={tooltipStyle}
-                    formatter={(v: number) => [fmtEUR2(v), 'Spend']} />
-                  <Bar dataKey="spend" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                </BarChart>
+                    );
+                  })}
+                </LineChart>
               </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            )}
+          </div>
+          {leadSeriesCampaigns.length > 0 && <PillLegend series={leadSeriesCampaigns} />}
+        </CardContent>
+      </Card>
+
+      {/* Spend per dag (full width) */}
+      <Card className="glass border-0 rounded-2xl shadow-none">
+        <CardContent className="p-6">
+          <h3 className="text-sm font-semibold">Spend per dag</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Dagelijkse advertentie-uitgaven</p>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartDays} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid stroke="hsl(var(--border) / 0.5)" strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} dy={6} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
+                  tickFormatter={(v) => `€${v}`} dx={-4} />
+                <Tooltip contentStyle={tooltipStyle}
+                  cursor={{ fill: 'hsl(var(--muted) / 0.4)' }}
+                  formatter={(v: number) => [fmtEUR2(v), 'Spend']} />
+                <Bar dataKey="spend" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* CTR per dag + Unique clicks */}
       <div className="grid lg:grid-cols-2 gap-4">
