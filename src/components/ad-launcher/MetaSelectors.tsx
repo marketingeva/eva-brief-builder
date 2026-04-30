@@ -139,7 +139,7 @@ function ResourceCombobox({
   );
 }
 
-export default function MetaSelectors({ nameFilter, pageId, value, onChange }: Props) {
+export default function MetaSelectors({ nameFilter, pageId, value, onChange, adsetReloadKey = 0 }: Props) {
   const [campaigns, setCampaigns] = useState<Item[]>([]);
   const [adsets, setAdsets] = useState<Item[]>([]);
   const [leadForms, setLeadForms] = useState<Item[]>([]);
