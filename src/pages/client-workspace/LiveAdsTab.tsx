@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -312,19 +313,16 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="glass-strong rounded-3xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
+    <div className="p-8 max-w-6xl mx-auto space-y-8 animate-fade-in">
+      {/* Header — minimal */}
+      <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <Radio className="h-5 w-5 text-primary" />
-            Live Ads — {clientName}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Actieve campagnes (on/off = on) met "{clientName}" in de naam
+          <h2 className="text-base font-semibold text-foreground">Live Ads</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Actieve campagnes met "{clientName}" in de naam
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap rounded-full glass-pill p-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Select
             value={dateMode === 'preset' ? preset : 'custom'}
             onValueChange={(v) => {
@@ -336,7 +334,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
               }
             }}
           >
-            <SelectTrigger className="w-[160px] h-9 text-xs rounded-full border-0 glass">
+            <SelectTrigger className="w-[150px] h-9 text-xs rounded-full border-0 glass">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -372,59 +370,37 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           <button
             onClick={() => fetchCampaigns(true)}
             disabled={refreshing}
-            className="flex items-center gap-1.5 h-9 px-4 rounded-full glass glass-hover text-xs font-medium text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center h-9 w-9 rounded-full glass glass-hover text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Vernieuwen"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            Vernieuwen
           </button>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Actief ({levelLabel})</p>
-              <Activity className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{currentData.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Totale spend</p>
-              <DollarSign className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{fmt(totalSpend)}</p>
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Gemiddelde CPL</p>
-              <TrendingUp className={`h-4 w-4 ${avgCpl > CPL_THRESHOLD ? 'text-destructive' : 'text-success'}`} />
-            </div>
-            <p className={`text-2xl font-bold mt-1 ${avgCpl > CPL_THRESHOLD ? 'text-destructive' : ''}`}>
-              {avgCpl > 0 ? fmt(avgCpl) : '—'}
-            </p>
-            {avgCpl > CPL_THRESHOLD && (
-              <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
-                <AlertTriangle className="h-3 w-3" /> Boven €{CPL_THRESHOLD}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Totale leads</p>
-              <Users className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{fmtNum(totalLeads)}</p>
-          </CardContent>
-        </Card>
+      {/* Summary stats — clean numeric row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl glass border-0 overflow-hidden">
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Actief</p>
+          <p className="text-2xl font-semibold mt-1.5 tabular-nums">{currentData.length}</p>
+        </div>
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Spend</p>
+          <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmt(totalSpend)}</p>
+        </div>
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Gem. CPL</p>
+          <p className={cn(
+            'text-2xl font-semibold mt-1.5 tabular-nums',
+            avgCpl > CPL_THRESHOLD && 'text-destructive'
+          )}>
+            {avgCpl > 0 ? fmt(avgCpl) : '—'}
+          </p>
+        </div>
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Leads</p>
+          <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmtNum(totalLeads)}</p>
+        </div>
       </div>
 
       {/* Breadcrumb */}
@@ -462,55 +438,50 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
         <Card className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
       ) : currentData.length > 0 ? (
         <Card className="glass border-0 rounded-2xl shadow-none overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">{levelLabel}</CardTitle>
-          </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Naam</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Spend</TableHead>
-                  <TableHead className="text-xs text-right">Leads</TableHead>
-                  <TableHead className="text-xs text-right">Gem. CPL</TableHead>
-                  <TableHead className="text-xs text-right">CTR</TableHead>
-                  <TableHead className="text-xs text-right">Impressies</TableHead>
-                  <TableHead className="text-xs w-16"></TableHead>
+                <TableRow className="border-b border-border/40 hover:bg-transparent">
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide h-10">Naam</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Spend</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Leads</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">CPL</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">CTR</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Impressies</TableHead>
+                  <TableHead className="w-10 h-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {currentData.map((row) => (
                   <TableRow
                     key={row.id}
-                    className={`${row.cpl > CPL_THRESHOLD ? 'bg-destructive/5' : ''} ${drillLevel !== 'ads' ? 'cursor-pointer hover:bg-muted/70' : ''}`}
+                    className={cn(
+                      'border-b border-border/30 last:border-0',
+                      row.cpl > CPL_THRESHOLD && 'bg-destructive/5',
+                      drillLevel !== 'ads' && 'cursor-pointer hover:bg-muted/40 transition-colors'
+                    )}
                     onClick={() => {
                       if (drillLevel === 'campaigns') drillIntoAdsets(row);
                       else if (drillLevel === 'adsets') drillIntoAds(row);
                     }}
                   >
-                    <TableCell className="text-xs font-medium max-w-[220px] truncate">{row.name}</TableCell>
-                    <TableCell>
-                      <Badge className="text-[10px] font-medium bg-success/15 text-success border-success/20">Actief</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium">{fmt(row.spend)}</TableCell>
-                    <TableCell className="text-xs text-right font-medium">{row.leads > 0 ? fmtNum(row.leads) : '—'}</TableCell>
-                    <TableCell className="text-right">{cplBadge(row.cpl)}</TableCell>
-                    <TableCell className="text-xs text-right">{fmtPct(row.ctr)}</TableCell>
-                    <TableCell className="text-xs text-right">{fmtNum(row.impressions)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-sm font-medium max-w-[260px] truncate py-3">{row.name}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums py-3">{fmt(row.spend)}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums py-3">{row.leads > 0 ? fmtNum(row.leads) : '—'}</TableCell>
+                    <TableCell className="text-right py-3">{cplBadge(row.cpl)}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums text-muted-foreground py-3">{fmtPct(row.ctr)}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums text-muted-foreground py-3">{fmtNum(row.impressions)}</TableCell>
+                    <TableCell className="text-right py-3 pr-4">
                       {drillLevel === 'ads' ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
+                        <button
                           onClick={(e) => { e.stopPropagation(); fetchAdDetail(row.id); }}
                           title="Bekijk preview"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/50 inline" />
                       )}
                     </TableCell>
                   </TableRow>
@@ -520,17 +491,12 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-12 text-center">
-            <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
-            <p className="text-sm font-medium text-muted-foreground">
-              Geen {drillLevel === 'campaigns' ? `actieve campagnes met "${clientName}"` : drillLevel === 'adsets' ? 'actieve advertentiesets' : 'actieve advertenties'} gevonden
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Alleen items waarvan de on/off-schakelaar op "on" staat worden getoond.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="py-16 text-center">
+          <Radio className="mx-auto mb-3 h-8 w-8 text-muted-foreground/20" />
+          <p className="text-sm text-muted-foreground">
+            Geen {drillLevel === 'campaigns' ? `actieve campagnes met "${clientName}"` : drillLevel === 'adsets' ? 'advertentiesets' : 'advertenties'} gevonden
+          </p>
+        </div>
       )}
 
       {fetchedAt && (

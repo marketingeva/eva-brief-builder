@@ -357,24 +357,24 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
   );
 
   return (
-    <div className="p-6 max-w-4xl mx-auto animate-fade-in">
-      {/* Score header */}
-      <div className="mb-6 flex items-center justify-between glass-strong rounded-3xl px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            'flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-bold glass-pill',
+    <div className="p-8 max-w-4xl mx-auto animate-fade-in">
+      {/* Score header — minimal */}
+      <div className="mb-8 flex items-end justify-between gap-6">
+        <div className="flex items-baseline gap-4">
+          <span className={cn(
+            'text-4xl font-semibold tracking-tight tabular-nums',
             score >= 80 ? 'text-success' :
             score >= 40 ? 'text-warning' :
             'text-muted-foreground'
           )}>
-            {score}%
-          </div>
+            {score}<span className="text-xl text-muted-foreground/60">%</span>
+          </span>
           <div>
-            <h2 className="text-lg font-bold text-foreground">AI Training Book</h2>
+            <h2 className="text-base font-semibold text-foreground leading-tight">AI Training Book</h2>
             <p className="text-xs text-muted-foreground">
-              {score >= 80 ? 'Getraind — voldoende context voor AI generatie.' :
-               score >= 40 ? 'In opbouw — bevestig en vul meer secties in.' :
-               'Begin met website analyse of vul handmatig in.'}
+              {score >= 80 ? 'Getraind — voldoende context voor AI.' :
+               score >= 40 ? 'In opbouw — bevestig meer secties.' :
+               'Start met website analyse of vul handmatig in.'}
             </p>
           </div>
         </div>
@@ -383,40 +383,36 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
           disabled={saving}
           className="flex items-center gap-1.5 h-9 px-4 rounded-full glass glass-hover text-sm font-medium text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? <Save className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Alles opslaan
+          {saving ? <Save className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Opslaan
         </button>
       </div>
 
-      {/* Status legend */}
-      <div className="flex items-center gap-4 mb-4 text-[10px] text-muted-foreground px-2">
-        <span className="flex items-center gap-1">Klik op status om te bevestigen:</span>
-        <StatusBadge status="suggested" compact />
-        <StatusBadge status="needs_review" compact />
-        <StatusBadge status="confirmed" compact />
-      </div>
-
-      {/* Website scan status */}
+      {/* Website scan status — subtle inline */}
       {(analyzedAt || clientInfo.website_url) && (
-        <div className="mb-4 flex items-center justify-between rounded-2xl glass-pill px-4 py-2.5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Globe className="h-3.5 w-3.5" />
+        <div className="mb-6 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 min-w-0">
+            <Globe className="h-3.5 w-3.5 shrink-0" />
             {analyzedAt ? (
-              <span>Website geanalyseerd op {new Date(analyzedAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} — velden zijn automatisch ingevuld</span>
+              <span className="truncate">Geanalyseerd op {new Date(analyzedAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
             ) : (
               <span>Nog niet geanalyseerd</span>
             )}
           </div>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleRescan} disabled={rescanning || !clientInfo.website_url}>
-            <RefreshCw className={cn("mr-1 h-3 w-3", rescanning && "animate-spin")} />
+          <button
+            onClick={handleRescan}
+            disabled={rescanning || !clientInfo.website_url}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={cn("h-3 w-3", rescanning && "animate-spin")} />
             {rescanning ? 'Bezig...' : 'Opnieuw scannen'}
-          </Button>
+          </button>
         </div>
       )}
 
-      <Accordion type="multiple" defaultValue={['org', 'care']} className="space-y-3">
+      <Accordion type="multiple" defaultValue={['org', 'care']} className="rounded-2xl glass border-0 px-2">
         {/* 1. Organisatie */}
-        <AccordionItem value="org" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="org" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-primary/60" />
@@ -462,7 +458,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 2. Locaties */}
-        <AccordionItem value="locations" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="locations" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary/60" />
@@ -488,7 +484,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 3. Zorgtypen */}
-        <AccordionItem value="care" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="care" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Heart className="h-4 w-4 text-primary/60" />
@@ -525,7 +521,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 4. Functies en Doelgroepen */}
-        <AccordionItem value="roles" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="roles" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary/60" />
@@ -586,7 +582,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 5. USPs */}
-        <AccordionItem value="usps" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="usps" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 text-primary/60" />
@@ -627,7 +623,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 6. Recruitmentstrategie */}
-        <AccordionItem value="strategy" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="strategy" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-primary/60" />
@@ -655,7 +651,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 7. Creative richtlijnen */}
-        <AccordionItem value="creative" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="creative" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Palette className="h-4 w-4 text-primary/60" />
@@ -693,7 +689,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 8. Uploads */}
-        <AccordionItem value="uploads" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="uploads" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <FileUp className="h-4 w-4 text-primary/60" />
@@ -737,7 +733,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 9. Interne Eva Zorg inzichten */}
-        <AccordionItem value="internal" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="internal" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary/60" />
