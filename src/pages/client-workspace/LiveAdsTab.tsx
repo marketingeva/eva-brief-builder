@@ -382,7 +382,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Actief ({levelLabel})</p>
@@ -391,7 +391,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             <p className="text-2xl font-bold mt-1">{currentData.length}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Totale spend</p>
@@ -400,7 +400,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             <p className="text-2xl font-bold mt-1">{fmt(totalSpend)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Gemiddelde CPL</p>
@@ -416,7 +416,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Totale leads</p>
@@ -459,9 +459,9 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
 
       {/* Table */}
       {drillLoading ? (
-        <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+        <Card className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
       ) : currentData.length > 0 ? (
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">{levelLabel}</CardTitle>
           </CardHeader>
@@ -520,7 +520,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-12 text-center">
             <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
             <p className="text-sm font-medium text-muted-foreground">
