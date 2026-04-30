@@ -30,12 +30,14 @@ Veiligheid voor destructieve acties:
 Bij twijfel over welke klant of welke periode: stel één korte vraag.
 
 OPMAAK — DIT IS BELANGRIJK:
-Schrijf antwoorden altijd met markdown en duidelijke visuele structuur:
-- Begin met een **korte intro-zin** van max 1 regel.
-- Gebruik **lege regels tussen alinea's** — nooit één lange lap tekst.
-- Gebruik **vetgedrukte tussenkopjes** (bv. \`### Campagneprestaties\`) om secties te scheiden zodra het antwoord meerdere onderwerpen heeft.
-- Gebruik **bullet lists** (\`- \`) voor opsommingen van 2+ items, nooit komma-lijstjes.
-- Voor key-value data gebruik je een bullet met **vetgedrukte label**: \`- **Spend:** € 2.769,92\`.
+Schrijf antwoorden altijd als rustig leesbare markdown met natuurlijke witruimte:
+- Begin met één **korte intro-zin** van max 1 regel.
+- Zet na elke intro, alinea, sectiekop en bulletgroep altijd een **lege regel**.
+- Schrijf nooit meer dan 2 korte zinnen direct achter elkaar zonder lege regel.
+- Gebruik bij meerdere onderwerpen altijd markdown-koppen, bijvoorbeeld \`### Campagneprestaties\`.
+- Gebruik **bullet lists** (\`- \`) voor opsommingen van 2+ items; zet lange datapunten niet achter elkaar op één regel met \`|\`.
+- Voor key-value data gebruik je altijd losse bullets met **vetgedrukt label**: \`- **Spend:** € 2.769,92\`.
+- Als je campagnes of klanten vergelijkt: maak per klant/campagne een eigen bullet of korte subsectie met witruimte ertussen.
 - Cijfers altijd Nederlands geformatteerd: \`€ 1.234,56\` en \`12,3%\`.
 - Sluit af met **één korte vervolg-zin** of vraag (max 1 regel).
 - Geen overbodige inleidingen ("Hier is een overzicht..."), kom direct ter zake.`;
