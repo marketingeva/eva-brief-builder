@@ -198,7 +198,7 @@ serve(async (req) => {
     if (adsetId) {
       const [adsRes, insightsRes] = await Promise.all([
         fetch(`${META_BASE}/${adsetId}/ads?fields=id,name,status,effective_status,configured_status&limit=100&access_token=${accessToken}`),
-        fetch(`${META_BASE}/${adsetId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,ctr,actions,cost_per_action_type&time_range=${timeRange}&level=ad&limit=100&access_token=${accessToken}`),
+        fetch(`${META_BASE}/${adsetId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=ad&limit=100&access_token=${accessToken}`),
       ]);
 
       const adsData = adsRes.ok ? await adsRes.json() : { data: [] };
@@ -222,7 +222,7 @@ serve(async (req) => {
     if (campaignId) {
       const [adsetsRes, insightsRes] = await Promise.all([
         fetch(`${META_BASE}/${campaignId}/adsets?fields=id,name,status,effective_status,configured_status,daily_budget,lifetime_budget&limit=100&access_token=${accessToken}`),
-        fetch(`${META_BASE}/${campaignId}/insights?fields=adset_id,adset_name,spend,impressions,clicks,ctr,actions,cost_per_action_type&time_range=${timeRange}&level=adset&limit=100&access_token=${accessToken}`),
+        fetch(`${META_BASE}/${campaignId}/insights?fields=adset_id,adset_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=adset&limit=100&access_token=${accessToken}`),
       ]);
 
       const adsetsData = adsetsRes.ok ? await adsetsRes.json() : { data: [] };
@@ -249,7 +249,7 @@ serve(async (req) => {
     // ── Default: campaigns ──
     const [campaignsRes, insightsRes] = await Promise.all([
       fetch(`${META_BASE}/${actId}/campaigns?fields=id,name,status,effective_status,configured_status,objective,daily_budget,lifetime_budget&limit=100&access_token=${accessToken}`),
-      fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,actions,cost_per_action_type&time_range=${timeRange}&level=campaign&limit=100&access_token=${accessToken}`),
+      fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=campaign&limit=100&access_token=${accessToken}`),
     ]);
 
     if (!campaignsRes.ok) {
