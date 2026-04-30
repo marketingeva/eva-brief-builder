@@ -77,7 +77,72 @@ const fmtDate = (s: string) => {
   return d.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' });
 };
 
-export default function AdsDashboardsPage() {
+interface SeriesItem { id: string; name: string }
+
+/** Pill-style legend chip per campaign with colored dot. */
+function PillLegend({ series }: { series: SeriesItem[] }) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-4">
+      {series.map((s, i) => {
+        const color = SERIES_COLORS[i % SERIES_COLORS.length];
+        return (
+          <div
+            key={s.id}
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium border border-border/40 bg-background/40 text-foreground/80"
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
+            />
+            <span className="truncate max-w-[140px]">{s.name}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Custom tooltip for per-campaign multi-line charts. */
+function CampaignTooltip({
+  active, payload, label, valueFormatter,
+}: {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+  valueFormatter: (v: number) => string;
+}) {
+  if (!active || !payload?.length) return null;
+  const rows = [...payload]
+    .filter((p) => p.value != null)
+    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-border/40 bg-popover/95 backdrop-blur-xl shadow-xl px-3.5 py-3 min-w-[200px]">
+      <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
+        {label}
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((r) => (
+          <div key={r.dataKey} className="flex items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="h-1.5 w-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: r.color, boxShadow: `0 0 6px ${r.color}` }}
+              />
+              <span className="truncate text-foreground/90">{r.name}</span>
+            </div>
+            <span className="tabular-nums font-medium text-foreground">
+              {valueFormatter(r.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
   const [days, setDays] = useState<DailyPoint[]>([]);
   const [perCampaign, setPerCampaign] = useState<CampaignAgg[]>([]);
   const [perCampaignDaily, setPerCampaignDaily] = useState<CampaignDailyPoint[]>([]);
