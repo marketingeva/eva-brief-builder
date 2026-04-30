@@ -412,7 +412,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
 
       <Accordion type="multiple" defaultValue={['org', 'care']} className="space-y-3">
         {/* 1. Organisatie */}
-        <AccordionItem value="org" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="org" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-primary/60" />
@@ -458,7 +458,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 2. Locaties */}
-        <AccordionItem value="locations" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="locations" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary/60" />
@@ -484,7 +484,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 3. Zorgtypen */}
-        <AccordionItem value="care" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="care" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Heart className="h-4 w-4 text-primary/60" />
@@ -521,7 +521,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 4. Functies en Doelgroepen */}
-        <AccordionItem value="roles" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="roles" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary/60" />
@@ -582,7 +582,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 5. USPs */}
-        <AccordionItem value="usps" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="usps" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 text-primary/60" />
@@ -623,7 +623,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 6. Recruitmentstrategie */}
-        <AccordionItem value="strategy" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="strategy" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-primary/60" />
@@ -651,7 +651,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 7. Creative richtlijnen */}
-        <AccordionItem value="creative" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="creative" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <Palette className="h-4 w-4 text-primary/60" />
@@ -689,7 +689,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 8. Uploads */}
-        <AccordionItem value="uploads" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="uploads" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <FileUp className="h-4 w-4 text-primary/60" />
@@ -733,7 +733,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </AccordionItem>
 
         {/* 9. Interne Eva Zorg inzichten */}
-        <AccordionItem value="internal" className="glass rounded-2xl border-0 px-4">
+        <AccordionItem value="internal" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary/60" />
