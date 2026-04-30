@@ -410,7 +410,7 @@ export default function LearningTab({ clientId, onScoreChange }: Props) {
         </div>
       )}
 
-      <Accordion type="multiple" defaultValue={['org', 'care']} className="space-y-3">
+      <Accordion type="multiple" defaultValue={['org', 'care']} className="rounded-2xl glass border-0 px-2">
         {/* 1. Organisatie */}
         <AccordionItem value="org" className="border-b border-border/50 last:border-0">
           <AccordionTrigger className="text-sm font-medium">
