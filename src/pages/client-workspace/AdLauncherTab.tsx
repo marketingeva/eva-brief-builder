@@ -298,6 +298,20 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
           onSave={(texts) => setCreatives((c) => c.map((r) => r.id === editingId ? { ...r, texts } : r))}
         />
       )}
+
+      <NewAdsetDialog
+        open={newAdsetOpen}
+        onOpenChange={setNewAdsetOpen}
+        clientId={clientId}
+        clientName={clientName}
+        pageId={pageId}
+        nameFilter={nameFilter}
+        initialCampaignId={selection.campaign_id}
+        onCreated={(adsetId, _name, campaignId) => {
+          setSelection((s) => ({ ...s, campaign_id: campaignId, adset_id: adsetId }));
+          setAdsetRefreshKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 }
