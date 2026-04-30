@@ -303,10 +303,10 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
       <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}><CardContent className="p-5"><Skeleton className="h-16 w-full" /></CardContent></Card>
+            <Card key={i} className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-5"><Skeleton className="h-16 w-full" /></CardContent></Card>
           ))}
         </div>
-        <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
+        <Card className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
       </div>
     );
   }
