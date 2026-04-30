@@ -22,6 +22,7 @@ import {
   RefreshCw, ChevronRight, ArrowLeft, CalendarDays, Eye, ExternalLink,
   Image as ImageIcon, Search,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
