@@ -51,8 +51,8 @@ export default function EvaPanel() {
         'z-40 flex flex-col glass-dark text-sidebar-foreground animate-fade-in',
         // Mobile: floating panel
         'fixed inset-y-3 right-3 left-3 rounded-3xl',
-        // Desktop: sits right next to the sidebar, in-flow
-        'lg:relative lg:inset-auto lg:my-3 lg:ml-3 lg:rounded-3xl lg:w-[380px] xl:w-[420px] lg:shrink-0'
+        // Desktop: floating, takes the full remaining width next to the sidebar
+        'lg:relative lg:inset-auto lg:my-3 lg:mx-3 lg:rounded-3xl lg:flex-1 lg:min-w-0'
       )}
     >
       {/* Header */}
