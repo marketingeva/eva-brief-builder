@@ -15,6 +15,7 @@ interface EvaContextValue {
   messages: EvaMessage[];
   state: EvaState;
   toolStatus: string | null;
+  suggestions: string[];
   sendMessage: (text: string) => Promise<void>;
   clearConversation: () => Promise<void>;
 }
@@ -32,7 +33,18 @@ export function EvaProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<EvaMessage[]>([]);
   const [state, setState] = useState<EvaState>('idle');
   const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const loadedRef = useRef(false);
+  const location = useLocation();
+  const lastPathRef = useRef(location.pathname);
+
+  // Auto-close Eva when navigating to a different route
+  useEffect(() => {
+    if (location.pathname !== lastPathRef.current) {
+      lastPathRef.current = location.pathname;
+      setOpen(false);
+    }
+  }, [location.pathname]);
 
   // Load saved conversation once
   useEffect(() => {
