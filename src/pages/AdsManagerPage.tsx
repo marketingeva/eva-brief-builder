@@ -428,10 +428,11 @@ export default function AdsManagerPage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-border/40 hover:bg-transparent">
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide h-10 w-[68px]">Status</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide h-10">Naam</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Spend</TableHead>
-                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Meta leads</TableHead>
-                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Per Meta lead</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Leads</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Kost per lead</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">CTR</TableHead>
                   <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Unique clicks</TableHead>
                   <TableHead className="w-10 h-10"></TableHead>
