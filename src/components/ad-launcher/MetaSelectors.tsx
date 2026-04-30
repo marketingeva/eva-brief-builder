@@ -18,6 +18,7 @@ interface Props {
   pageId?: string | null;
   value: MetaSelection;
   onChange: (v: MetaSelection) => void;
+  adsetReloadKey?: number;
 }
 
 interface Item {
