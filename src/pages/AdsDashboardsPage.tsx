@@ -304,57 +304,92 @@ export default function AdsDashboardsPage() {
         </div>
       </div>
 
-      {/* Leads per dag */}
+      {/* Leads per dag — per campagne */}
       <Card className="glass border-0 rounded-2xl shadow-none">
         <CardContent className="p-6">
-          <div className="flex items-baseline justify-between mb-4">
+          <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Leads per dag</h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Aantal leads via Meta lead forms per dag</p>
+              <h3 className="text-sm font-semibold">Leads per dag — per campagne</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Meta leads per dag, opgesplitst per campagne (top {leadSeriesCampaigns.length})
+              </p>
             </div>
             <span className="text-xs text-muted-foreground tabular-nums">{fmtNum(totals.leads)} totaal</span>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartDays} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="leadsFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number) => [fmtNum(v), 'Leads']}
-                />
-                <Area type="monotone" dataKey="meta_leads" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#leadsFill)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-72">
+            {leadSeriesCampaigns.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Geen leaddata in deze periode
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number, name: string) => [fmtNum(v), name]}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                    iconType="circle"
+                  />
+                  {leadSeriesCampaigns.map((c, i) => (
+                    <Line
+                      key={c.id}
+                      type="monotone"
+                      dataKey={`leads_${c.id}`}
+                      name={c.name}
+                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 2.5 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Cost per lead per dag + Spend per dag */}
+      {/* Kost per Meta lead per dag — per campagne + Spend per dag */}
       <div className="grid lg:grid-cols-2 gap-4">
         <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-6">
-            <h3 className="text-sm font-semibold">Kost per lead per dag</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Lager is beter</p>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartDays} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
-                    tickFormatter={(v) => `€${v}`} />
-                  <Tooltip contentStyle={tooltipStyle}
-                    formatter={(v: number) => [fmtEUR2(v), 'Kost per lead']} />
-                  <Line type="monotone" dataKey="cpl_round" stroke="hsl(var(--accent))" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
+            <h3 className="text-sm font-semibold">Kost per Meta lead per dag — per campagne</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Lager is beter • top {leadSeriesCampaigns.length} campagnes</p>
+            <div className="h-64">
+              {leadSeriesCampaigns.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                  Geen leaddata in deze periode
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
+                      tickFormatter={(v) => `€${v}`} />
+                    <Tooltip contentStyle={tooltipStyle}
+                      formatter={(v: number, name: string) => [fmtEUR2(v), name]} />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
+                    {leadSeriesCampaigns.map((c, i) => (
+                      <Line
+                        key={c.id}
+                        type="monotone"
+                        dataKey={`cpl_${c.id}`}
+                        name={c.name}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 2.5 }}
+                        connectNulls
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
