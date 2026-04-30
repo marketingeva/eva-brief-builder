@@ -438,55 +438,50 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
         <Card className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
       ) : currentData.length > 0 ? (
         <Card className="glass border-0 rounded-2xl shadow-none overflow-hidden">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">{levelLabel}</CardTitle>
-          </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Naam</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Spend</TableHead>
-                  <TableHead className="text-xs text-right">Leads</TableHead>
-                  <TableHead className="text-xs text-right">Gem. CPL</TableHead>
-                  <TableHead className="text-xs text-right">CTR</TableHead>
-                  <TableHead className="text-xs text-right">Impressies</TableHead>
-                  <TableHead className="text-xs w-16"></TableHead>
+                <TableRow className="border-b border-border/40 hover:bg-transparent">
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide h-10">Naam</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Spend</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Leads</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">CPL</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">CTR</TableHead>
+                  <TableHead className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide text-right h-10">Impressies</TableHead>
+                  <TableHead className="w-10 h-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {currentData.map((row) => (
                   <TableRow
                     key={row.id}
-                    className={`${row.cpl > CPL_THRESHOLD ? 'bg-destructive/5' : ''} ${drillLevel !== 'ads' ? 'cursor-pointer hover:bg-muted/70' : ''}`}
+                    className={cn(
+                      'border-b border-border/30 last:border-0',
+                      row.cpl > CPL_THRESHOLD && 'bg-destructive/5',
+                      drillLevel !== 'ads' && 'cursor-pointer hover:bg-muted/40 transition-colors'
+                    )}
                     onClick={() => {
                       if (drillLevel === 'campaigns') drillIntoAdsets(row);
                       else if (drillLevel === 'adsets') drillIntoAds(row);
                     }}
                   >
-                    <TableCell className="text-xs font-medium max-w-[220px] truncate">{row.name}</TableCell>
-                    <TableCell>
-                      <Badge className="text-[10px] font-medium bg-success/15 text-success border-success/20">Actief</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium">{fmt(row.spend)}</TableCell>
-                    <TableCell className="text-xs text-right font-medium">{row.leads > 0 ? fmtNum(row.leads) : '—'}</TableCell>
-                    <TableCell className="text-right">{cplBadge(row.cpl)}</TableCell>
-                    <TableCell className="text-xs text-right">{fmtPct(row.ctr)}</TableCell>
-                    <TableCell className="text-xs text-right">{fmtNum(row.impressions)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-sm font-medium max-w-[260px] truncate py-3">{row.name}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums py-3">{fmt(row.spend)}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums py-3">{row.leads > 0 ? fmtNum(row.leads) : '—'}</TableCell>
+                    <TableCell className="text-right py-3">{cplBadge(row.cpl)}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums text-muted-foreground py-3">{fmtPct(row.ctr)}</TableCell>
+                    <TableCell className="text-sm text-right tabular-nums text-muted-foreground py-3">{fmtNum(row.impressions)}</TableCell>
+                    <TableCell className="text-right py-3 pr-4">
                       {drillLevel === 'ads' ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
+                        <button
                           onClick={(e) => { e.stopPropagation(); fetchAdDetail(row.id); }}
                           title="Bekijk preview"
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/50 inline" />
                       )}
                     </TableCell>
                   </TableRow>
@@ -496,17 +491,12 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-12 text-center">
-            <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
-            <p className="text-sm font-medium text-muted-foreground">
-              Geen {drillLevel === 'campaigns' ? `actieve campagnes met "${clientName}"` : drillLevel === 'adsets' ? 'actieve advertentiesets' : 'actieve advertenties'} gevonden
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Alleen items waarvan de on/off-schakelaar op "on" staat worden getoond.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="py-16 text-center">
+          <Radio className="mx-auto mb-3 h-8 w-8 text-muted-foreground/20" />
+          <p className="text-sm text-muted-foreground">
+            Geen {drillLevel === 'campaigns' ? `actieve campagnes met "${clientName}"` : drillLevel === 'adsets' ? 'advertentiesets' : 'advertenties'} gevonden
+          </p>
+        </div>
       )}
 
       {fetchedAt && (
