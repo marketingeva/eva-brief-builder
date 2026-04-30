@@ -80,6 +80,7 @@ const fmtDate = (s: string) => {
 export default function AdsDashboardsPage() {
   const [days, setDays] = useState<DailyPoint[]>([]);
   const [perCampaign, setPerCampaign] = useState<CampaignAgg[]>([]);
+  const [perCampaignDaily, setPerCampaignDaily] = useState<CampaignDailyPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
