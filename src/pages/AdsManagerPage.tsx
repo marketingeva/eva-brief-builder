@@ -201,6 +201,38 @@ export default function AdsManagerPage() {
     }
   };
 
+  const toggleStatus = async (row: MetricRow, level: 'campaign' | 'adset' | 'ad', nextActive: boolean) => {
+    const newStatus = nextActive ? 'ACTIVE' : 'PAUSED';
+    const prevStatus = row.status;
+    setTogglingId(row.id);
+
+    const updateRow = (list: MetricRow[]) =>
+      list.map((r) => (r.id === row.id ? { ...r, status: newStatus } : r));
+    if (level === 'campaign') setCampaigns(updateRow);
+    else if (level === 'adset') setAdsets(updateRow);
+    else setAds(updateRow);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('toggle-meta-status', {
+        body: { id: row.id, level, status: newStatus },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(newStatus === 'ACTIVE' ? 'Geactiveerd in Meta' : 'Gepauzeerd in Meta');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Kon status niet wijzigen: ${err?.message || 'onbekende fout'}`);
+      // revert
+      const revert = (list: MetricRow[]) =>
+        list.map((r) => (r.id === row.id ? { ...r, status: prevStatus } : r));
+      if (level === 'campaign') setCampaigns(revert);
+      else if (level === 'adset') setAdsets(revert);
+      else setAds(revert);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const goBack = () => {
     setSearch('');
     if (drillLevel === 'ads') {
