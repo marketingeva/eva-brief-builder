@@ -204,7 +204,7 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange, ads
       });
 
     return () => { active = false; };
-  }, [value.campaign_id]);
+  }, [value.campaign_id, adsetReloadKey]);
 
   useEffect(() => {
     let active = true;
