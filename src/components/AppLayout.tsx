@@ -274,8 +274,11 @@ function AppLayoutInner() {
         </div>
       </aside>
 
+      {/* Eva side panel — sits next to the sidebar */}
+      <EvaOverlay />
+
       {/* Main */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         {/* Mobile header */}
         <header className="flex h-14 items-center gap-3 border-b border-border/60 px-4 lg:hidden glass">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
@@ -291,7 +294,6 @@ function AppLayoutInner() {
       </div>
 
       <AddClientDialog open={addOpen} onOpenChange={setAddOpen} onCreated={handleClientCreated} />
-      <EvaOverlay />
     </div>
   );
 }
