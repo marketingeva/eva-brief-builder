@@ -534,17 +534,19 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
                 </span>
               </div>
 
-              {/* Image preview — clean, borderless */}
+              {/* Image preview — compact, centered */}
               {adDetail.image_url ? (
-                <div className="rounded-2xl overflow-hidden bg-muted/40">
-                  <img
-                    src={adDetail.image_url}
-                    alt={adDetail.name}
-                    className="w-full max-h-[340px] object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
+                <div className="flex justify-center">
+                  <div className="rounded-xl overflow-hidden bg-muted/40 max-w-[280px]">
+                    <img
+                      src={adDetail.image_url}
+                      alt={adDetail.name}
+                      className="w-full max-h-[260px] object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
                 </div>
               ) : null}
 
