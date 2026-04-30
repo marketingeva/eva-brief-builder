@@ -183,8 +183,8 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>
-                + Create Ad Set
+              <Button variant="outline" size="sm" onClick={() => setNewAdsetOpen(true)}>
+                + Nieuwe ad set
               </Button>
               <Button size="sm" onClick={launch} disabled={!canLaunch || launching} className="font-semibold">
                 {launching ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Rocket className="h-4 w-4 mr-1.5" />}
