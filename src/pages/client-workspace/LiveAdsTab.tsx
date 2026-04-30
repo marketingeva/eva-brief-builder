@@ -576,42 +576,40 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
                 </div>
               )}
 
-              {/* Compact meta grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-2 border-t border-border/40">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Call-to-action</p>
-                  <p className="text-sm text-foreground">
-                    {adDetail.cta_type ? (CTA_LABELS[adDetail.cta_type] || adDetail.cta_type) : <span className="text-muted-foreground">—</span>}
-                  </p>
-                </div>
-                <div className="space-y-1 min-w-0">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Bestemming</p>
-                  {adDetail.link_url && !/^https?:\/\/(www\.)?fb\.me\/?$/i.test(adDetail.link_url) ? (
-                    <a href={adDetail.link_url} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate max-w-full">
-                      <span className="truncate">{adDetail.link_url.replace(/^https?:\/\//, '')}</span>
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">—</p>
-                  )}
-                </div>
+              {/* CTA */}
+              <div className="space-y-1 pt-2 border-t border-border/40">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Call-to-action</p>
+                <p className="text-sm text-foreground">
+                  {adDetail.cta_type ? (CTA_LABELS[adDetail.cta_type] || adDetail.cta_type) : <span className="text-muted-foreground">—</span>}
+                </p>
               </div>
 
-              {/* Lead form */}
+              {/* Lead form — refined card */}
               {adDetail.lead_form && (
-                <div className="space-y-2 pt-4 border-t border-border/40">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead formulier</p>
-                  <p className="text-sm font-medium text-foreground">{adDetail.lead_form.name}</p>
+                <div className="space-y-3 pt-4 border-t border-border/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead formulier</p>
+                      <p className="text-sm font-semibold text-foreground mt-1 truncate">{adDetail.lead_form.name}</p>
+                    </div>
+                    {adDetail.lead_form.questions.length > 0 && (
+                      <span className="shrink-0 inline-flex items-center justify-center h-6 min-w-[24px] px-2 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                        {adDetail.lead_form.questions.length}
+                      </span>
+                    )}
+                  </div>
+
                   {adDetail.lead_form.questions.length > 0 && (
-                    <ul className="space-y-1 mt-1.5">
+                    <div className="rounded-xl bg-muted/40 divide-y divide-border/40 overflow-hidden">
                       {adDetail.lead_form.questions.map((q, i) => (
-                        <li key={i} className="text-xs text-muted-foreground flex items-center gap-2">
-                          <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                          {q.label || q.key}
-                        </li>
+                        <div key={i} className="flex items-center gap-3 px-3.5 py-2.5">
+                          <span className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-full bg-background text-[10px] font-medium text-muted-foreground tabular-nums">
+                            {i + 1}
+                          </span>
+                          <span className="text-sm text-foreground leading-snug">{q.label || q.key}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
               )}
