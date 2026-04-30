@@ -141,7 +141,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
             {!pageId && (
               <p className="text-xs text-warning">Geen Meta Page ID ingesteld — lead formulieren kunnen niet geladen worden.</p>
             )}
-            <MetaSelectors nameFilter={nameFilter} pageId={pageId} value={selection} onChange={setSelection} />
+            <MetaSelectors nameFilter={nameFilter} pageId={pageId} value={selection} onChange={setSelection} adsetReloadKey={adsetRefreshKey} />
           </Card>
 
           <Card className="p-5 space-y-3">
