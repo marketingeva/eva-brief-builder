@@ -8,6 +8,7 @@ import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Sparkles, I
 import CreativeUploadZone from '@/components/ad-launcher/CreativeUploadZone';
 import MetaSelectors, { MetaSelection } from '@/components/ad-launcher/MetaSelectors';
 import CreativeTextsPanel, { CreativeText } from '@/components/ad-launcher/CreativeTextsPanel';
+import NewAdsetDialog from '@/components/ad-launcher/NewAdsetDialog';
 
 interface Props {
   clientId: string;
