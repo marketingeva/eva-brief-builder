@@ -4,9 +4,9 @@ const corsHeaders = {
 };
 
 const META_API = 'https://graph.facebook.com/v21.0';
-const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms']);
+const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms', 'location_search']);
 
-type MetaResource = 'campaigns' | 'adsets' | 'leadforms';
+type MetaResource = 'campaigns' | 'adsets' | 'leadforms' | 'location_search';
 
 type RequestBody = {
   resource?: unknown;
