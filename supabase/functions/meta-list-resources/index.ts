@@ -15,6 +15,8 @@ type RequestBody = {
   ad_id?: unknown;
   name_filter?: unknown;
   page_id?: unknown;
+  query?: unknown;
+  country_code?: unknown;
 };
 
 async function sleep(ms: number) {
