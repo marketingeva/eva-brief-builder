@@ -109,6 +109,7 @@ export default function AdsDashboardsPage() {
       setPerCampaign(((data as any).per_campaign || []).sort(
         (a: CampaignAgg, b: CampaignAgg) => b.spend - a.spend
       ));
+      setPerCampaignDaily(((data as any).per_campaign_daily || []) as CampaignDailyPoint[]);
       if (showToast) toast.success('Dashboards vernieuwd');
     } catch (err) {
       console.error(err);
