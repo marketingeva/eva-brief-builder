@@ -104,9 +104,9 @@ export default function EvaPanel() {
       {/* Chat */}
       <div
         ref={scrollRef}
-        className="relative flex-1 overflow-y-auto scroll-smooth px-4 py-6 [mask-image:linear-gradient(to_bottom,transparent_0,hsl(var(--sidebar-background))_28px,hsl(var(--sidebar-background))_calc(100%-28px),transparent_100%)] sm:px-6"
+        className="relative flex-1 overflow-y-auto scroll-smooth px-4 py-6 [mask-image:linear-gradient(to_bottom,transparent_0,hsl(var(--sidebar-foreground))_28px,hsl(var(--sidebar-foreground))_calc(100%_-_28px),transparent_100%)] sm:px-6"
       >
-        <div className="mx-auto w-full max-w-2xl space-y-7 py-4">
+        <div className="mx-auto w-full max-w-2xl space-y-7 pb-10 pt-4">
           {messages.length === 0 ? (
             <div className="text-center pt-2 animate-fade-in px-2">
               <h2 className="text-2xl font-bold tracking-tight mb-2 text-sidebar-foreground">Hoi, ik ben Eva</h2>
