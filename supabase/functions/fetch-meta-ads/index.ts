@@ -80,9 +80,12 @@ serve(async (req) => {
 
     // ── Daily breakdown for dashboards ──
     if (body.daily) {
-      const breakdownRes = await fetch(
-        `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,ctr,reach,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&time_increment=1&level=account&limit=500&access_token=${accessToken}`
-      );
+      const [breakdownRes, campRes, perCampDailyRes] = await Promise.all([
+        fetch(`${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,ctr,reach,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&time_increment=1&level=account&limit=500&access_token=${accessToken}`),
+        fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=campaign&limit=200&access_token=${accessToken}`),
+        fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&time_increment=1&level=campaign&limit=500&access_token=${accessToken}`),
+      ]);
+
       if (!breakdownRes.ok) {
         const err = await breakdownRes.text();
         return new Response(JSON.stringify({ error: "Failed daily insights", detail: err }), {
@@ -95,10 +98,6 @@ serve(async (req) => {
         ...extractMetrics(d),
       }));
 
-      // Also fetch per-campaign totals for breakdown charts
-      const campRes = await fetch(
-        `${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=campaign&limit=200&access_token=${accessToken}`
-      );
       const campData = campRes.ok ? await campRes.json() : { data: [] };
       const perCampaign = (campData.data || []).map((c: any) => ({
         id: c.campaign_id,
@@ -106,10 +105,19 @@ serve(async (req) => {
         ...extractMetrics(c),
       }));
 
+      const perCampDailyData = perCampDailyRes.ok ? await perCampDailyRes.json() : { data: [] };
+      const perCampaignDaily = (perCampDailyData.data || []).map((d: any) => ({
+        campaign_id: d.campaign_id,
+        campaign_name: d.campaign_name,
+        date: d.date_start,
+        ...extractMetrics(d),
+      }));
+
       return new Response(JSON.stringify({
         type: "daily",
         days,
         per_campaign: perCampaign,
+        per_campaign_daily: perCampaignDaily,
         date_range: { since, until },
         fetched_at: new Date().toISOString(),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
