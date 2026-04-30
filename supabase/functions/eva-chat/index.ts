@@ -390,12 +390,72 @@ serve(async (req) => {
 
             // Done — finalize
             send("done", { text: assistantText });
+
             // Persist conversation (excluding system)
             const finalMessages = [...messages, { role: "assistant", content: assistantText }];
             await sb.from("eva_conversations").upsert(
               { user_id: user.id, messages: finalMessages, updated_at: new Date().toISOString() },
               { onConflict: "user_id" }
             );
+
+            // Generate 3 follow-up question suggestions based on the conversation
+            try {
+              const suggResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash-lite",
+                  messages: [
+                    {
+                      role: "system",
+                      content:
+                        "Je genereert exact 3 korte, logische vervolgvragen in het Nederlands die de gebruiker zou kunnen stellen op basis van het laatste antwoord van Eva. Vragen mogen max ~8 woorden zijn, geen herhaling van wat al gevraagd is, en concreet/actiegericht. Gebruik enkel de tool.",
+                    },
+                    ...messages.slice(-4),
+                    { role: "assistant", content: assistantText },
+                  ],
+                  tools: [
+                    {
+                      type: "function",
+                      function: {
+                        name: "return_suggestions",
+                        description: "Geef exact 3 vervolgvragen terug.",
+                        parameters: {
+                          type: "object",
+                          properties: {
+                            suggestions: {
+                              type: "array",
+                              minItems: 3,
+                              maxItems: 3,
+                              items: { type: "string" },
+                            },
+                          },
+                          required: ["suggestions"],
+                          additionalProperties: false,
+                        },
+                      },
+                    },
+                  ],
+                  tool_choice: { type: "function", function: { name: "return_suggestions" } },
+                }),
+              });
+              if (suggResp.ok) {
+                const sd = await suggResp.json();
+                const args = sd.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+                if (args) {
+                  const parsed = JSON.parse(args);
+                  if (Array.isArray(parsed.suggestions)) {
+                    send("suggestions", { items: parsed.suggestions.slice(0, 3) });
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("suggestions error:", e);
+            }
+
             break;
           }
         } catch (e) {
