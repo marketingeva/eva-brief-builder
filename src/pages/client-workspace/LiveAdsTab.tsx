@@ -314,7 +314,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="glass-strong rounded-3xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
@@ -324,7 +324,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             Actieve campagnes (on/off = on) met "{clientName}" in de naam
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap rounded-full glass-pill p-1.5">
           <Select
             value={dateMode === 'preset' ? preset : 'custom'}
             onValueChange={(v) => {
@@ -336,7 +336,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
               }
             }}
           >
-            <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectTrigger className="w-[160px] h-9 text-xs rounded-full border-0 glass">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -350,10 +350,10 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           {dateMode === 'custom' && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                <button className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-xs text-foreground">
                   <CalendarDays className="h-3.5 w-3.5" />
                   {customSince} — {customUntil}
-                </Button>
+                </button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-4 space-y-3" align="end">
                 <div className="space-y-1.5">
@@ -369,10 +369,14 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             </Popover>
           )}
 
-          <Button variant="outline" size="sm" onClick={() => fetchCampaigns(true)} disabled={refreshing} className="h-8 text-xs gap-1.5">
+          <button
+            onClick={() => fetchCampaigns(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 h-9 px-4 rounded-full glass glass-hover text-xs font-medium text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Vernieuwen
-          </Button>
+          </button>
         </div>
       </div>
 
