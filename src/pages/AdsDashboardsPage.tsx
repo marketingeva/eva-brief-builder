@@ -14,7 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, Tooltip, CartesianGrid,
+  XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts';
 
 interface DailyPoint {
@@ -43,6 +43,27 @@ interface CampaignAgg {
   clicks: number;
 }
 
+interface CampaignDailyPoint {
+  campaign_id: string;
+  campaign_name: string;
+  date: string;
+  spend: number;
+  meta_leads: number;
+  cost_per_meta_lead: number;
+}
+
+// Distinct, accessible palette for multi-line charts (works in light + dark)
+const SERIES_COLORS = [
+  'hsl(265 85% 65%)', // primary purple
+  'hsl(45 95% 55%)',  // accent yellow
+  'hsl(190 85% 55%)', // cyan
+  'hsl(340 80% 65%)', // pink
+  'hsl(150 65% 50%)', // green
+  'hsl(20 90% 60%)',  // orange
+  'hsl(220 80% 65%)', // blue
+  'hsl(285 60% 70%)', // lavender
+];
+
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString().split('T')[0]; }
 
@@ -59,6 +80,7 @@ const fmtDate = (s: string) => {
 export default function AdsDashboardsPage() {
   const [days, setDays] = useState<DailyPoint[]>([]);
   const [perCampaign, setPerCampaign] = useState<CampaignAgg[]>([]);
+  const [perCampaignDaily, setPerCampaignDaily] = useState<CampaignDailyPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -87,6 +109,7 @@ export default function AdsDashboardsPage() {
       setPerCampaign(((data as any).per_campaign || []).sort(
         (a: CampaignAgg, b: CampaignAgg) => b.spend - a.spend
       ));
+      setPerCampaignDaily(((data as any).per_campaign_daily || []) as CampaignDailyPoint[]);
       if (showToast) toast.success('Dashboards vernieuwd');
     } catch (err) {
       console.error(err);
@@ -131,6 +154,34 @@ export default function AdsDashboardsPage() {
     ...c,
     short: c.name.length > 22 ? c.name.slice(0, 22) + '…' : c.name,
   })), [perCampaign]);
+
+  // Top campaigns by leads, used as the series for multi-line charts
+  const leadSeriesCampaigns = useMemo(() => {
+    return [...perCampaign]
+      .sort((a, b) => b.meta_leads - a.meta_leads)
+      .slice(0, 6)
+      .filter((c) => c.meta_leads > 0 || c.spend > 0);
+  }, [perCampaign]);
+
+  // Wide-format daily data: one row per date, one column per campaign
+  const leadsPerCampaignDaily = useMemo(() => {
+    if (days.length === 0 || leadSeriesCampaigns.length === 0) return [];
+    const dateOrder = days.map((d) => d.date);
+    const idToName = new Map(leadSeriesCampaigns.map((c) => [c.id, c.name]));
+
+    const byDate = new Map<string, Record<string, any>>();
+    for (const d of dateOrder) {
+      byDate.set(d, { date: d, label: fmtDate(d) });
+    }
+    for (const row of perCampaignDaily) {
+      if (!idToName.has(row.campaign_id)) continue;
+      const bucket = byDate.get(row.date);
+      if (!bucket) continue;
+      bucket[`leads_${row.campaign_id}`] = row.meta_leads;
+      bucket[`cpl_${row.campaign_id}`] = row.cost_per_meta_lead || null;
+    }
+    return dateOrder.map((d) => byDate.get(d)!);
+  }, [days, perCampaignDaily, leadSeriesCampaigns]);
 
   if (loading) {
     return (
@@ -253,57 +304,92 @@ export default function AdsDashboardsPage() {
         </div>
       </div>
 
-      {/* Leads per dag */}
+      {/* Leads per dag — per campagne */}
       <Card className="glass border-0 rounded-2xl shadow-none">
         <CardContent className="p-6">
-          <div className="flex items-baseline justify-between mb-4">
+          <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Leads per dag</h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Aantal leads via Meta lead forms per dag</p>
+              <h3 className="text-sm font-semibold">Leads per dag — per campagne</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Meta leads per dag, opgesplitst per campagne (top {leadSeriesCampaigns.length})
+              </p>
             </div>
             <span className="text-xs text-muted-foreground tabular-nums">{fmtNum(totals.leads)} totaal</span>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartDays} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="leadsFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(v: number) => [fmtNum(v), 'Leads']}
-                />
-                <Area type="monotone" dataKey="meta_leads" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#leadsFill)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-72">
+            {leadSeriesCampaigns.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Geen leaddata in deze periode
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: number, name: string) => [fmtNum(v), name]}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                    iconType="circle"
+                  />
+                  {leadSeriesCampaigns.map((c, i) => (
+                    <Line
+                      key={c.id}
+                      type="monotone"
+                      dataKey={`leads_${c.id}`}
+                      name={c.name}
+                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 2.5 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Cost per lead per dag + Spend per dag */}
+      {/* Kost per Meta lead per dag — per campagne + Spend per dag */}
       <div className="grid lg:grid-cols-2 gap-4">
         <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-6">
-            <h3 className="text-sm font-semibold">Kost per lead per dag</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Lager is beter</p>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartDays} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
-                    tickFormatter={(v) => `€${v}`} />
-                  <Tooltip contentStyle={tooltipStyle}
-                    formatter={(v: number) => [fmtEUR2(v), 'Kost per lead']} />
-                  <Line type="monotone" dataKey="cpl_round" stroke="hsl(var(--accent))" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
+            <h3 className="text-sm font-semibold">Kost per Meta lead per dag — per campagne</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Lager is beter • top {leadSeriesCampaigns.length} campagnes</p>
+            <div className="h-64">
+              {leadSeriesCampaigns.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                  Geen leaddata in deze periode
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={leadsPerCampaignDaily} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false}
+                      tickFormatter={(v) => `€${v}`} />
+                    <Tooltip contentStyle={tooltipStyle}
+                      formatter={(v: number, name: string) => [fmtEUR2(v), name]} />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
+                    {leadSeriesCampaigns.map((c, i) => (
+                      <Line
+                        key={c.id}
+                        type="monotone"
+                        dataKey={`cpl_${c.id}`}
+                        name={c.name}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 2.5 }}
+                        connectNulls
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
