@@ -18,6 +18,7 @@ interface Props {
   pageId?: string | null;
   value: MetaSelection;
   onChange: (v: MetaSelection) => void;
+  adsetReloadKey?: number;
 }
 
 interface Item {
@@ -138,7 +139,7 @@ function ResourceCombobox({
   );
 }
 
-export default function MetaSelectors({ nameFilter, pageId, value, onChange }: Props) {
+export default function MetaSelectors({ nameFilter, pageId, value, onChange, adsetReloadKey = 0 }: Props) {
   const [campaigns, setCampaigns] = useState<Item[]>([]);
   const [adsets, setAdsets] = useState<Item[]>([]);
   const [leadForms, setLeadForms] = useState<Item[]>([]);
@@ -203,7 +204,7 @@ export default function MetaSelectors({ nameFilter, pageId, value, onChange }: P
       });
 
     return () => { active = false; };
-  }, [value.campaign_id]);
+  }, [value.campaign_id, adsetReloadKey]);
 
   useEffect(() => {
     let active = true;

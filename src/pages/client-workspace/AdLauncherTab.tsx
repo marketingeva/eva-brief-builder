@@ -8,6 +8,7 @@ import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Sparkles, I
 import CreativeUploadZone from '@/components/ad-launcher/CreativeUploadZone';
 import MetaSelectors, { MetaSelection } from '@/components/ad-launcher/MetaSelectors';
 import CreativeTextsPanel, { CreativeText } from '@/components/ad-launcher/CreativeTextsPanel';
+import NewAdsetDialog from '@/components/ad-launcher/NewAdsetDialog';
 
 interface Props {
   clientId: string;
@@ -45,6 +46,8 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
+  const [newAdsetOpen, setNewAdsetOpen] = useState(false);
+  const [adsetRefreshKey, setAdsetRefreshKey] = useState(0);
 
   useEffect(() => {
     supabase.from('clients').select('meta_name_filter, meta_page_id').eq('id', clientId).single()
@@ -138,7 +141,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
             {!pageId && (
               <p className="text-xs text-warning">Geen Meta Page ID ingesteld — lead formulieren kunnen niet geladen worden.</p>
             )}
-            <MetaSelectors nameFilter={nameFilter} pageId={pageId} value={selection} onChange={setSelection} />
+            <MetaSelectors nameFilter={nameFilter} pageId={pageId} value={selection} onChange={setSelection} adsetReloadKey={adsetRefreshKey} />
           </Card>
 
           <Card className="p-5 space-y-3">
@@ -180,8 +183,8 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>
-                + Create Ad Set
+              <Button variant="outline" size="sm" onClick={() => setNewAdsetOpen(true)}>
+                + Nieuwe ad set
               </Button>
               <Button size="sm" onClick={launch} disabled={!canLaunch || launching} className="font-semibold">
                 {launching ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Rocket className="h-4 w-4 mr-1.5" />}
@@ -295,6 +298,20 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
           onSave={(texts) => setCreatives((c) => c.map((r) => r.id === editingId ? { ...r, texts } : r))}
         />
       )}
+
+      <NewAdsetDialog
+        open={newAdsetOpen}
+        onOpenChange={setNewAdsetOpen}
+        clientId={clientId}
+        clientName={clientName}
+        pageId={pageId}
+        nameFilter={nameFilter}
+        initialCampaignId={selection.campaign_id}
+        onCreated={(adsetId, _name, campaignId) => {
+          setSelection((s) => ({ ...s, campaign_id: campaignId, adset_id: adsetId }));
+          setAdsetRefreshKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 }

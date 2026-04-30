@@ -4,9 +4,9 @@ const corsHeaders = {
 };
 
 const META_API = 'https://graph.facebook.com/v21.0';
-const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms']);
+const VALID_RESOURCES = new Set(['campaigns', 'adsets', 'leadforms', 'location_search']);
 
-type MetaResource = 'campaigns' | 'adsets' | 'leadforms';
+type MetaResource = 'campaigns' | 'adsets' | 'leadforms' | 'location_search';
 
 type RequestBody = {
   resource?: unknown;
@@ -15,6 +15,8 @@ type RequestBody = {
   ad_id?: unknown;
   name_filter?: unknown;
   page_id?: unknown;
+  query?: unknown;
+  country_code?: unknown;
 };
 
 async function sleep(ms: number) {
@@ -135,6 +137,8 @@ Deno.serve(async (req) => {
     const adsetId = asTrimmedString(body.adset_id);
     const adId = asTrimmedString(body.ad_id);
     const pageId = asTrimmedString(body.page_id);
+    const searchQuery = asTrimmedString(body.query);
+    const countryCode = asTrimmedString(body.country_code) || 'NL';
 
     if (!VALID_RESOURCES.has(resource)) {
       return jsonResponse({ data: [], error: 'Ongeldige resource opgevraagd.', fallback: true }, 400);
@@ -170,6 +174,35 @@ Deno.serve(async (req) => {
       data = sortActiveFirst(
         items.filter((a) => isVisibleStatus(a.effective_status)),
       );
+    }
+
+    if (resource === 'location_search') {
+      if (!searchQuery || searchQuery.length < 2) {
+        return jsonResponse({ data: [] });
+      }
+      const params = new URLSearchParams({
+        location_types: JSON.stringify(['city', 'subcity', 'region', 'neighborhood']),
+        type: 'adgeolocation',
+        q: searchQuery,
+        country_code: countryCode,
+        limit: '20',
+        access_token: token,
+      });
+      const res = await fetch(`${META_API}/search?${params.toString()}`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error.message || 'Meta location search error');
+      data = (json.data || []).map((it: any) => ({
+        key: it.key,
+        name: it.name,
+        type: it.type,
+        country_code: it.country_code,
+        country_name: it.country_name,
+        region: it.region,
+        primary_city: it.primary_city,
+        supports_region: it.supports_region,
+        supports_city: it.supports_city,
+      }));
+      return jsonResponse({ data, meta: { total: data.length } });
     }
 
     if (resource === 'leadforms') {
