@@ -176,6 +176,35 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (resource === 'location_search') {
+      if (!searchQuery || searchQuery.length < 2) {
+        return jsonResponse({ data: [] });
+      }
+      const params = new URLSearchParams({
+        location_types: JSON.stringify(['city', 'subcity', 'region', 'neighborhood']),
+        type: 'adgeolocation',
+        q: searchQuery,
+        country_code: countryCode,
+        limit: '20',
+        access_token: token,
+      });
+      const res = await fetch(`${META_API}/search?${params.toString()}`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error.message || 'Meta location search error');
+      data = (json.data || []).map((it: any) => ({
+        key: it.key,
+        name: it.name,
+        type: it.type,
+        country_code: it.country_code,
+        country_name: it.country_name,
+        region: it.region,
+        primary_city: it.primary_city,
+        supports_region: it.supports_region,
+        supports_city: it.supports_city,
+      }));
+      return jsonResponse({ data, meta: { total: data.length } });
+    }
+
     if (resource === 'leadforms') {
       if (!pageId) {
         return jsonResponse({ data: [], error: 'page_id ontbreekt voor leadforms.', fallback: true }, 400);
