@@ -15,11 +15,24 @@ function extractMetrics(ins: any) {
   const clicks = ins ? parseInt(ins.clicks || "0") : 0;
   const ctr = ins ? parseFloat(ins.ctr || "0") : 0;
   const reach = ins ? parseInt(ins.reach || "0") : 0;
+
+  // Total leads (any lead source — onsite + offsite combined)
   const leadAction = ins?.actions?.find((x: any) => x.action_type === "lead" || x.action_type === "onsite_conversion.lead_grouped");
   const leads = leadAction ? parseInt(leadAction.value) : 0;
   const cplAction = ins?.cost_per_action_type?.find((x: any) => x.action_type === "lead" || x.action_type === "onsite_conversion.lead_grouped");
   const cpl = cplAction ? parseFloat(cplAction.value) : leads > 0 ? spend / leads : 0;
-  return { spend, impressions, clicks, ctr, reach, leads, cpl };
+
+  // Meta leads specifically — leads collected via Meta lead form (instant form on platform)
+  const metaLeadAction = ins?.actions?.find((x: any) => x.action_type === "onsite_conversion.lead_grouped");
+  const meta_leads = metaLeadAction ? parseInt(metaLeadAction.value) : 0;
+  const metaCplAction = ins?.cost_per_action_type?.find((x: any) => x.action_type === "onsite_conversion.lead_grouped");
+  const cost_per_meta_lead = metaCplAction ? parseFloat(metaCplAction.value) : meta_leads > 0 ? spend / meta_leads : 0;
+
+  // Unique link clicks
+  const uniqueLinkClicksAction = ins?.unique_actions?.find((x: any) => x.action_type === "link_click");
+  const unique_link_clicks = uniqueLinkClicksAction ? parseInt(uniqueLinkClicksAction.value) : 0;
+
+  return { spend, impressions, clicks, ctr, reach, leads, cpl, meta_leads, cost_per_meta_lead, unique_link_clicks };
 }
 
 serve(async (req) => {
