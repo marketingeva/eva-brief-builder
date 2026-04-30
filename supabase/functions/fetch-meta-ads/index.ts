@@ -15,11 +15,24 @@ function extractMetrics(ins: any) {
   const clicks = ins ? parseInt(ins.clicks || "0") : 0;
   const ctr = ins ? parseFloat(ins.ctr || "0") : 0;
   const reach = ins ? parseInt(ins.reach || "0") : 0;
+
+  // Total leads (any lead source — onsite + offsite combined)
   const leadAction = ins?.actions?.find((x: any) => x.action_type === "lead" || x.action_type === "onsite_conversion.lead_grouped");
   const leads = leadAction ? parseInt(leadAction.value) : 0;
   const cplAction = ins?.cost_per_action_type?.find((x: any) => x.action_type === "lead" || x.action_type === "onsite_conversion.lead_grouped");
   const cpl = cplAction ? parseFloat(cplAction.value) : leads > 0 ? spend / leads : 0;
-  return { spend, impressions, clicks, ctr, reach, leads, cpl };
+
+  // Meta leads specifically — leads collected via Meta lead form (instant form on platform)
+  const metaLeadAction = ins?.actions?.find((x: any) => x.action_type === "onsite_conversion.lead_grouped");
+  const meta_leads = metaLeadAction ? parseInt(metaLeadAction.value) : 0;
+  const metaCplAction = ins?.cost_per_action_type?.find((x: any) => x.action_type === "onsite_conversion.lead_grouped");
+  const cost_per_meta_lead = metaCplAction ? parseFloat(metaCplAction.value) : meta_leads > 0 ? spend / meta_leads : 0;
+
+  // Unique link clicks
+  const uniqueLinkClicksAction = ins?.unique_actions?.find((x: any) => x.action_type === "link_click");
+  const unique_link_clicks = uniqueLinkClicksAction ? parseInt(uniqueLinkClicksAction.value) : 0;
+
+  return { spend, impressions, clicks, ctr, reach, leads, cpl, meta_leads, cost_per_meta_lead, unique_link_clicks };
 }
 
 serve(async (req) => {
@@ -185,7 +198,7 @@ serve(async (req) => {
     if (adsetId) {
       const [adsRes, insightsRes] = await Promise.all([
         fetch(`${META_BASE}/${adsetId}/ads?fields=id,name,status,effective_status,configured_status&limit=100&access_token=${accessToken}`),
-        fetch(`${META_BASE}/${adsetId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,ctr,actions,cost_per_action_type&time_range=${timeRange}&level=ad&limit=100&access_token=${accessToken}`),
+        fetch(`${META_BASE}/${adsetId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=ad&limit=100&access_token=${accessToken}`),
       ]);
 
       const adsData = adsRes.ok ? await adsRes.json() : { data: [] };
@@ -209,7 +222,7 @@ serve(async (req) => {
     if (campaignId) {
       const [adsetsRes, insightsRes] = await Promise.all([
         fetch(`${META_BASE}/${campaignId}/adsets?fields=id,name,status,effective_status,configured_status,daily_budget,lifetime_budget&limit=100&access_token=${accessToken}`),
-        fetch(`${META_BASE}/${campaignId}/insights?fields=adset_id,adset_name,spend,impressions,clicks,ctr,actions,cost_per_action_type&time_range=${timeRange}&level=adset&limit=100&access_token=${accessToken}`),
+        fetch(`${META_BASE}/${campaignId}/insights?fields=adset_id,adset_name,spend,impressions,clicks,ctr,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=adset&limit=100&access_token=${accessToken}`),
       ]);
 
       const adsetsData = adsetsRes.ok ? await adsetsRes.json() : { data: [] };
@@ -236,7 +249,7 @@ serve(async (req) => {
     // ── Default: campaigns ──
     const [campaignsRes, insightsRes] = await Promise.all([
       fetch(`${META_BASE}/${actId}/campaigns?fields=id,name,status,effective_status,configured_status,objective,daily_budget,lifetime_budget&limit=100&access_token=${accessToken}`),
-      fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,actions,cost_per_action_type&time_range=${timeRange}&level=campaign&limit=100&access_token=${accessToken}`),
+      fetch(`${META_BASE}/${actId}/insights?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,actions,cost_per_action_type,unique_actions&time_range=${timeRange}&level=campaign&limit=100&access_token=${accessToken}`),
     ]);
 
     if (!campaignsRes.ok) {

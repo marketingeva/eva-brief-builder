@@ -2,7 +2,7 @@ import { Outlet, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText } from 'lucide-react';
+import { LogOut, Search, Plus, Menu, X, Building2, Rocket, PanelLeftClose, PanelLeft, FileText, BarChart3 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,7 @@ export default function AppLayout() {
   const location = useLocation();
   const isAdLauncher = location.pathname.startsWith('/ad-launcher');
   const isBriefings = location.pathname.startsWith('/briefings');
+  const isAdsManager = location.pathname.startsWith('/ads-manager');
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -125,6 +126,7 @@ export default function AppLayout() {
           {[
             { key: 'ad-launcher', label: 'Ad Launcher', icon: Rocket, path: '/ad-launcher', active: isAdLauncher },
             { key: 'briefings', label: 'Briefings', icon: FileText, path: '/briefings', active: isBriefings },
+            { key: 'ads-manager', label: 'Ads Manager', icon: BarChart3, path: '/ads-manager', active: isAdsManager },
           ].map(({ key, label, icon: Icon, path, active }) => (
             <button
               key={key}
