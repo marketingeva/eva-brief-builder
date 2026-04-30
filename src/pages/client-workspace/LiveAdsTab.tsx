@@ -312,19 +312,16 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="glass-strong rounded-3xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
+    <div className="p-8 max-w-6xl mx-auto space-y-8 animate-fade-in">
+      {/* Header — minimal */}
+      <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <Radio className="h-5 w-5 text-primary" />
-            Live Ads — {clientName}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Actieve campagnes (on/off = on) met "{clientName}" in de naam
+          <h2 className="text-base font-semibold text-foreground">Live Ads</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Actieve campagnes met "{clientName}" in de naam
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap rounded-full glass-pill p-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Select
             value={dateMode === 'preset' ? preset : 'custom'}
             onValueChange={(v) => {
@@ -336,7 +333,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
               }
             }}
           >
-            <SelectTrigger className="w-[160px] h-9 text-xs rounded-full border-0 glass">
+            <SelectTrigger className="w-[150px] h-9 text-xs rounded-full border-0 glass">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -372,59 +369,37 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           <button
             onClick={() => fetchCampaigns(true)}
             disabled={refreshing}
-            className="flex items-center gap-1.5 h-9 px-4 rounded-full glass glass-hover text-xs font-medium text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center h-9 w-9 rounded-full glass glass-hover text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Vernieuwen"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            Vernieuwen
           </button>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Actief ({levelLabel})</p>
-              <Activity className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{currentData.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Totale spend</p>
-              <DollarSign className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{fmt(totalSpend)}</p>
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Gemiddelde CPL</p>
-              <TrendingUp className={`h-4 w-4 ${avgCpl > CPL_THRESHOLD ? 'text-destructive' : 'text-success'}`} />
-            </div>
-            <p className={`text-2xl font-bold mt-1 ${avgCpl > CPL_THRESHOLD ? 'text-destructive' : ''}`}>
-              {avgCpl > 0 ? fmt(avgCpl) : '—'}
-            </p>
-            {avgCpl > CPL_THRESHOLD && (
-              <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5">
-                <AlertTriangle className="h-3 w-3" /> Boven €{CPL_THRESHOLD}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="glass border-0 rounded-2xl shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Totale leads</p>
-              <Users className="h-4 w-4 text-primary" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{fmtNum(totalLeads)}</p>
-          </CardContent>
-        </Card>
+      {/* Summary stats — clean numeric row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl glass border-0 overflow-hidden">
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Actief</p>
+          <p className="text-2xl font-semibold mt-1.5 tabular-nums">{currentData.length}</p>
+        </div>
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Spend</p>
+          <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmt(totalSpend)}</p>
+        </div>
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Gem. CPL</p>
+          <p className={cn(
+            'text-2xl font-semibold mt-1.5 tabular-nums',
+            avgCpl > CPL_THRESHOLD && 'text-destructive'
+          )}>
+            {avgCpl > 0 ? fmt(avgCpl) : '—'}
+          </p>
+        </div>
+        <div className="p-5 bg-transparent">
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Leads</p>
+          <p className="text-2xl font-semibold mt-1.5 tabular-nums">{fmtNum(totalLeads)}</p>
+        </div>
       </div>
 
       {/* Breadcrumb */}
