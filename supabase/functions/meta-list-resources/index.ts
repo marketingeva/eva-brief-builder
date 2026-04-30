@@ -137,6 +137,8 @@ Deno.serve(async (req) => {
     const adsetId = asTrimmedString(body.adset_id);
     const adId = asTrimmedString(body.ad_id);
     const pageId = asTrimmedString(body.page_id);
+    const searchQuery = asTrimmedString(body.query);
+    const countryCode = asTrimmedString(body.country_code) || 'NL';
 
     if (!VALID_RESOURCES.has(resource)) {
       return jsonResponse({ data: [], error: 'Ongeldige resource opgevraagd.', fallback: true }, 400);
