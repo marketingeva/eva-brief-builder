@@ -102,8 +102,11 @@ export default function EvaPanel() {
       </div>
 
       {/* Chat */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6">
-        <div className="max-w-2xl mx-auto py-4 space-y-4 w-full">
+      <div
+        ref={scrollRef}
+        className="relative flex-1 overflow-y-auto scroll-smooth px-4 py-6 [mask-image:linear-gradient(to_bottom,transparent_0,hsl(var(--sidebar-background))_28px,hsl(var(--sidebar-background))_calc(100%-28px),transparent_100%)] sm:px-6"
+      >
+        <div className="mx-auto w-full max-w-2xl space-y-7 py-4">
           {messages.length === 0 ? (
             <div className="text-center pt-2 animate-fade-in px-2">
               <h2 className="text-2xl font-bold tracking-tight mb-2 text-sidebar-foreground">Hoi, ik ben Eva</h2>
@@ -129,7 +132,7 @@ export default function EvaPanel() {
       </div>
 
       {/* Input */}
-      <div className="px-4 sm:px-6 pb-4 pt-2 shrink-0">
+      <div className="shrink-0 border-t border-sidebar-border/25 bg-sidebar-background/30 px-4 pb-4 pt-4 backdrop-blur-xl sm:px-6">
         <div className="max-w-2xl mx-auto">
           {suggestions.length > 0 && state === 'idle' && (
             <div className="flex flex-wrap gap-1.5 mb-2 animate-fade-in">
