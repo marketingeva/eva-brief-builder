@@ -507,11 +507,10 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
 
       {/* ── Ad Detail Dialog ── */}
       <Dialog open={showAdDetail} onOpenChange={setShowAdDetail}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-2">
-              <Eye className="h-4 w-4 text-primary" />
-              Advertentie Preview
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40">
+            <DialogTitle className="text-sm font-medium text-muted-foreground">
+              Advertentie preview
             </DialogTitle>
             <DialogDescription className="sr-only">
               Bekijk de details van deze advertentie
@@ -519,179 +518,119 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           </DialogHeader>
 
           {adDetailLoading ? (
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 p-6">
               <Skeleton className="h-48 w-full rounded-lg" />
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-10 w-1/2" />
             </div>
           ) : adDetail ? (
-            <div className="space-y-5 py-2">
-              {/* Ad name */}
-              <div>
-                <p className="text-sm font-semibold text-foreground">{adDetail.name}</p>
-                <Badge className="mt-1 text-[10px] bg-success/15 text-success border-success/20">
+            <div className="px-6 py-5 space-y-6">
+              {/* Title + status */}
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-base font-semibold text-foreground leading-snug">{adDetail.name}</h3>
+                <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] text-success">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" />
                   {adDetail.status === 'ACTIVE' ? 'Actief' : adDetail.status}
-                </Badge>
+                </span>
               </div>
 
-              {/* Image preview */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">Afbeelding</span>
+              {/* Image preview — clean, borderless */}
+              {adDetail.image_url ? (
+                <div className="rounded-2xl overflow-hidden bg-muted/40">
+                  <img
+                    src={adDetail.image_url}
+                    alt={adDetail.name}
+                    className="w-full max-h-[340px] object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 </div>
-                {adDetail.image_url ? (
-                  <div className="relative rounded-lg overflow-hidden border bg-muted">
-                    <img
-                      src={adDetail.image_url}
-                      alt={adDetail.name}
-                      className="w-full max-h-[300px] object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        const fallback = (e.target as HTMLImageElement).nextElementSibling;
-                        if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                      }}
-                    />
-                    <div className="hidden items-center justify-center h-48 text-muted-foreground">
-                      <div className="text-center">
-                        <ImageIcon className="mx-auto h-8 w-8 mb-2 opacity-30" />
-                        <p className="text-xs">Afbeelding kan niet worden geladen</p>
-                        {adDetail.image_url && (
-                          <a href={adDetail.image_url} target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] text-primary flex items-center gap-1 mt-1 justify-center">
-                            Bekijk origineel <ExternalLink className="h-2.5 w-2.5" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-32 rounded-lg border border-dashed bg-muted/50">
-                    <p className="text-xs text-muted-foreground">Geen afbeelding beschikbaar</p>
-                  </div>
-                )}
-              </div>
-
-              <Separator />
+              ) : null}
 
               {/* Primary text */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Type className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">Advertentietekst</span>
-                </div>
-                {adDetail.primary_text ? (
-                  <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-lg p-3 border">
+              {adDetail.primary_text && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Tekst</p>
+                  <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                     {adDetail.primary_text}
                   </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Geen tekst beschikbaar</p>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Headline */}
               {adDetail.headline && (
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-xs font-medium text-muted-foreground">Headline</span>
-                  </div>
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Headline</p>
                   <p className="text-sm font-semibold text-foreground">{adDetail.headline}</p>
                 </div>
               )}
 
               {/* Description */}
               {adDetail.description && (
-                <div>
-                  <span className="text-xs font-medium text-muted-foreground">Beschrijving</span>
-                  <p className="text-sm text-muted-foreground mt-0.5">{adDetail.description}</p>
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Beschrijving</p>
+                  <p className="text-sm text-muted-foreground">{adDetail.description}</p>
                 </div>
               )}
 
-              <Separator />
-
-              {/* CTA */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <MousePointerClick className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">Call-to-Action</span>
+              {/* Compact meta grid */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-2 border-t border-border/40">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Call-to-action</p>
+                  <p className="text-sm text-foreground">
+                    {adDetail.cta_type ? (CTA_LABELS[adDetail.cta_type] || adDetail.cta_type) : <span className="text-muted-foreground">—</span>}
+                  </p>
                 </div>
-                {adDetail.cta_type ? (
-                  <Badge variant="outline" className="text-xs">
-                    {CTA_LABELS[adDetail.cta_type] || adDetail.cta_type}
-                  </Badge>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Geen CTA ingesteld</p>
-                )}
-              </div>
-
-              {/* Destination */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">Destination</span>
+                <div className="space-y-1 min-w-0">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Bestemming</p>
+                  {adDetail.link_url && !/^https?:\/\/(www\.)?fb\.me\/?$/i.test(adDetail.link_url) ? (
+                    <a href={adDetail.link_url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate max-w-full">
+                      <span className="truncate">{adDetail.link_url.replace(/^https?:\/\//, '')}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </a>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  )}
                 </div>
-                {adDetail.link_url && !/^https?:\/\/(www\.)?fb\.me\/?$/i.test(adDetail.link_url) ? (
-                  <a href={adDetail.link_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm text-primary hover:underline break-all">
-                    {adDetail.link_url}
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                  </a>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Geen bestemming beschikbaar</p>
-                )}
               </div>
 
               {/* Lead form */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-medium text-muted-foreground">Lead formulier</span>
+              {adDetail.lead_form && (
+                <div className="space-y-2 pt-4 border-t border-border/40">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead formulier</p>
+                  <p className="text-sm font-medium text-foreground">{adDetail.lead_form.name}</p>
+                  {adDetail.lead_form.questions.length > 0 && (
+                    <ul className="space-y-1 mt-1.5">
+                      {adDetail.lead_form.questions.map((q, i) => (
+                        <li key={i} className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+                          {q.label || q.key}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {adDetail.lead_form ? (
-                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    <p className="text-sm font-medium">{adDetail.lead_form.name}</p>
-                    <Badge variant="outline" className="text-[10px]">
-                      {adDetail.lead_form.status === 'ACTIVE' ? 'Actief' : adDetail.lead_form.status}
-                    </Badge>
-                    {adDetail.lead_form.questions.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-[10px] font-medium text-muted-foreground mb-1">Vragen:</p>
-                        <ul className="space-y-0.5">
-                          {adDetail.lead_form.questions.map((q, i) => (
-                            <li key={i} className="text-xs text-foreground flex items-center gap-1.5">
-                              <span className="h-1 w-1 rounded-full bg-primary/50 shrink-0" />
-                              {q.label || q.key}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Geen formulier gekoppeld</p>
-                )}
-              </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <p className="text-sm text-muted-foreground">Kon advertentie details niet laden</p>
+            </div>
+          )}
 
-              <Separator />
-
-              {/* Create similar briefing button */}
+          {/* Sticky footer action */}
+          {adDetail && !adDetailLoading && (
+            <div className="px-6 py-4 border-t border-border/40 bg-background/50 backdrop-blur-sm sticky bottom-0">
               <Button
                 onClick={createSimilarBriefing}
                 disabled={creatingBriefing}
                 className="w-full gap-2"
-                size="lg"
               >
                 <Sparkles className="h-4 w-4" />
-                {creatingBriefing ? 'Briefing aanmaken...' : 'Maak vergelijkbare advertentie (briefing)'}
+                {creatingBriefing ? 'Briefing aanmaken...' : 'Maak vergelijkbare advertentie'}
               </Button>
-              <p className="text-[10px] text-muted-foreground text-center -mt-2">
-                Maakt een briefing-verzoek aan met variaties op deze ad: andere kleuren, header, foto, etc.
-              </p>
-            </div>
-          ) : (
-            <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">Kon advertentie details niet laden</p>
             </div>
           )}
         </DialogContent>
