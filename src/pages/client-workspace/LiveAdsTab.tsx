@@ -303,10 +303,10 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
       <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}><CardContent className="p-5"><Skeleton className="h-16 w-full" /></CardContent></Card>
+            <Card key={i} className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-5"><Skeleton className="h-16 w-full" /></CardContent></Card>
           ))}
         </div>
-        <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
+        <Card className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
       </div>
     );
   }
@@ -314,7 +314,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="glass-strong rounded-3xl px-6 py-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
@@ -324,7 +324,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             Actieve campagnes (on/off = on) met "{clientName}" in de naam
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap rounded-full glass-pill p-1.5">
           <Select
             value={dateMode === 'preset' ? preset : 'custom'}
             onValueChange={(v) => {
@@ -336,7 +336,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
               }
             }}
           >
-            <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectTrigger className="w-[160px] h-9 text-xs rounded-full border-0 glass">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -350,10 +350,10 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           {dateMode === 'custom' && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                <button className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-xs text-foreground">
                   <CalendarDays className="h-3.5 w-3.5" />
                   {customSince} — {customUntil}
-                </Button>
+                </button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-4 space-y-3" align="end">
                 <div className="space-y-1.5">
@@ -369,16 +369,20 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             </Popover>
           )}
 
-          <Button variant="outline" size="sm" onClick={() => fetchCampaigns(true)} disabled={refreshing} className="h-8 text-xs gap-1.5">
+          <button
+            onClick={() => fetchCampaigns(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 h-9 px-4 rounded-full glass glass-hover text-xs font-medium text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Vernieuwen
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Actief ({levelLabel})</p>
@@ -387,7 +391,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             <p className="text-2xl font-bold mt-1">{currentData.length}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Totale spend</p>
@@ -396,7 +400,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             <p className="text-2xl font-bold mt-1">{fmt(totalSpend)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Gemiddelde CPL</p>
@@ -412,7 +416,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">Totale leads</p>
@@ -455,9 +459,9 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
 
       {/* Table */}
       {drillLoading ? (
-        <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+        <Card className="glass border-0 rounded-2xl shadow-none"><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
       ) : currentData.length > 0 ? (
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">{levelLabel}</CardTitle>
           </CardHeader>
@@ -516,7 +520,7 @@ export default function LiveAdsTab({ clientName, clientId }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="glass border-0 rounded-2xl shadow-none">
           <CardContent className="p-12 text-center">
             <Radio className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
             <p className="text-sm font-medium text-muted-foreground">
