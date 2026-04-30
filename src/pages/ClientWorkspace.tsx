@@ -83,7 +83,7 @@ export default function ClientWorkspace() {
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-foreground leading-tight">{client.name}</h1>
-            {client.care_type && (
+            {client.care_type && client.name.toLowerCase() !== 'wijdezorg' && (
               <span className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full glass-pill text-[11px] text-muted-foreground font-medium">
                 {client.care_type}
               </span>
