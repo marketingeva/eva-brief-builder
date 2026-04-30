@@ -11,6 +11,7 @@ import ClientWorkspace from "@/pages/ClientWorkspace";
 import AdLauncherPage from "@/pages/AdLauncherPage";
 import BriefingsPage from "@/pages/BriefingsPage";
 import AdsManagerPage from "@/pages/AdsManagerPage";
+import AdsDashboardsPage from "@/pages/AdsDashboardsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
