@@ -134,10 +134,7 @@ export default function ClientWorkspace() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'overview' && <OverviewTab client={client} learningScore={learningScore} />}
         {activeTab === 'learning' && <LearningTab clientId={client.id} onScoreChange={setLearningScore} />}
-        {activeTab === 'briefings' && <BriefingsTab clientId={client.id} clientName={client.name} />}
-        {activeTab === 'creatives' && <CreativesCopyTab clientId={client.id} />}
         {activeTab === 'live-ads' && <LiveAdsTab clientName={client.name} clientId={client.id} />}
-        {activeTab === 'ai-team' && <AITeamTab clientId={client.id} clientName={client.name} />}
       </div>
     </div>
   );
