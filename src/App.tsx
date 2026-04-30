@@ -45,6 +45,7 @@ const App = () => (
                 <Route path="/ad-launcher" element={<AdLauncherPage />} />
                 <Route path="/briefings" element={<BriefingsPage />} />
                 <Route path="/ads-manager" element={<AdsManagerPage />} />
+                <Route path="/ads-manager/dashboards" element={<AdsDashboardsPage />} />
                 <Route path="/client/:slug" element={<ClientWorkspace />} />
                 <Route path="/client/:slug/:tab" element={<ClientWorkspace />} />
               </Route>
