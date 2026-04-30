@@ -46,6 +46,8 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
+  const [newAdsetOpen, setNewAdsetOpen] = useState(false);
+  const [adsetRefreshKey, setAdsetRefreshKey] = useState(0);
 
   useEffect(() => {
     supabase.from('clients').select('meta_name_filter, meta_page_id').eq('id', clientId).single()
