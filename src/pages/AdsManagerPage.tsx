@@ -451,6 +451,16 @@ export default function AdsManagerPage() {
                       else if (drillLevel === 'adsets') drillIntoAds(row);
                     }}
                   >
+                    <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={row.status === 'ACTIVE'}
+                        disabled={togglingId === row.id}
+                        onCheckedChange={(checked) => {
+                          const lvl = drillLevel === 'campaigns' ? 'campaign' : drillLevel === 'adsets' ? 'adset' : 'ad';
+                          toggleStatus(row, lvl, checked);
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="text-sm font-medium max-w-[320px] truncate py-3">{row.name}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums py-3">{fmt(row.spend)}</TableCell>
                     <TableCell className="text-sm text-right tabular-nums py-3">{row.meta_leads > 0 ? fmtNum(row.meta_leads) : '—'}</TableCell>
