@@ -131,6 +131,19 @@ export default function EvaPanel() {
       {/* Input */}
       <div className="px-4 sm:px-6 pb-4 pt-2 shrink-0">
         <div className="max-w-2xl mx-auto">
+          {suggestions.length > 0 && state === 'idle' && (
+            <div className="flex flex-wrap gap-1.5 mb-2 animate-fade-in">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => sendMessage(s)}
+                  className="text-xs px-3 py-1.5 rounded-full bg-sidebar-accent/40 hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground transition-all border border-sidebar-border/40"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <div
             className={cn(
               'relative flex items-end gap-2 rounded-2xl bg-sidebar-accent/50 ring-1 ring-sidebar-border/50 p-1.5 transition-all',
