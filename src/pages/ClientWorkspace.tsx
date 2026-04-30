@@ -21,10 +21,7 @@ interface Client {
 const tabs = [
   { key: 'overview', label: 'Overzicht', icon: LayoutDashboard },
   { key: 'learning', label: 'Learning', icon: BookOpen },
-  { key: 'briefings', label: 'Briefings', icon: FileText },
-  { key: 'creatives', label: 'Creatives & Copy', icon: Palette },
   { key: 'live-ads', label: 'Live Ads', icon: Radio },
-  { key: 'ai-team', label: 'AI Team', icon: Bot },
 ] as const;
 
 type TabKey = typeof tabs[number]['key'];
