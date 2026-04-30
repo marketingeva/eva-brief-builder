@@ -52,16 +52,16 @@ interface CampaignDailyPoint {
   cost_per_meta_lead: number;
 }
 
-// Distinct, accessible palette for multi-line charts (works in light + dark)
+// Refined, calm palette — premium feel, accessible in light + dark
 const SERIES_COLORS = [
-  'hsl(265 85% 65%)', // primary purple
-  'hsl(45 95% 55%)',  // accent yellow
-  'hsl(190 85% 55%)', // cyan
-  'hsl(340 80% 65%)', // pink
-  'hsl(150 65% 50%)', // green
-  'hsl(20 90% 60%)',  // orange
-  'hsl(220 80% 65%)', // blue
-  'hsl(285 60% 70%)', // lavender
+  'hsl(265 70% 65%)', // soft purple (brand)
+  'hsl(42 90% 60%)',  // warm amber
+  'hsl(195 70% 55%)', // teal-cyan
+  'hsl(340 65% 65%)', // dusty rose
+  'hsl(155 45% 52%)', // sage green
+  'hsl(220 70% 68%)', // periwinkle blue
+  'hsl(25 75% 62%)',  // muted orange
+  'hsl(285 45% 70%)', // lavender
 ];
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
