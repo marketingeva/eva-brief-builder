@@ -43,6 +43,27 @@ interface CampaignAgg {
   clicks: number;
 }
 
+interface CampaignDailyPoint {
+  campaign_id: string;
+  campaign_name: string;
+  date: string;
+  spend: number;
+  meta_leads: number;
+  cost_per_meta_lead: number;
+}
+
+// Distinct, accessible palette for multi-line charts (works in light + dark)
+const SERIES_COLORS = [
+  'hsl(265 85% 65%)', // primary purple
+  'hsl(45 95% 55%)',  // accent yellow
+  'hsl(190 85% 55%)', // cyan
+  'hsl(340 80% 65%)', // pink
+  'hsl(150 65% 50%)', // green
+  'hsl(20 90% 60%)',  // orange
+  'hsl(220 80% 65%)', // blue
+  'hsl(285 60% 70%)', // lavender
+];
+
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function daysAgo(n: number) { return new Date(Date.now() - n * 86400000).toISOString().split('T')[0]; }
 
