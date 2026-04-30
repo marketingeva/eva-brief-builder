@@ -142,7 +142,7 @@ function CampaignTooltip({
   );
 }
 
-
+export default function AdsDashboardsPage() {
   const [days, setDays] = useState<DailyPoint[]>([]);
   const [perCampaign, setPerCampaign] = useState<CampaignAgg[]>([]);
   const [perCampaignDaily, setPerCampaignDaily] = useState<CampaignDailyPoint[]>([]);
