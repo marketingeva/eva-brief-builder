@@ -32,105 +32,112 @@ interface ParsedItem {
   primary_text?: string;
   external_id?: string;
   started_running?: string;
-  platforms?: string[];
+}
+
+function decodeHtml(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\\u0040/g, "@")
+    .replace(/\\\//g, "/");
+}
+
+function stripTags(s: string): string {
+  return decodeHtml(s.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 }
 
 /**
- * Parse Firecrawl markdown into ad items.
- * Each ad block on Facebook Ads Library follows this pattern:
- *   Actief / Inactief
- *   Bibliotheek-ID: <id>
- *   Uitgevoerd vanaf <date>  (or: Started running on <date>)
- *   Platformen + icons
- *   ... metadata ...
- *   Advertentiegegevens bekijken
- *   * * *
- *   ![<advertiser>](<small avatar>)
- *   [<advertiser>](<page url>)
- *   **Gesponsord**
- *   <primary text>
- *   [![](<creative image url>) ... <link card text>](<destination url>)
+ * Parse the Facebook Ad Library HTML.
+ * Each ad card is rendered as a div containing a "Library ID" / "Bibliotheek-ID" string.
+ * We split on those markers and extract per block:
+ *  - external_id (digits after the marker)
+ *  - started_running (date)
+ *  - the LARGE creative image (scontent.*.jpg/png with size suffix like _n.jpg, NOT s60x60/s90x90 avatars)
+ *  - the advertiser name + page url (facebook.com/<page>)
+ *  - the primary ad copy (longest meaningful text inside the block, after stripping nav/UI labels)
  */
-function parseAdsFromMarkdown(markdown: string): ParsedItem[] {
+function parseAdsFromHtml(html: string): ParsedItem[] {
   const items: ParsedItem[] = [];
 
-  // Split into blocks starting at each library id marker
-  const blocks = markdown.split(/(?=Bibliotheek-?ID:|Library ID:|Ad Library ID)/i);
+  // Normalize: remove script/style content, keep tags otherwise
+  const cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
 
-  for (const block of blocks) {
-    if (block.length < 80) continue;
+  // Split on Library ID markers; each chunk = one ad card (roughly)
+  const chunks = cleaned.split(/(?=(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]*\d)/i);
 
-    const idMatch = block.match(/(?:Bibliotheek-?ID|Library ID|Ad Library ID)[:\s]*(\d+)/i);
+  for (const chunk of chunks) {
+    const idMatch = chunk.match(/(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]*(\d{8,})/i);
     if (!idMatch) continue;
     const externalId = idMatch[1];
+    if (chunk.length < 200) continue;
 
-    // started running date
+    // started_running
     let startedRunning: string | undefined;
-    const dateMatch = block.match(/(?:Uitgevoerd vanaf|Started running on|Gestart op)\s+([^\n]+?)(?:\n|$)/i);
-    if (dateMatch) startedRunning = dateMatch[1].trim();
+    const dateMatch = chunk.match(/(?:Uitgevoerd vanaf|Started running on|Gestart op)\s+([^<\n]+?)(?:<|\n|$)/i);
+    if (dateMatch) startedRunning = dateMatch[1].trim().replace(/\s{2,}/g, " ");
 
-    // Find all images in this block
-    const imgs: { alt: string; url: string; index: number }[] = [];
-    const imgRegex = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
-    let m: RegExpExecArray | null;
-    while ((m = imgRegex.exec(block)) !== null) {
-      imgs.push({ alt: m[1], url: m[2], index: m.index });
+    // ---- IMAGES ----
+    // Find every scontent image; pick the one that is NOT a tiny avatar.
+    // Avatars: s60x60, s90x90, p60x60, p100x100, _q.jpg, _t.jpg
+    // Creatives: typically end in _n.jpg / _n.png with bigger dimensions, or s600x600 / p526x526.
+    const imgUrls: string[] = [];
+    const imgRegex = /<img[^>]+src=["']([^"']+scontent[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["'][^>]*>/gi;
+    let im: RegExpExecArray | null;
+    while ((im = imgRegex.exec(chunk)) !== null) {
+      imgUrls.push(decodeHtml(im[1]));
     }
 
-    // Advertiser logo: first small image (s60x60 or s90x90)
-    const logoImg = imgs.find(i => /s\d{2,3}x\d{2,3}/.test(i.url));
-    const advertiserLogo = logoImg?.url;
+    const isAvatar = (u: string) =>
+      /\/s(?:60x60|90x90|100x100|120x120|160x160)/i.test(u) ||
+      /\/p(?:60x60|100x100)/i.test(u) ||
+      /_(?:q|t|s)\.(?:jpg|png)/i.test(u);
 
-    // Creative: first non-logo (large) image, OR second image overall
-    const creativeImg = imgs.find(i =>
-      i !== logoImg &&
-      !/s60x60|s90x90/.test(i.url)
-    ) || imgs.find(i => i !== logoImg);
-    const imageUrl = creativeImg?.url;
+    const advertiserLogo = imgUrls.find(isAvatar);
+    const creativeImg = imgUrls.find((u) => !isAvatar(u)) || imgUrls.find((u) => u !== advertiserLogo);
 
-    // Advertiser link: facebook.com/<page>/ link that's not ads/library
+    // ---- ADVERTISER ----
     let advertiserName: string | undefined;
     let advertiserUrl: string | undefined;
-    const advRegex = /\[([^\]]{2,80})\]\((https?:\/\/(?:www\.)?facebook\.com\/[^)\s?#]+)\)/g;
-    while ((m = advRegex.exec(block)) !== null) {
-      if (/ads\/library/.test(m[2])) continue;
-      advertiserName = m[1].trim();
-      advertiserUrl = m[2];
+    const advRegex = /<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/[^"'?#]+)["'][^>]*>([^<]{2,80})<\/a>/gi;
+    let am: RegExpExecArray | null;
+    while ((am = advRegex.exec(chunk)) !== null) {
+      const url = am[1];
+      const name = stripTags(am[2]);
+      if (/\/ads\/library/i.test(url)) continue;
+      if (/^(Sponsored|Gesponsord|Library ID|Bibliotheek)/i.test(name)) continue;
+      if (name.length < 2) continue;
+      advertiserName = name;
+      advertiserUrl = url;
       break;
     }
 
-    // Primary text: line right after **Gesponsord**, OR longest content paragraph
-    let primaryText: string | undefined;
-    const sponsoredIdx = block.search(/\*\*Gesponsord\*\*|\*\*Sponsored\*\*/i);
-    if (sponsoredIdx >= 0) {
-      const after = block.substring(sponsoredIdx).split(/\n+/).slice(1);
-      for (const raw of after) {
-        const line = raw.trim();
-        if (!line) continue;
-        if (/^!\[/.test(line)) break; // hit the creative image, stop
-        if (/^\[!\[/.test(line)) break; // hit the link-wrapped creative
-        if (line.length < 15) continue;
-        if (/^(Bibliotheek|Library ID|Actief|Inactief|Categorieën|Categories|Platformen|Platforms|Transparantie|EU transparency|Advertentiegegevens|See ad details)/i.test(line)) break;
-        primaryText = line.replace(/^\*+|\*+$/g, "").trim();
-        break;
-      }
+    // ---- PRIMARY TEXT ----
+    // Strategy: collect all visible text nodes inside this chunk, filter out UI labels,
+    // and pick the longest paragraph (which is virtually always the ad body copy).
+    const textNodes: string[] = [];
+    const divRegex = /<(?:div|span|p)[^>]*>([^<]{20,2000})<\/(?:div|span|p)>/gi;
+    let tm: RegExpExecArray | null;
+    while ((tm = divRegex.exec(chunk)) !== null) {
+      const t = decodeHtml(tm[1]).replace(/\s+/g, " ").trim();
+      if (!t) continue;
+      if (/^(Sponsored|Gesponsord|Library ID|Bibliotheek|Active|Actief|Inactief|Started running|Uitgevoerd|Platforms?|Platformen|See ad details|Advertentiegegevens|Categories|Categorieën|EU transparency|See summary details|See more|Meer weergeven|Vervolgkeuzemenu|Open Drop-down)/i.test(t)) continue;
+      if (/^https?:\/\//i.test(t)) continue;
+      if (t.length < 25) continue;
+      textNodes.push(t);
     }
-
-    if (!primaryText) {
-      const lines = block.split(/\n+/).map(l => l.trim()).filter(Boolean);
-      const candidates = lines.filter(l =>
-        l.length > 30 && l.length < 1500 &&
-        !/^!\[/.test(l) && !/^\[/.test(l) && !/^\*\*/.test(l) &&
-        !/^(Bibliotheek|Library ID|Uitgevoerd|Started|Actief|Inactief|Categorieën|Categories|Platformen|Platforms|Transparantie|EU transparency|Advertentiegegevens|See ad details|Vervolgkeuzemenu|Gesponsord|Sponsored)/i.test(l) &&
-        !/^\d{1,2}\s+\w{3,}\s+\d{4}/i.test(l)
-      );
-      primaryText = candidates.sort((a, b) => b.length - a.length)[0];
-    }
+    const primaryText = textNodes.sort((a, b) => b.length - a.length)[0];
 
     items.push({
       external_id: externalId,
       ad_library_url: `https://www.facebook.com/ads/library/?id=${externalId}`,
-      image_url: imageUrl,
+      image_url: creativeImg,
       advertiser_name: advertiserName,
       advertiser_page_url: advertiserUrl,
       advertiser_logo_url: advertiserLogo,
@@ -139,13 +146,17 @@ function parseAdsFromMarkdown(markdown: string): ParsedItem[] {
     });
   }
 
-  // Dedupe by external_id
-  const seen = new Set<string>();
-  return items.filter(i => {
-    if (!i.external_id || seen.has(i.external_id)) return false;
-    seen.add(i.external_id);
-    return true;
-  });
+  // Dedupe by external_id, prefer entries that have an image
+  const map = new Map<string, ParsedItem>();
+  for (const it of items) {
+    if (!it.external_id) continue;
+    const existing = map.get(it.external_id);
+    if (!existing) { map.set(it.external_id, it); continue; }
+    // Prefer the one with image_url + primary_text
+    const score = (x: ParsedItem) => (x.image_url ? 2 : 0) + (x.primary_text ? 1 : 0);
+    if (score(it) > score(existing)) map.set(it.external_id, it);
+  }
+  return Array.from(map.values());
 }
 
 serve(async (req) => {
@@ -203,7 +214,7 @@ serve(async (req) => {
       }
     }
 
-    // Scrape - use actions to scroll and load more ads
+    // Scrape - request rawHtml so we can extract real creative image URLs and full ad copy.
     const url = buildAdsLibraryUrl(query, mediaType);
     console.log(`Scraping: ${url}`);
 
@@ -215,20 +226,24 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url,
-        formats: ["markdown"],
+        formats: ["rawHtml"],
         onlyMainContent: false,
-        waitFor: 6000,
+        waitFor: 8000,
         location: { country: "NL", languages: ["nl"] },
         actions: [
-          { type: "wait", milliseconds: 4000 },
+          { type: "wait", milliseconds: 5000 },
           { type: "scroll", direction: "down" },
-          { type: "wait", milliseconds: 2500 },
+          { type: "wait", milliseconds: 3000 },
           { type: "scroll", direction: "down" },
-          { type: "wait", milliseconds: 2500 },
+          { type: "wait", milliseconds: 3000 },
           { type: "scroll", direction: "down" },
-          { type: "wait", milliseconds: 2500 },
+          { type: "wait", milliseconds: 3000 },
           { type: "scroll", direction: "down" },
-          { type: "wait", milliseconds: 2500 },
+          { type: "wait", milliseconds: 3000 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 3000 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 3000 },
         ],
       }),
     });
@@ -242,9 +257,9 @@ serve(async (req) => {
       );
     }
 
-    const markdown: string = fcData.data?.markdown || fcData.markdown || "";
-    const parsed = parseAdsFromMarkdown(markdown);
-    console.log(`Parsed ${parsed.length} ads from ${markdown.length} chars`);
+    const rawHtml: string = fcData.data?.rawHtml || fcData.rawHtml || fcData.data?.html || fcData.html || "";
+    const parsed = parseAdsFromHtml(rawHtml);
+    console.log(`Parsed ${parsed.length} ads from ${rawHtml.length} chars HTML`);
 
     // Optional AI summary
     let aiSummary: string | null = null;
@@ -291,7 +306,7 @@ Wees concreet, geen marketing-fluff.` }
         country: "NL",
         media_type: mediaType,
         result_count: parsed.length,
-        raw_markdown: markdown.substring(0, 80000),
+        raw_markdown: rawHtml.substring(0, 80000),
         ai_summary: aiSummary,
       })
       .select()
