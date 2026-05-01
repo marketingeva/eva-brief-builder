@@ -44,6 +44,13 @@ interface ClientOption {
   name: string;
 }
 
+const hasStaleMetaResult = (item: InspirationItem) => {
+  const imageUrl = item.image_url || '';
+  const text = item.primary_text || '';
+  return /(?:s|p)(?:40|50|60|64|72|80|90|100|120|160)x(?:40|50|60|64|72|80|90|100|120|160)/i.test(imageUrl) ||
+    /facebook\.com\/ads\/about|Over advertenties en het gebruik van gegevens/i.test(text);
+};
+
 export default function AdsInspirationPage() {
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('images_hooks');
@@ -96,6 +103,11 @@ export default function AdsInspirationPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (data.cached && !forceRefresh && (data.items || []).some(hasStaleMetaResult)) {
+        toast.info('Oude cache gevonden, ik haal automatisch verse resultaten op');
+        await runSearch(true);
+        return;
+      }
       setSearch(data.search);
       setItems(data.items || []);
       if (data.cached) toast.info('Resultaten uit cache (laatste 6 uur)');
