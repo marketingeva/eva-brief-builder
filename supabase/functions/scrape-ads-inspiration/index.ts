@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const FIRECRAWL_V2 = "https://api.firecrawl.dev/v2/scrape";
+const META_GRAPH_ADS_ARCHIVE = "https://graph.facebook.com/v20.0/ads_archive";
 const ADS_LIBRARY_BASE = "https://www.facebook.com/ads/library/";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 uur
 
@@ -33,6 +34,30 @@ function buildAdsLibraryUrl(query: string, mediaType: string): string {
     search_type: "keyword_unordered",
   });
   return `${ADS_LIBRARY_BASE}?${params.toString()}`;
+}
+
+function buildMetaArchiveUrl(query: string, mediaType: string, accessToken: string): string {
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    search_terms: query,
+    ad_type: "ALL",
+    ad_reached_countries: JSON.stringify(["NL"]),
+    media_type: mediaType === "image" ? "IMAGE" : "ALL",
+    limit: "30",
+    fields: [
+      "id",
+      "page_id",
+      "page_name",
+      "ad_snapshot_url",
+      "ad_delivery_start_time",
+      "ad_creative_bodies",
+      "ad_creative_link_titles",
+      "ad_creative_link_descriptions",
+      "ad_creative_link_captions",
+      "publisher_platforms",
+    ].join(","),
+  });
+  return `${META_GRAPH_ADS_ARCHIVE}?${params.toString()}`;
 }
 
 interface ParsedItem {
