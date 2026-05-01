@@ -17,7 +17,8 @@ function buildAdsLibraryUrl(query: string, mediaType: string): string {
     ad_type: "all",
     country: "NL",
     q: query,
-    media_type: mediaType, // "image" | "all"
+    media_type: mediaType,
+    search_type: "keyword_unordered",
   });
   return `${ADS_LIBRARY_BASE}?${params.toString()}`;
 }
@@ -25,82 +26,106 @@ function buildAdsLibraryUrl(query: string, mediaType: string): string {
 interface ParsedItem {
   advertiser_name?: string;
   advertiser_page_url?: string;
+  advertiser_logo_url?: string;
   ad_library_url?: string;
   image_url?: string;
   primary_text?: string;
   external_id?: string;
+  started_running?: string;
+  platforms?: string[];
 }
 
 /**
- * Parse Firecrawl markdown into ad items. Facebook's Ads Library renders each ad
- * as a block with the advertiser name, an image, and the ad copy. We extract these
- * heuristically from the markdown / links output.
+ * Parse Firecrawl markdown into ad items.
+ * Each ad block on Facebook Ads Library follows this pattern:
+ *   Actief / Inactief
+ *   Bibliotheek-ID: <id>
+ *   Uitgevoerd vanaf <date>  (or: Started running on <date>)
+ *   Platformen + icons
+ *   ... metadata ...
+ *   Advertentiegegevens bekijken
+ *   * * *
+ *   ![<advertiser>](<small avatar>)
+ *   [<advertiser>](<page url>)
+ *   **Gesponsord**
+ *   <primary text>
+ *   [![](<creative image url>) ... <link card text>](<destination url>)
  */
-function parseAdsFromMarkdown(markdown: string, links: string[]): ParsedItem[] {
+function parseAdsFromMarkdown(markdown: string): ParsedItem[] {
   const items: ParsedItem[] = [];
 
-  // Find all image URLs in markdown - Facebook ad images come from scontent/fbcdn
-  const imgRegex = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
-  const allImages: { alt: string; url: string; index: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = imgRegex.exec(markdown)) !== null) {
-    const url = m[2];
-    // Skip avatars, icons, blank pixels
-    if (
-      url.includes("scontent") ||
-      url.includes("fbcdn.net") ||
-      url.includes("/ads/image/")
-    ) {
-      // Skip tiny profile pics (often have small numeric paths)
-      if (!/\/p\d{2,3}x\d{2,3}\//.test(url)) {
-        allImages.push({ alt: m[1], url, index: m.index });
-      }
-    }
-  }
-
-  // Find ad library detail links (format: /ads/library/?id=12345 or ?ids=)
-  const libIdRegex = /facebook\.com\/ads\/library\/\?(?:id|ids?)=(\d+)/g;
-  const libLinks: { id: string; index: number }[] = [];
-  while ((m = libIdRegex.exec(markdown)) !== null) {
-    libLinks.push({ id: m[1], index: m.index });
-  }
-
-  // Split markdown into ad-blocks by "Library ID" markers (Facebook always shows this)
-  const blocks = markdown.split(/(?=Library ID:|Bibliotheek-?ID:|Ad Library ID)/i);
+  // Split into blocks starting at each library id marker
+  const blocks = markdown.split(/(?=Bibliotheek-?ID:|Library ID:|Ad Library ID)/i);
 
   for (const block of blocks) {
-    if (block.length < 50) continue;
+    if (block.length < 80) continue;
 
-    // Extract Library ID
-    const idMatch = block.match(/(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]*(\d+)/i);
+    const idMatch = block.match(/(?:Bibliotheek-?ID|Library ID|Ad Library ID)[:\s]*(\d+)/i);
     if (!idMatch) continue;
     const externalId = idMatch[1];
 
-    // Extract first big image in this block
-    let imageUrl: string | undefined;
-    const blockImg = block.match(/!\[[^\]]*\]\((https?:\/\/(?:scontent|[^)]*?fbcdn\.net)[^)\s]+)\)/);
-    if (blockImg) imageUrl = blockImg[1];
+    // started running date
+    let startedRunning: string | undefined;
+    const dateMatch = block.match(/(?:Uitgevoerd vanaf|Started running on|Gestart op)\s+([^\n]+?)(?:\n|$)/i);
+    if (dateMatch) startedRunning = dateMatch[1].trim();
 
-    // Extract advertiser name - usually first link or bold text near top
-    let advertiserName: string | undefined;
-    let advertiserUrl: string | undefined;
-    const advMatch = block.match(/\[([^\]]{2,80})\]\((https?:\/\/(?:www\.)?facebook\.com\/[^)\s?]+)\)/);
-    if (advMatch && !/ads\/library/.test(advMatch[2])) {
-      advertiserName = advMatch[1].trim();
-      advertiserUrl = advMatch[2];
+    // Find all images in this block
+    const imgs: { alt: string; url: string; index: number }[] = [];
+    const imgRegex = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = imgRegex.exec(block)) !== null) {
+      imgs.push({ alt: m[1], url: m[2], index: m.index });
     }
 
-    // Extract primary text - longest paragraph in the block, excluding metadata lines
-    const lines = block.split(/\n+/).map(l => l.trim()).filter(Boolean);
-    const textCandidates = lines.filter(l =>
-      l.length > 30 &&
-      l.length < 1500 &&
-      !/^(Library ID|Bibliotheek|Started running|Gestart|Platforms?|Categorieën|Categories|See ad details|Bekijk advertentiedetails)/i.test(l) &&
-      !/^!\[/.test(l) &&
-      !/^\[.*\]\(/.test(l) &&
-      !/^\d{1,2}\s+\w+\s+\d{4}/.test(l)
-    );
-    const primaryText = textCandidates.sort((a, b) => b.length - a.length)[0];
+    // Advertiser logo: first small image (s60x60 or s90x90)
+    const logoImg = imgs.find(i => /s\d{2,3}x\d{2,3}/.test(i.url));
+    const advertiserLogo = logoImg?.url;
+
+    // Creative: first non-logo (large) image, OR second image overall
+    const creativeImg = imgs.find(i =>
+      i !== logoImg &&
+      !/s60x60|s90x90/.test(i.url)
+    ) || imgs.find(i => i !== logoImg);
+    const imageUrl = creativeImg?.url;
+
+    // Advertiser link: facebook.com/<page>/ link that's not ads/library
+    let advertiserName: string | undefined;
+    let advertiserUrl: string | undefined;
+    const advRegex = /\[([^\]]{2,80})\]\((https?:\/\/(?:www\.)?facebook\.com\/[^)\s?#]+)\)/g;
+    while ((m = advRegex.exec(block)) !== null) {
+      if (/ads\/library/.test(m[2])) continue;
+      advertiserName = m[1].trim();
+      advertiserUrl = m[2];
+      break;
+    }
+
+    // Primary text: line right after **Gesponsord**, OR longest content paragraph
+    let primaryText: string | undefined;
+    const sponsoredIdx = block.search(/\*\*Gesponsord\*\*|\*\*Sponsored\*\*/i);
+    if (sponsoredIdx >= 0) {
+      const after = block.substring(sponsoredIdx).split(/\n+/).slice(1);
+      for (const raw of after) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (/^!\[/.test(line)) break; // hit the creative image, stop
+        if (/^\[!\[/.test(line)) break; // hit the link-wrapped creative
+        if (line.length < 15) continue;
+        if (/^(Bibliotheek|Library ID|Actief|Inactief|Categorieën|Categories|Platformen|Platforms|Transparantie|EU transparency|Advertentiegegevens|See ad details)/i.test(line)) break;
+        primaryText = line.replace(/^\*+|\*+$/g, "").trim();
+        break;
+      }
+    }
+
+    if (!primaryText) {
+      const lines = block.split(/\n+/).map(l => l.trim()).filter(Boolean);
+      const candidates = lines.filter(l =>
+        l.length > 30 && l.length < 1500 &&
+        !/^!\[/.test(l) && !/^\[/.test(l) && !/^\*\*/.test(l) &&
+        !/^(Bibliotheek|Library ID|Uitgevoerd|Started|Actief|Inactief|Categorieën|Categories|Platformen|Platforms|Transparantie|EU transparency|Advertentiegegevens|See ad details|Vervolgkeuzemenu|Gesponsord|Sponsored)/i.test(l) &&
+        !/^\d{1,2}\s+\w{3,}\s+\d{4}/i.test(l)
+      );
+      primaryText = candidates.sort((a, b) => b.length - a.length)[0];
+    }
 
     items.push({
       external_id: externalId,
@@ -108,19 +133,19 @@ function parseAdsFromMarkdown(markdown: string, links: string[]): ParsedItem[] {
       image_url: imageUrl,
       advertiser_name: advertiserName,
       advertiser_page_url: advertiserUrl,
+      advertiser_logo_url: advertiserLogo,
       primary_text: primaryText,
+      started_running: startedRunning,
     });
   }
 
   // Dedupe by external_id
   const seen = new Set<string>();
-  const deduped = items.filter(i => {
+  return items.filter(i => {
     if (!i.external_id || seen.has(i.external_id)) return false;
     seen.add(i.external_id);
     return true;
   });
-
-  return deduped;
 }
 
 serve(async (req) => {
@@ -152,7 +177,7 @@ serve(async (req) => {
 
     const sb = createClient(supabaseUrl, serviceKey);
 
-    // Check cache (within TTL)
+    // Cache check
     if (!forceRefresh) {
       const since = new Date(Date.now() - CACHE_TTL_MS).toISOString();
       const { data: cached } = await sb
@@ -178,7 +203,7 @@ serve(async (req) => {
       }
     }
 
-    // Scrape
+    // Scrape - use actions to scroll and load more ads
     const url = buildAdsLibraryUrl(query, mediaType);
     console.log(`Scraping: ${url}`);
 
@@ -190,10 +215,21 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url,
-        formats: ["markdown", "links"],
-        onlyMainContent: true,
-        waitFor: 4000,
+        formats: ["markdown"],
+        onlyMainContent: false,
+        waitFor: 6000,
         location: { country: "NL", languages: ["nl"] },
+        actions: [
+          { type: "wait", milliseconds: 4000 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 2500 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 2500 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 2500 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 2500 },
+        ],
       }),
     });
 
@@ -207,12 +243,10 @@ serve(async (req) => {
     }
 
     const markdown: string = fcData.data?.markdown || fcData.markdown || "";
-    const links: string[] = fcData.data?.links || fcData.links || [];
+    const parsed = parseAdsFromMarkdown(markdown);
+    console.log(`Parsed ${parsed.length} ads from ${markdown.length} chars`);
 
-    const parsed = parseAdsFromMarkdown(markdown, links);
-    console.log(`Parsed ${parsed.length} ads`);
-
-    // Optional AI summary of patterns
+    // Optional AI summary
     let aiSummary: string | null = null;
     if (wantSummary && lovableKey && parsed.length > 0) {
       try {
@@ -257,7 +291,7 @@ Wees concreet, geen marketing-fluff.` }
         country: "NL",
         media_type: mediaType,
         result_count: parsed.length,
-        raw_markdown: markdown.substring(0, 50000),
+        raw_markdown: markdown.substring(0, 80000),
         ai_summary: aiSummary,
       })
       .select()
@@ -276,6 +310,10 @@ Wees concreet, geen marketing-fluff.` }
         primary_text: p.primary_text || null,
         external_id: p.external_id || null,
         media_type: mediaType,
+        metadata: {
+          advertiser_logo_url: p.advertiser_logo_url || null,
+          started_running: p.started_running || null,
+        },
       }));
       const { data: inserted, error: itemsErr } = await sb
         .from("inspiration_items")
