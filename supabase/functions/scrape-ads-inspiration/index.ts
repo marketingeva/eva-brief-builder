@@ -225,10 +225,18 @@ serve(async (req) => {
           .select("*")
           .eq("search_id", cached.id)
           .order("created_at", { ascending: true });
+
+        const cachedItems = items || [];
+        const badCacheCount = cachedItems.filter(isBadCachedItem).length;
+        const cacheLooksStale = cachedItems.length === 0 || badCacheCount > Math.max(0, cachedItems.length * 0.4);
+        if (cacheLooksStale) {
+          console.log(`Ignoring stale inspiration cache for "${query}": ${badCacheCount}/${cachedItems.length} bad items`);
+        } else {
         return new Response(
-          JSON.stringify({ search: cached, items: items || [], cached: true }),
+          JSON.stringify({ search: cached, items: cachedItems, cached: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+        }
       }
     }
 
