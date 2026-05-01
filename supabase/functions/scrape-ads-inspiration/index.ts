@@ -8,8 +8,21 @@ const corsHeaders = {
 };
 
 const FIRECRAWL_V2 = "https://api.firecrawl.dev/v2/scrape";
+const META_GRAPH_ADS_ARCHIVE = "https://graph.facebook.com/v20.0/ads_archive";
 const ADS_LIBRARY_BASE = "https://www.facebook.com/ads/library/";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 uur
+
+function isLikelyTinyMetaImage(url: string): boolean {
+  return /(?:^|[_/&?=-])(?:s|p)(?:40|50|60|64|72|80|90|100|120|160)x(?:40|50|60|64|72|80|90|100|120|160)(?:[_/&?=-]|$)/i.test(url) ||
+    /(?:dst|src)-jpg_(?:s|p)(?:40|50|60|64|72|80|90|100|120|160)x(?:40|50|60|64|72|80|90|100|120|160)/i.test(url) ||
+    /_(?:q|t|s)\.(?:jpg|jpeg|png|webp)/i.test(url);
+}
+
+function isBadCachedItem(item: { image_url?: string | null; primary_text?: string | null }): boolean {
+  const imageUrl = item.image_url || "";
+  const text = item.primary_text || "";
+  return isLikelyTinyMetaImage(imageUrl) || /facebook\.com\/ads\/about|Over advertenties en het gebruik van gegevens/i.test(text);
+}
 
 function buildAdsLibraryUrl(query: string, mediaType: string): string {
   const params = new URLSearchParams({
@@ -23,6 +36,30 @@ function buildAdsLibraryUrl(query: string, mediaType: string): string {
   return `${ADS_LIBRARY_BASE}?${params.toString()}`;
 }
 
+function buildMetaArchiveUrl(query: string, mediaType: string, accessToken: string): string {
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    search_terms: query,
+    ad_type: "ALL",
+    ad_reached_countries: JSON.stringify(["NL"]),
+    media_type: mediaType === "image" ? "IMAGE" : "ALL",
+    limit: "30",
+    fields: [
+      "id",
+      "page_id",
+      "page_name",
+      "ad_snapshot_url",
+      "ad_delivery_start_time",
+      "ad_creative_bodies",
+      "ad_creative_link_titles",
+      "ad_creative_link_descriptions",
+      "ad_creative_link_captions",
+      "publisher_platforms",
+    ].join(","),
+  });
+  return `${META_GRAPH_ADS_ARCHIVE}?${params.toString()}`;
+}
+
 interface ParsedItem {
   advertiser_name?: string;
   advertiser_page_url?: string;
@@ -32,6 +69,29 @@ interface ParsedItem {
   primary_text?: string;
   external_id?: string;
   started_running?: string;
+}
+
+async function fetchMetaArchiveItems(query: string, mediaType: string, accessToken: string): Promise<ParsedItem[]> {
+  const resp = await fetch(buildMetaArchiveUrl(query, mediaType, accessToken));
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data?.error?.message || `Meta archive ${resp.status}`);
+  const rows = Array.isArray(data?.data) ? data.data : [];
+
+  return rows.map((ad: any): ParsedItem => {
+    const body = Array.isArray(ad.ad_creative_bodies) ? ad.ad_creative_bodies.find(Boolean) : undefined;
+    const title = Array.isArray(ad.ad_creative_link_titles) ? ad.ad_creative_link_titles.find(Boolean) : undefined;
+    const description = Array.isArray(ad.ad_creative_link_descriptions) ? ad.ad_creative_link_descriptions.find(Boolean) : undefined;
+    const primaryText = [body, title, description].filter(Boolean).join("\n\n").trim();
+
+    return {
+      external_id: ad.id,
+      advertiser_name: ad.page_name,
+      advertiser_page_url: ad.page_id ? `https://www.facebook.com/${ad.page_id}` : undefined,
+      ad_library_url: ad.ad_snapshot_url || (ad.id ? `https://www.facebook.com/ads/library/?id=${ad.id}` : undefined),
+      primary_text: primaryText || undefined,
+      started_running: ad.ad_delivery_start_time,
+    };
+  }).filter((item: ParsedItem) => item.external_id && (item.primary_text || item.advertiser_name));
 }
 
 function decodeHtml(s: string): string {
@@ -94,13 +154,19 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       imgUrls.push(decodeHtml(im[1]));
     }
 
-    const isAvatar = (u: string) =>
-      /\/s(?:60x60|90x90|100x100|120x120|160x160)/i.test(u) ||
-      /\/p(?:60x60|100x100)/i.test(u) ||
-      /_(?:q|t|s)\.(?:jpg|png)/i.test(u);
+    const isAvatar = (u: string) => isLikelyTinyMetaImage(u);
+
+    const imageScore = (u: string) => {
+      const sizeMatch = u.match(/(?:^|[_/&?=-])(?:s|p)(\d{3,4})x(\d{3,4})(?:[_/&?=-]|$)/i);
+      const area = sizeMatch ? Number(sizeMatch[1]) * Number(sizeMatch[2]) : 0;
+      const hasCreativeMarker = /t39\.35426|ad_library|creative|scontent/i.test(u) ? 500000 : 0;
+      return area + hasCreativeMarker - (isLikelyTinyMetaImage(u) ? 1000000 : 0);
+    };
 
     const advertiserLogo = imgUrls.find(isAvatar);
-    const creativeImg = imgUrls.find((u) => !isAvatar(u)) || imgUrls.find((u) => u !== advertiserLogo);
+    const creativeImg = [...imgUrls]
+      .filter((u) => !isAvatar(u))
+      .sort((a, b) => imageScore(b) - imageScore(a))[0];
 
     // ---- ADVERTISER ----
     let advertiserName: string | undefined;
@@ -177,6 +243,7 @@ serve(async (req) => {
 
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const metaToken = Deno.env.get("META_ACCESS_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -207,16 +274,36 @@ serve(async (req) => {
           .select("*")
           .eq("search_id", cached.id)
           .order("created_at", { ascending: true });
+
+        const cachedItems = items || [];
+        const badCacheCount = cachedItems.filter(isBadCachedItem).length;
+        const cacheLooksStale = cachedItems.length === 0 || badCacheCount > Math.max(0, cachedItems.length * 0.4);
+        if (cacheLooksStale) {
+          console.log(`Ignoring stale inspiration cache for "${query}": ${badCacheCount}/${cachedItems.length} bad items`);
+        } else {
         return new Response(
-          JSON.stringify({ search: cached, items: items || [], cached: true }),
+          JSON.stringify({ search: cached, items: cachedItems, cached: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+        }
       }
     }
 
-    // Scrape - request rawHtml so we can extract real creative image URLs and full ad copy.
+    let parsed: ParsedItem[] = [];
+    if (metaToken) {
+      try {
+        parsed = await fetchMetaArchiveItems(query, mediaType, metaToken);
+        console.log(`Fetched ${parsed.length} ads from Meta Ads Archive API`);
+      } catch (e) {
+        console.error("Meta Ads Archive API failed, falling back to scraping:", e);
+      }
+    }
+
+    // Scrape fallback - request rawHtml so we can extract creative image URLs and ad copy.
     const url = buildAdsLibraryUrl(query, mediaType);
-    console.log(`Scraping: ${url}`);
+
+    if (parsed.length === 0) {
+      console.log(`Scraping: ${url}`);
 
     const fcResp = await fetch(FIRECRAWL_V2, {
       method: "POST",
@@ -257,9 +344,10 @@ serve(async (req) => {
       );
     }
 
-    const rawHtml: string = fcData.data?.rawHtml || fcData.rawHtml || fcData.data?.html || fcData.html || "";
-    const parsed = parseAdsFromHtml(rawHtml);
+      const rawHtml: string = fcData.data?.rawHtml || fcData.rawHtml || fcData.data?.html || fcData.html || "";
+      parsed = parseAdsFromHtml(rawHtml);
     console.log(`Parsed ${parsed.length} ads from ${rawHtml.length} chars HTML`);
+    }
 
     // Optional AI summary
     let aiSummary: string | null = null;
