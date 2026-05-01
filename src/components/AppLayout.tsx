@@ -29,6 +29,7 @@ function AppLayoutInner() {
   const isAdLauncher = location.pathname.startsWith('/ad-launcher');
   const isBriefings = location.pathname.startsWith('/briefings');
   const isAdsManager = location.pathname.startsWith('/ads-manager');
+  const isInspirationHub = location.pathname.startsWith('/inspiration-hub');
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
