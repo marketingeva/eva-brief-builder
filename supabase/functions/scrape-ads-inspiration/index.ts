@@ -243,6 +243,7 @@ serve(async (req) => {
 
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const metaToken = Deno.env.get("META_ACCESS_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -288,9 +289,21 @@ serve(async (req) => {
       }
     }
 
-    // Scrape - request rawHtml so we can extract real creative image URLs and full ad copy.
+    let parsed: ParsedItem[] = [];
+    if (metaToken) {
+      try {
+        parsed = await fetchMetaArchiveItems(query, mediaType, metaToken);
+        console.log(`Fetched ${parsed.length} ads from Meta Ads Archive API`);
+      } catch (e) {
+        console.error("Meta Ads Archive API failed, falling back to scraping:", e);
+      }
+    }
+
+    // Scrape fallback - request rawHtml so we can extract creative image URLs and ad copy.
     const url = buildAdsLibraryUrl(query, mediaType);
-    console.log(`Scraping: ${url}`);
+
+    if (parsed.length === 0) {
+      console.log(`Scraping: ${url}`);
 
     const fcResp = await fetch(FIRECRAWL_V2, {
       method: "POST",
@@ -331,9 +344,10 @@ serve(async (req) => {
       );
     }
 
-    const rawHtml: string = fcData.data?.rawHtml || fcData.rawHtml || fcData.data?.html || fcData.html || "";
-    const parsed = parseAdsFromHtml(rawHtml);
+      const rawHtml: string = fcData.data?.rawHtml || fcData.rawHtml || fcData.data?.html || fcData.html || "";
+      parsed = parseAdsFromHtml(rawHtml);
     console.log(`Parsed ${parsed.length} ads from ${rawHtml.length} chars HTML`);
+    }
 
     // Optional AI summary
     let aiSummary: string | null = null;
