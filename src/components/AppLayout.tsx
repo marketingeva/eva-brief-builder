@@ -131,6 +131,7 @@ function AppLayoutInner() {
             { key: 'ad-launcher', label: 'Ad Launcher', icon: Rocket, path: '/ad-launcher', active: isAdLauncher },
             { key: 'briefings', label: 'Briefings', icon: FileText, path: '/briefings', active: isBriefings },
             { key: 'ads-manager', label: 'Ads Manager', icon: BarChart3, path: '/ads-manager', active: isAdsManager },
+            { key: 'inspiration-hub', label: 'Inspiration Hub', icon: Sparkles, path: '/inspiration-hub', active: isInspirationHub },
           ].map(({ key, label, icon: Icon, path, active }) => (
             <button
               key={key}
