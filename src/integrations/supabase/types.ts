@@ -1172,6 +1172,7 @@ export type Database = {
       inspiration_items: {
         Row: {
           ad_library_url: string | null
+          advertiser_logo_url: string | null
           advertiser_name: string | null
           advertiser_page_url: string | null
           created_at: string
@@ -1183,9 +1184,11 @@ export type Database = {
           media_type: string | null
           primary_text: string | null
           search_id: string | null
+          started_running: string | null
         }
         Insert: {
           ad_library_url?: string | null
+          advertiser_logo_url?: string | null
           advertiser_name?: string | null
           advertiser_page_url?: string | null
           created_at?: string
@@ -1197,9 +1200,11 @@ export type Database = {
           media_type?: string | null
           primary_text?: string | null
           search_id?: string | null
+          started_running?: string | null
         }
         Update: {
           ad_library_url?: string | null
+          advertiser_logo_url?: string | null
           advertiser_name?: string | null
           advertiser_page_url?: string | null
           created_at?: string
@@ -1211,6 +1216,7 @@ export type Database = {
           media_type?: string | null
           primary_text?: string | null
           search_id?: string | null
+          started_running?: string | null
         }
         Relationships: [
           {

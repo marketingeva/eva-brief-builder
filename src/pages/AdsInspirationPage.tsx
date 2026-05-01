@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  ArrowLeft, Search, RefreshCw, Heart, ExternalLink,
-  Image as ImageIcon, Sparkles, Loader2, X,
+  Search, RefreshCw, Heart, ExternalLink,
+  Image as ImageIcon, Sparkles, Loader2, CheckCircle2, Facebook, Instagram,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -24,10 +23,12 @@ interface InspirationItem {
   search_id: string;
   advertiser_name: string | null;
   advertiser_page_url: string | null;
+  advertiser_logo_url: string | null;
   ad_library_url: string | null;
   image_url: string | null;
   primary_text: string | null;
   external_id: string | null;
+  started_running: string | null;
 }
 
 interface SearchRow {
@@ -49,13 +50,12 @@ export default function AdsInspirationPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState<SearchRow | null>(null);
   const [items, setItems] = useState<InspirationItem[]>([]);
-  const [favorites, setFavorites] = useState<Record<string, string>>({}); // item_id -> favorite_id
+  const [favorites, setFavorites] = useState<Record<string, string>>({});
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [recentSearches, setRecentSearches] = useState<SearchRow[]>([]);
 
-  // Load clients + recent searches once
   useEffect(() => {
     (async () => {
       const { data: cs } = await supabase.from('clients').select('id,name').order('name');
@@ -69,7 +69,6 @@ export default function AdsInspirationPage() {
     })();
   }, []);
 
-  // Refresh favorites whenever client or items change
   const loadFavorites = useCallback(async () => {
     const clientFilter = activeClient === 'global' ? null : activeClient;
     let q = supabase.from('inspiration_favorites').select('id, item_id, client_id');
@@ -84,19 +83,14 @@ export default function AdsInspirationPage() {
 
   const runSearch = async (forceRefresh = false) => {
     const q = query.trim();
-    if (!q) {
-      toast.error('Voer een zoekterm in');
-      return;
-    }
+    if (!q) { toast.error('Voer een zoekterm in'); return; }
     setLoading(true);
     setSearch(null);
     setItems([]);
     try {
       const { data, error } = await supabase.functions.invoke('scrape-ads-inspiration', {
         body: {
-          query: q,
-          mediaType: 'image',
-          forceRefresh,
+          query: q, mediaType: 'image', forceRefresh,
           wantSummary: viewMode === 'images_hooks',
         },
       });
@@ -106,7 +100,6 @@ export default function AdsInspirationPage() {
       setItems(data.items || []);
       if (data.cached) toast.info('Resultaten uit cache (laatste 6 uur)');
       else toast.success(`${data.items?.length || 0} advertenties gevonden`);
-      // refresh recents
       const { data: rs } = await supabase
         .from('inspiration_searches')
         .select('id, query, ai_summary, result_count, created_at')
@@ -125,10 +118,7 @@ export default function AdsInspirationPage() {
     setSearch(s);
     setQuery(s.query);
     const { data: its } = await supabase
-      .from('inspiration_items')
-      .select('*')
-      .eq('search_id', s.id)
-      .order('created_at');
+      .from('inspiration_items').select('*').eq('search_id', s.id).order('created_at');
     setItems(its || []);
     setLoading(false);
   };
@@ -152,23 +142,16 @@ export default function AdsInspirationPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-end justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link to="/ads-manager">
-            <button className="h-9 w-9 rounded-full glass glass-hover flex items-center justify-center">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          </Link>
-          <div>
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Statische advertentie-inspiratie uit de Facebook Ads Library
-            </p>
-          </div>
+        <div>
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Statische advertentie-inspiratie uit de Facebook Ads Library
+          </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <Select value={viewMode} onValueChange={(v: ViewMode) => setViewMode(v)}>
@@ -205,46 +188,30 @@ export default function AdsInspirationPage() {
           className="border-0 bg-transparent focus-visible:ring-0 text-sm"
           disabled={loading}
         />
-        <Button
-          onClick={() => runSearch(false)}
-          disabled={loading || !query.trim()}
-          className="rounded-full h-9 text-xs"
-        >
+        <Button onClick={() => runSearch(false)} disabled={loading || !query.trim()} className="rounded-full h-9 text-xs">
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Zoeken'}
         </Button>
         {search && (
-          <Button
-            onClick={() => runSearch(true)}
-            disabled={loading}
-            variant="ghost"
-            className="rounded-full h-9 text-xs"
-            title="Cache negeren en opnieuw scrapen"
-          >
+          <Button onClick={() => runSearch(true)} disabled={loading} variant="ghost" className="rounded-full h-9 text-xs" title="Cache negeren en opnieuw scrapen">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
 
-      {/* Recent searches (when no active search) */}
       {!search && !loading && recentSearches.length > 0 && (
         <div>
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 px-1">Recente zoekopdrachten</p>
           <div className="flex flex-wrap gap-1.5">
             {recentSearches.map(s => (
-              <button
-                key={s.id}
-                onClick={() => loadHistoricalSearch(s)}
-                className="px-3 h-8 rounded-full glass glass-hover text-xs text-foreground flex items-center gap-1.5"
-              >
-                {s.query}
-                <span className="text-muted-foreground">· {s.result_count}</span>
+              <button key={s.id} onClick={() => loadHistoricalSearch(s)}
+                className="px-3 h-8 rounded-full glass glass-hover text-xs text-foreground flex items-center gap-1.5">
+                {s.query}<span className="text-muted-foreground">· {s.result_count}</span>
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* AI summary */}
       {viewMode === 'images_hooks' && search?.ai_summary && (
         <div className="glass rounded-2xl p-5 border border-primary/15">
           <div className="flex items-center gap-2 mb-2">
@@ -255,44 +222,34 @@ export default function AdsInspirationPage() {
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-square rounded-2xl" />
+            <Skeleton key={i} className="h-[480px] rounded-2xl" />
           ))}
         </div>
       )}
 
-      {/* Results grid */}
       {!loading && items.length > 0 && (
-        <div className={cn(
-          'grid gap-4',
-          viewMode === 'images'
-            ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-            : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-        )}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {items.map(item => (
-            <InspirationCard
+            <AdLibraryCard
               key={item.id}
               item={item}
-              viewMode={viewMode}
               isFavorite={!!favorites[item.id]}
               onToggleFavorite={() => toggleFavorite(item)}
               onPreview={() => setPreviewItem(item)}
+              showText={viewMode === 'images_hooks'}
             />
           ))}
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && search && items.length === 0 && (
         <div className="glass rounded-2xl p-12 text-center">
           <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
           <p className="text-sm text-foreground font-medium">Geen advertenties gevonden voor "{search.query}"</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Probeer een bredere of andere zoekterm.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Probeer een bredere of andere zoekterm.</p>
         </div>
       )}
 
@@ -309,10 +266,18 @@ export default function AdsInspirationPage() {
                 )}
               </div>
               <div className="p-6 space-y-3 max-h-[80vh] overflow-auto">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Adverteerder</p>
-                  <p className="text-sm font-semibold">{previewItem.advertiser_name || 'Onbekend'}</p>
+                <div className="flex items-center gap-2">
+                  {previewItem.advertiser_logo_url && (
+                    <img src={previewItem.advertiser_logo_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold">{previewItem.advertiser_name || 'Onbekend'}</p>
+                    <p className="text-[11px] text-muted-foreground">Sponsored</p>
+                  </div>
                 </div>
+                {previewItem.started_running && (
+                  <p className="text-[11px] text-muted-foreground">Started running on {previewItem.started_running}</p>
+                )}
                 {previewItem.primary_text && (
                   <div>
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Advertentietekst</p>
@@ -327,11 +292,8 @@ export default function AdsInspirationPage() {
                       </Button>
                     </a>
                   )}
-                  <Button
-                    onClick={() => toggleFavorite(previewItem)}
-                    variant={favorites[previewItem.id] ? 'default' : 'outline'}
-                    size="sm" className="rounded-full text-xs"
-                  >
+                  <Button onClick={() => toggleFavorite(previewItem)}
+                    variant={favorites[previewItem.id] ? 'default' : 'outline'} size="sm" className="rounded-full text-xs">
                     <Heart className={cn('h-3 w-3 mr-1', favorites[previewItem.id] && 'fill-current')} />
                     {favorites[previewItem.id] ? 'Bewaard' : 'Bewaar'}
                   </Button>
@@ -345,23 +307,85 @@ export default function AdsInspirationPage() {
   );
 }
 
-function InspirationCard({
-  item, viewMode, isFavorite, onToggleFavorite, onPreview,
+function AdLibraryCard({
+  item, isFavorite, onToggleFavorite, onPreview, showText,
 }: {
   item: InspirationItem;
-  viewMode: ViewMode;
   isFavorite: boolean;
   onToggleFavorite: () => void;
   onPreview: () => void;
+  showText: boolean;
 }) {
   return (
-    <div className="group glass rounded-2xl overflow-hidden hover:shadow-lg transition-all">
-      <button onClick={onPreview} className="block w-full aspect-square bg-muted/30 relative overflow-hidden">
+    <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
+      {/* Top metadata strip - Meta Ad Library style */}
+      <div className="px-4 pt-4 pb-3 space-y-1.5 relative">
+        <button
+          onClick={onToggleFavorite}
+          className={cn(
+            'absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center transition z-10',
+            isFavorite ? 'bg-primary text-primary-foreground' : 'bg-muted/70 text-foreground hover:bg-muted'
+          )}
+        >
+          <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+        </button>
+        <div className="flex items-center gap-1.5">
+          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+          <span className="text-[11px] font-medium text-foreground">Active</span>
+        </div>
+        {item.external_id && (
+          <p className="text-[11px] text-muted-foreground">Library ID: {item.external_id}</p>
+        )}
+        {item.started_running && (
+          <p className="text-[11px] text-muted-foreground">Started running on {item.started_running}</p>
+        )}
+        <div className="flex items-center gap-1.5 pt-0.5">
+          <span className="text-[11px] text-muted-foreground">Platforms</span>
+          <Facebook className="h-3 w-3 text-muted-foreground" />
+          <Instagram className="h-3 w-3 text-muted-foreground" />
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="h-px bg-border/60 mx-4" />
+
+      {/* Advertiser header */}
+      <div className="px-4 py-3 flex items-center gap-2.5">
+        {item.advertiser_logo_url ? (
+          <img src={item.advertiser_logo_url} alt="" className="h-9 w-9 rounded-full object-cover bg-muted" />
+        ) : (
+          <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-[11px] font-semibold text-muted-foreground">
+            {(item.advertiser_name || '?').charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
+          <p className="text-[11px] text-muted-foreground">Sponsored</p>
+        </div>
+        {item.ad_library_url && (
+          <a href={item.ad_library_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+            className="text-muted-foreground hover:text-foreground">
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+
+      {/* Primary text */}
+      {showText && item.primary_text && (
+        <div className="px-4 pb-3">
+          <p className="text-xs text-foreground/85 leading-relaxed line-clamp-4">
+            {item.primary_text}
+          </p>
+        </div>
+      )}
+
+      {/* Creative image */}
+      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden mt-auto">
         {item.image_url ? (
           <img
             src={item.image_url}
             alt={item.advertiser_name || ''}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
             loading="lazy"
             onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.2'; }}
           />
@@ -370,33 +394,7 @@ function InspirationCard({
             <ImageIcon className="h-8 w-8 text-muted-foreground" />
           </div>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className={cn(
-            'absolute top-2 right-2 h-8 w-8 rounded-full backdrop-blur-md flex items-center justify-center transition',
-            isFavorite ? 'bg-primary text-primary-foreground' : 'bg-background/70 text-foreground hover:bg-background'
-          )}
-        >
-          <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-        </button>
       </button>
-      <div className="p-3 space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-foreground truncate">
-            {item.advertiser_name || 'Onbekend'}
-          </p>
-          {item.ad_library_url && (
-            <a href={item.ad_library_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-              <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-            </a>
-          )}
-        </div>
-        {viewMode === 'images_hooks' && item.primary_text && (
-          <p className="text-xs text-muted-foreground line-clamp-4 leading-relaxed">
-            {item.primary_text}
-          </p>
-        )}
-      </div>
     </div>
   );
 }
