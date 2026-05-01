@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   RefreshCw, ChevronRight, ArrowLeft, CalendarDays, Eye, ExternalLink,
-  Image as ImageIcon, Search, BarChart3,
+  Image as ImageIcon, Search, BarChart3, Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Switch } from '@/components/ui/switch';
