@@ -11,6 +11,18 @@ const FIRECRAWL_V2 = "https://api.firecrawl.dev/v2/scrape";
 const ADS_LIBRARY_BASE = "https://www.facebook.com/ads/library/";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 uur
 
+function isLikelyTinyMetaImage(url: string): boolean {
+  return /(?:^|[_/&?=-])(?:s|p)(?:40|50|60|64|72|80|90|100|120|160)x(?:40|50|60|64|72|80|90|100|120|160)(?:[_/&?=-]|$)/i.test(url) ||
+    /(?:dst|src)-jpg_(?:s|p)(?:40|50|60|64|72|80|90|100|120|160)x(?:40|50|60|64|72|80|90|100|120|160)/i.test(url) ||
+    /_(?:q|t|s)\.(?:jpg|jpeg|png|webp)/i.test(url);
+}
+
+function isBadCachedItem(item: { image_url?: string | null; primary_text?: string | null }): boolean {
+  const imageUrl = item.image_url || "";
+  const text = item.primary_text || "";
+  return isLikelyTinyMetaImage(imageUrl) || /facebook\.com\/ads\/about|Over advertenties en het gebruik van gegevens/i.test(text);
+}
+
 function buildAdsLibraryUrl(query: string, mediaType: string): string {
   const params = new URLSearchParams({
     active_status: "active",
@@ -94,13 +106,19 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       imgUrls.push(decodeHtml(im[1]));
     }
 
-    const isAvatar = (u: string) =>
-      /\/s(?:60x60|90x90|100x100|120x120|160x160)/i.test(u) ||
-      /\/p(?:60x60|100x100)/i.test(u) ||
-      /_(?:q|t|s)\.(?:jpg|png)/i.test(u);
+    const isAvatar = (u: string) => isLikelyTinyMetaImage(u);
+
+    const imageScore = (u: string) => {
+      const sizeMatch = u.match(/(?:^|[_/&?=-])(?:s|p)(\d{3,4})x(\d{3,4})(?:[_/&?=-]|$)/i);
+      const area = sizeMatch ? Number(sizeMatch[1]) * Number(sizeMatch[2]) : 0;
+      const hasCreativeMarker = /t39\.35426|ad_library|creative|scontent/i.test(u) ? 500000 : 0;
+      return area + hasCreativeMarker - (isLikelyTinyMetaImage(u) ? 1000000 : 0);
+    };
 
     const advertiserLogo = imgUrls.find(isAvatar);
-    const creativeImg = imgUrls.find((u) => !isAvatar(u)) || imgUrls.find((u) => u !== advertiserLogo);
+    const creativeImg = [...imgUrls]
+      .filter((u) => !isAvatar(u))
+      .sort((a, b) => imageScore(b) - imageScore(a))[0];
 
     // ---- ADVERTISER ----
     let advertiserName: string | undefined;
