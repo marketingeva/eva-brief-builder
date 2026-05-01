@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   RefreshCw, ChevronRight, ArrowLeft, CalendarDays, Eye, ExternalLink,
-  Image as ImageIcon, Search, BarChart3,
+  Image as ImageIcon, Search, BarChart3, Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Switch } from '@/components/ui/switch';
@@ -299,6 +299,15 @@ export default function AdsManagerPage() {
             >
               <BarChart3 className="h-3.5 w-3.5" />
               Dashboards
+            </button>
+          </Link>
+          <Link to="/ads-manager/inspiration">
+            <button
+              className="flex items-center gap-1.5 h-9 px-3 rounded-full glass glass-hover text-xs text-foreground"
+              title="Open Inspiration Hub"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Inspiration Hub
             </button>
           </Link>
           <Select

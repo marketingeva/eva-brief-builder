@@ -1134,6 +1134,130 @@ export type Database = {
           },
         ]
       }
+      inspiration_favorites: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          item_id: string
+          notes: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_id: string
+          notes?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspiration_favorites_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "inspiration_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspiration_items: {
+        Row: {
+          ad_library_url: string | null
+          advertiser_name: string | null
+          advertiser_page_url: string | null
+          created_at: string
+          cta: string | null
+          external_id: string | null
+          headline: string | null
+          id: string
+          image_url: string | null
+          media_type: string | null
+          primary_text: string | null
+          search_id: string | null
+        }
+        Insert: {
+          ad_library_url?: string | null
+          advertiser_name?: string | null
+          advertiser_page_url?: string | null
+          created_at?: string
+          cta?: string | null
+          external_id?: string | null
+          headline?: string | null
+          id?: string
+          image_url?: string | null
+          media_type?: string | null
+          primary_text?: string | null
+          search_id?: string | null
+        }
+        Update: {
+          ad_library_url?: string | null
+          advertiser_name?: string | null
+          advertiser_page_url?: string | null
+          created_at?: string
+          cta?: string | null
+          external_id?: string | null
+          headline?: string | null
+          id?: string
+          image_url?: string | null
+          media_type?: string | null
+          primary_text?: string | null
+          search_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspiration_items_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "inspiration_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspiration_searches: {
+        Row: {
+          ai_summary: string | null
+          country: string
+          created_at: string
+          created_by: string | null
+          id: string
+          media_type: string
+          query: string
+          raw_markdown: string | null
+          result_count: number
+        }
+        Insert: {
+          ai_summary?: string | null
+          country?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_type?: string
+          query: string
+          raw_markdown?: string | null
+          result_count?: number
+        }
+        Update: {
+          ai_summary?: string | null
+          country?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_type?: string
+          query?: string
+          raw_markdown?: string | null
+          result_count?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
