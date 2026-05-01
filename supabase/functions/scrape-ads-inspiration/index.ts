@@ -71,6 +71,29 @@ interface ParsedItem {
   started_running?: string;
 }
 
+async function fetchMetaArchiveItems(query: string, mediaType: string, accessToken: string): Promise<ParsedItem[]> {
+  const resp = await fetch(buildMetaArchiveUrl(query, mediaType, accessToken));
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data?.error?.message || `Meta archive ${resp.status}`);
+  const rows = Array.isArray(data?.data) ? data.data : [];
+
+  return rows.map((ad: any): ParsedItem => {
+    const body = Array.isArray(ad.ad_creative_bodies) ? ad.ad_creative_bodies.find(Boolean) : undefined;
+    const title = Array.isArray(ad.ad_creative_link_titles) ? ad.ad_creative_link_titles.find(Boolean) : undefined;
+    const description = Array.isArray(ad.ad_creative_link_descriptions) ? ad.ad_creative_link_descriptions.find(Boolean) : undefined;
+    const primaryText = [body, title, description].filter(Boolean).join("\n\n").trim();
+
+    return {
+      external_id: ad.id,
+      advertiser_name: ad.page_name,
+      advertiser_page_url: ad.page_id ? `https://www.facebook.com/${ad.page_id}` : undefined,
+      ad_library_url: ad.ad_snapshot_url || (ad.id ? `https://www.facebook.com/ads/library/?id=${ad.id}` : undefined),
+      primary_text: primaryText || undefined,
+      started_running: ad.ad_delivery_start_time,
+    };
+  }).filter((item: ParsedItem) => item.external_id && (item.primary_text || item.advertiser_name));
+}
+
 function decodeHtml(s: string): string {
   return s
     .replace(/&amp;/g, "&")
