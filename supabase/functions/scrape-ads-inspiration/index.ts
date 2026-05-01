@@ -310,10 +310,8 @@ Wees concreet, geen marketing-fluff.` }
         primary_text: p.primary_text || null,
         external_id: p.external_id || null,
         media_type: mediaType,
-        metadata: {
-          advertiser_logo_url: p.advertiser_logo_url || null,
-          started_running: p.started_running || null,
-        },
+        advertiser_logo_url: p.advertiser_logo_url || null,
+        started_running: p.started_running || null,
       }));
       const { data: inserted, error: itemsErr } = await sb
         .from("inspiration_items")
