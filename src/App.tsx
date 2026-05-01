@@ -47,7 +47,7 @@ const App = () => (
                 <Route path="/briefings" element={<BriefingsPage />} />
                 <Route path="/ads-manager" element={<AdsManagerPage />} />
                 <Route path="/ads-manager/dashboards" element={<AdsDashboardsPage />} />
-                <Route path="/ads-manager/inspiration" element={<AdsInspirationPage />} />
+                <Route path="/inspiration-hub" element={<AdsInspirationPage />} />
                 <Route path="/client/:slug" element={<ClientWorkspace />} />
                 <Route path="/client/:slug/:tab" element={<ClientWorkspace />} />
               </Route>
