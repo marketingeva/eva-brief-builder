@@ -556,6 +556,81 @@ function AdLibraryCard({
   );
 }
 
+function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; onOpen: () => void }) {
+  const [index, setIndex] = useState(0);
+  const activeUrl = urls[index] || null;
+  const hasMultiple = urls.length > 1;
+  const activeIsVideo = isVideoUrl(activeUrl);
+
+  const goTo = (nextIndex: number) => {
+    const total = urls.length;
+    if (!total) return;
+    setIndex((nextIndex + total) % total);
+  };
+
+  return (
+    <div className="w-full bg-muted/40 aspect-square overflow-hidden relative">
+      {activeUrl ? (
+        activeIsVideo ? (
+          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full object-cover bg-muted" />
+        ) : (
+          <button onClick={onOpen} className="block w-full h-full">
+            <img
+              src={activeUrl}
+              alt={label}
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+              loading="lazy"
+            />
+          </button>
+        )
+      ) : (
+        <button onClick={onOpen} className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</button>
+      )}
+
+      {activeIsVideo && (
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-background/85 border border-border/70 px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-foreground">
+          <PlayCircle className="h-3 w-3" /> Video
+        </div>
+      )}
+
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            onClick={() => goTo(index - 1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-background/85 border border-border/70 flex items-center justify-center text-foreground shadow-sm hover:bg-background"
+            aria-label="Vorige carousel slide"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => goTo(index + 1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-background/85 border border-border/70 flex items-center justify-center text-foreground shadow-sm hover:bg-background"
+            aria-label="Volgende carousel slide"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-1.5">
+            {urls.map((url, dotIndex) => (
+              <button
+                key={`${url}-${dotIndex}`}
+                type="button"
+                onClick={() => setIndex(dotIndex)}
+                className={cn(
+                  'h-1.5 rounded-full transition-all bg-background/75 border border-border/70',
+                  dotIndex === index ? 'w-5' : 'w-1.5 opacity-70'
+                )}
+                aria-label={`Carousel slide ${dotIndex + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function HookCard({ item, onOpen }: { item: InspirationItem; onOpen: () => void }) {
   return (
     <button
