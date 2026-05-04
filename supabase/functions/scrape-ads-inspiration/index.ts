@@ -135,6 +135,75 @@ function extractImageCandidates(chunk: string): string[] {
   return candidates;
 }
 
+function extractVideoCandidates(chunk: string): string[] {
+  const candidates: string[] = [];
+  Array.from(chunk.matchAll(/<video\b[^>]*(?:src|data-src)=["']([^"']+)["'][^>]*>/gi)).forEach((m) => candidates.push(m[1]));
+  Array.from(chunk.matchAll(/(?:playable_url|browser_native_hd_url|browser_native_sd_url|video_url|og:video(?::secure_url)?)\S{0,80}?["'](https?:\\?\/\\?\/[^"'<>\s]+)["']/gi)).forEach((m) => candidates.push(m[1]));
+  Array.from(chunk.matchAll(/https?:\\?\/\\?\/[^"'<>\s]+?\.mp4[^"'<>\s]*/gi)).forEach((m) => candidates.push(m[0]));
+
+  return unique(candidates.map(decodeScrapedUrl).map(decodeHtml)).filter((url) => /^https?:\/\//i.test(url));
+}
+
+function extractVisibleTextLines(chunk: string): string[] {
+  const text = chunk
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(?:div|p|span|h[1-6]|li|a|button)>/gi, "\n")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/\s(?:aria-label|alt|title)=["']([^"']{2,240})["']/gi, "\n$1\n");
+
+  return unique(stripTags(text)
+    .split(/\n+/)
+    .map((line) => normalizeText(line))
+    .filter((line) => line.length >= 2 && line.length <= 1800)
+    .filter((line) => !/^https?:\/\//i.test(line))
+    .filter((line) => !/^\d+$/.test(line))
+    .filter((line) => !isBoilerplateText(line)));
+}
+
+function isLikelyHeadline(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
+  if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(normalized)) return true;
+  if (/^[A-ZÀ-Ý0-9].{6,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
+  return false;
+}
+
+function pickHeadlineText(texts: string[], primaryText?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText)
+    .filter((text) => isLikelyHeadline(text))
+    .sort((a, b) => {
+      const score = (text: string) => (/\b(werken bij|welkom bij|ontdek|vacature|solliciteer)\b/i.test(text) ? 100 : 0) + Math.max(0, 120 - text.length);
+      return score(b) - score(a);
+    })[0];
+}
+
+function pickDescriptionText(texts: string[], primaryText?: string, headline?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText && text !== headline)
+    .filter((text) => text.length >= 24 && text.length <= 220)
+    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text))
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+function inferAdvertiserName(texts: string[]): string | undefined {
+  const joined = unique(texts.map((text) => normalizeText(text))).join(" | ");
+  const patterns = [
+    /(?:werken bij|welkom bij|bij)\s+([A-ZÀ-Ý][A-Za-zÀ-ÿ0-9&'. -]{2,45})(?:[!?.|]|\s{2,}|$)/i,
+    /([A-ZÀ-Ý][A-Za-zÀ-ÿ0-9&'. -]{2,45})\s+(?:zoekt|vacature|thuiszorgvacatures)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = joined.match(pattern)?.[1];
+    if (!match) continue;
+    const name = normalizeText(match.replace(/\b(?:Gouda|Elst|Nijmegen Oost|Nederland)\b/gi, "").replace(/[|:,-]+$/g, ""));
+    if (!isBoilerplateAdvertiserName(name)) return name;
+  }
+
+  return undefined;
+}
+
 function isBoilerplateText(text: string): boolean {
   return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
