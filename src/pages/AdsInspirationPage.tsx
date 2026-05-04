@@ -153,18 +153,26 @@ function getMediaUrls(item: InspirationItem): string[] {
   return filtered;
 }
 
+interface GeneratedHook {
+  id: string;
+  hook_text: string;
+  hook_category: string;
+  rationale?: string;
+}
+
 export default function AdsInspirationPage() {
   const [activeTab, setActiveTab] = useState<HubTab>('ad-library');
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState<SearchRow | null>(null);
   const [items, setItems] = useState<InspirationItem[]>([]);
   const [favorites, setFavorites] = useState<Record<string, string>>({});
-  const [clients, setClients] = useState<ClientOption[]>([]);
-  const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [activeQuery, setActiveQuery] = useState<string>(FIXED_QUERY);
   const [queryInput, setQueryInput] = useState<string>(FIXED_QUERY);
+  const [generatedHooks, setGeneratedHooks] = useState<GeneratedHook[]>([]);
+  const [hooksLoading, setHooksLoading] = useState(false);
+  const [hooksRole, setHooksRole] = useState<string>('');
 
   const loadFavorites = useCallback(async () => {
     const clientFilter = activeClient === 'global' ? null : activeClient;
