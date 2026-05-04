@@ -440,11 +440,24 @@ export default function AdsInspirationPage() {
                         </div>
                       )}
 
-                      {(destinationLabel || headline || description) && (
+                      {destinationLabel && (
                         <div className="space-y-1.5">
-                          {destinationLabel && <p className="text-[11px] uppercase text-muted-foreground">{destinationLabel}</p>}
-                          {headline && <p className="text-sm font-semibold text-foreground">{headline}</p>}
-                          {description && <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{description}</p>}
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Bestemming</p>
+                          <p className="text-sm text-foreground/85">{destinationLabel}</p>
+                        </div>
+                      )}
+
+                      {headline && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
+                          <p className="text-sm font-semibold text-foreground leading-snug">{headline}</p>
+                        </div>
+                      )}
+
+                      {description && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
+                          <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{description}</p>
                         </div>
                       )}
 
