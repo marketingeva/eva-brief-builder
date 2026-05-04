@@ -159,6 +159,30 @@ interface GeneratedHook {
   rationale?: string;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface LocationOption {
+  id: string;
+  name: string;
+  city: string | null;
+}
+
+interface SavedHookRow {
+  id: string;
+  client_id: string | null;
+  location_id: string | null;
+  location_label: string | null;
+  role_query: string;
+  hook_text: string;
+  hook_category: string | null;
+  rationale: string | null;
+  created_at: string;
+  client?: { name: string } | null;
+}
+
 export default function AdsInspirationPage() {
   const [activeTab, setActiveTab] = useState<HubTab>('ad-library');
   const [loading, setLoading] = useState(false);
@@ -172,6 +196,14 @@ export default function AdsInspirationPage() {
   const [generatedHooks, setGeneratedHooks] = useState<GeneratedHook[]>([]);
   const [hooksLoading, setHooksLoading] = useState(false);
   const [hooksRole, setHooksRole] = useState<string>('');
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [locationsByClient, setLocationsByClient] = useState<Record<string, LocationOption[]>>({});
+  const [hookClient, setHookClient] = useState<string>(GENERAL_CLIENT_VALUE);
+  const [hookLocation, setHookLocation] = useState<string>(ALL_LOCATIONS_VALUE);
+  const [savedHooks, setSavedHooks] = useState<SavedHookRow[]>([]);
+  const [savedHookKeys, setSavedHookKeys] = useState<Set<string>>(new Set());
+  const [savedFavoriteItems, setSavedFavoriteItems] = useState<Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>>([]);
+
 
   const loadFavorites = useCallback(async () => {
     const { data } = await supabase
