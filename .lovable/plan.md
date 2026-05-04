@@ -1,96 +1,58 @@
-Doel
-De Inspiration Hub wordt omgebouwd naar 2 duidelijke tabs:
-1. Ad Library
-2. Hooks
+Ik ga de Inspiration Hub zo aanpassen dat de kaarten meer lijken op de echte Meta Ad Library-opbouw: organisatie bovenaan, advertentietekst boven de creative, headline/description onder de creative, en alleen 12 advertenties initieel zichtbaar met een knop om meer te laden.
 
-Wat ik ga aanpassen
+Plan:
 
-1. Inspiration Hub herstructureren
-- De huidige modus “Afbeeldingen” / “Afbeeldingen + hooks” verwijderen.
-- Bovenin 2 tabs maken:
-  - Ad Library
-  - Hooks
-- De Ad Library-tab krijgt een vaste bron en vaste filters gebaseerd op jouw link:
-  - land: Nederland
-  - categorie: Employment
-  - status: Active
-  - zoekterm: Verzorgende IG
-  - media: all
-- De vrije zoekbalk verdwijnt hier dus als primaire input; de hub wordt een vaste inspiratiebron voor deze doelgroep.
+1. Datamodel en types afronden
+- De databasekolommen `media_urls` en `description` bestaan al.
+- Ik werk de frontend-types bij zodat `description` en `media_urls` echt gebruikt worden in de UI.
+- Ik zorg dat inserts vanuit de scraper deze velden ook vullen; nu worden ze nog niet opgeslagen.
 
-2. Ad Library-tab functioneel opnieuw opzetten
-- De scraper aanpassen zodat hij exact op de Meta Ad Library URL en parameters werkt die jij doorgaf, in plaats van de huidige lossere query-opbouw.
-- De huidige fout corrigeren waarbij de edge function nu nog `ad_type=all` gebruikt voor de scrape-fallback, terwijl jij expliciet employment ads wilt.
-- Resultaten opslaan als echte “ad library snapshots” met per advertentie:
-  - adverteerder
-  - advertentietekst
-  - afbeelding of video-indicatie
-  - ad library link
-  - library ID
-  - startdatum
-  - platformen indien beschikbaar
-- UI van de cards aanpassen zodat image en video beide goed weergegeven worden. Voor video’s toon ik een duidelijke video-state/thumbnail-link in plaats van ze als afbeelding te behandelen.
+2. Scraper corrigeren: advertentietekst vs description
+- `primary_text` wordt uitsluitend de echte advertentietekst/body boven de afbeelding.
+- `headline` wordt de link/headline tekst.
+- `description` wordt de linkbeschrijving/description onder de afbeelding.
+- `cta` blijft apart voor CTA/caption als die beschikbaar is.
+- De huidige fout waarbij `title + description + caption` in `primary_text` wordt geplakt, haal ik eruit.
+- De snapshot fallback mag niet langer automatisch `og:description` als advertentietekst opslaan, omdat dat precies de verwarring veroorzaakt.
 
-3. Datamodel uitbreiden voor Ad Library-items
-- De bestaande inspiratietabellen blijven de basis, maar ik voeg gerichte velden toe zodat Ad Library-data niet meer “half” in het huidige images-model wordt geperst.
-- Waarschijnlijke extra velden:
-  - tab_type / source_type
-  - media_preview_url
-  - video_url of snapshot_url
-  - publisher_platforms
-  - raw_payload / metadata
-  - sort_mode / source_url op search-niveau
-- Bestaande favorieten en opslag blijven werken.
+3. Organisatienaam verbeteren
+- Als de officiële Meta API geen toegang geeft, valt de scraper terug op HTML-scraping. Daar komt nu vaak `Onbekend` of `Meer informatie` uit.
+- Ik maak de HTML-parser strenger: boilerplate zoals `Meer informatie`, `Sponsored`, `Onbekend` wordt nooit als organisatie gebruikt.
+- Ik voeg heuristieken toe om de organisatie uit betere bronnen te halen: Facebook page links, aria-labels, nearby sponsored block, en eventueel tekst op/onder de creative zoals `van Savelberg` of `bij Liante` als fallback.
+- Als er echt niets betrouwbaar is, blijft de fallback netjes leeg/`Onbekend`, maar niet meer foutief `Meer informatie`.
 
-4. Scrape-logica betrouwbaarder maken
-- Eerst de officiële archive API-resultaten gebruiken voor stabiele metadata.
-- Daarna per ad de snapshot/render-pagina gebruiken om creatives betrouwbaarder uit te lezen, omdat de listing-pagina zelf niet alle media volledig en consistent bevat.
-- Fall-back scraping op de listing alleen gebruiken als aanvullende bron, niet meer als primaire waarheid.
-- Deduplicatie verbeteren op library ID.
-- Cache-key aanscherpen zodat resultaten specifiek zijn voor:
-  - query
-  - country
-  - ad_type
-  - media_type
-  - sort_mode
-- Oude generieke cache wordt dus niet meer per ongeluk hergebruikt.
+4. Media: afbeeldingen, video’s en carousels
+- De scraper verzamelt meerdere geldige media-URL’s per advertentie in `media_urls`.
+- Video-URL’s/posters worden apart gedetecteerd en `media_type` wordt `video`, `carousel` of `image`.
+- Ik pas de scoring aan zodat kleine logo’s/avatars niet als advertentiecreative eindigen.
+- In de UI toon ik:
+  - video met play-overlay / video player in preview,
+  - carousel als meerdere thumbnails/strip,
+  - gewone image als één creative.
 
-5. Hooks-tab toevoegen
-- Nieuwe Hooks-tab bouwen die niet simpelweg hetzelfde overzicht met tekst toont, maar echte hook-inspiratie uit de gescrapete advertentieteksten haalt.
-- Per hook laat ik zien:
-  - hook-zin of opener
-  - type hook (bijv. collega’s, betekenisvol werk, flexibiliteit, waardering, ontwikkeling)
-  - voorbeeldadvertentie / bron
-  - gekoppelde adverteerder
-- Hooks worden afgeleid uit de opgeslagen Ad Library-items voor “Verzorgende IG” in Nederland, zodat deze tab direct gevoed wordt vanuit echte advertenties.
+5. UI layout corrigeren
+- Het kopje/platformblok met `Platforms Niet beschikbaar` verdwijnt van de kaart.
+- De kaartvolgorde wordt:
+  1. status + Library ID + startdatum,
+  2. organisatie + Sponsored,
+  3. advertentietekst boven de media,
+  4. image/video/carousel,
+  5. headline/description/CTA onder de media indien aanwezig.
+- In de detail-popup toon ik dezelfde scheiding expliciet met labels: `Advertentietekst`, `Headline`, `Beschrijving`, `CTA`.
 
-6. UX en gedrag verbeteren
-- In de Ad Library-tab een duidelijke knop “Vernieuwen uit Meta Ad Library” toevoegen.
-- Recente zoekopdrachten vervangen of versimpelen naar een vaste dataset-weergave, omdat deze hub nu niet meer generiek zoekgedreven is maar bron-gedreven.
-- Favorieten behouden op itemniveau.
-- Detailmodal behouden, maar uitbreiden voor advertentietekst en media-type.
+6. Eerst 12 laden, daarna “Meer laden”
+- De scraper mag nog steeds meer resultaten ophalen en opslaan, maar de UI toont initieel 12 advertenties.
+- Onderaan komt een knop `Meer laden` die telkens 12 extra advertenties zichtbaar maakt.
+- Bij verversen, tabwissel of nieuwe resultaten reset de zichtbare teller terug naar 12.
+- De Hooks-tab krijgt vergelijkbaar limietgedrag als daar veel resultaten staan, of blijft afgeleid van de geladen advertenties als dat beter aansluit bij de bestaande UX.
 
-Waarom dit nodig is
-- De huidige implementatie is nog te generiek en gebruikt niet exact jouw Meta Ad Library-scope.
-- In de edge function zit nu al een inhoudelijke mismatch: de scrape-URL gebruikt `ad_type=all`, terwijl jouw use case `employment_ads` vereist.
-- De huidige UI probeert hooks als view-mode boven op dezelfde resultaten te tonen, terwijl jij eigenlijk 2 aparte werkmodi wilt: echte ads bekijken en hooks analyseren.
+7. Cache en bestaande foute data
+- Omdat er nu al fout gecachte items staan, laat ik de kwaliteitscontrole ook letten op ontbrekende `description/media_urls`, boilerplate organisatie, en verkeerd gevulde `primary_text`.
+- Daardoor wordt bij de eerstvolgende refresh automatisch nieuwe data opgehaald in plaats van oude foutieve cache te tonen.
+- Na de codewijziging deploy ik de backendfunctie opnieuw zodat de knop direct de nieuwe logica gebruikt.
 
-Technische details
-- Bestanden die ik verwacht aan te passen:
-  - `src/pages/AdsInspirationPage.tsx`
-  - `supabase/functions/scrape-ads-inspiration/index.ts`
-  - mogelijk `src/integrations/supabase/types.ts` (automatisch bijgewerkt na schemawijziging)
-  - nieuwe migratie voor extra inspiratievelden
-- Database:
-  - bestaande tabellen `inspiration_searches`, `inspiration_items`, `inspiration_favorites` blijven bruikbaar
-  - schema wordt uitgebreid i.p.v. vervangen
-- Backend:
-  - edge function gebruikt bestaande secrets en connectoren; er zijn geen nieuwe geheimen nodig
-- Beperkingen:
-  - De officiële archive API geeft metadata heel goed terug, maar media-assets vereisen vaak extra scraping van de snapshot/ad detail pagina. Daarom combineer ik beide bronnen.
-
-Resultaat na implementatie
-- Een Inspiration Hub met:
-  - Tab 1: Ad Library — echte Nederlandse employment ads voor “Verzorgende IG” inclusief tekst + afbeelding/video
-  - Tab 2: Hooks — afgeleide hook-inspiratie uit dezelfde advertentiebron
-- Resultaten die veel dichter aansluiten op jouw gedeelde link en screenshot.
+Technische details:
+- Bestanden die ik aanpas: `supabase/functions/scrape-ads-inspiration/index.ts` en `src/pages/AdsInspirationPage.tsx`.
+- Ik wijzig geen gegenereerde backend client/types-bestanden handmatig.
+- Er is waarschijnlijk geen nieuwe database-migratie nodig, omdat `media_urls` en `description` al bestaan.
+- De officiële Meta API faalt momenteel met permissies en valt terug op scraping; ik verbeter daarom vooral de fallback-parser, zodat de pagina ook zonder die permissie bruikbaar is.

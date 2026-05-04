@@ -30,9 +30,11 @@ interface InspirationItem {
   ad_library_url: string | null;
   image_url: string | null;
   media_preview_url?: string | null;
+  media_urls?: string[] | null;
   video_url?: string | null;
   snapshot_url?: string | null;
   primary_text: string | null;
+  description?: string | null;
   external_id: string | null;
   started_running: string | null;
   headline?: string | null;
@@ -43,6 +45,8 @@ interface InspirationItem {
   hook_category?: string | null;
   is_hook_candidate?: boolean | null;
 }
+
+const PAGE_SIZE = 12;
 
 interface SearchRow {
   id: string;
@@ -79,6 +83,7 @@ export default function AdsInspirationPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
 
   const loadFavorites = useCallback(async () => {
     const clientFilter = activeClient === 'global' ? null : activeClient;
@@ -100,6 +105,7 @@ export default function AdsInspirationPage() {
       if (data?.error) throw new Error(data.error);
       setSearch(data.search || null);
       setItems(data.items || []);
+      setVisibleCount(PAGE_SIZE);
       if (forceRefresh) toast.success('Ad Library vernieuwd');
     } catch (e: any) {
       console.error(e);
@@ -127,6 +133,7 @@ export default function AdsInspirationPage() {
   }, []);
 
   useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
     loadHub(false);
   }, [loadHub]);
 
@@ -262,17 +269,30 @@ export default function AdsInspirationPage() {
           </div>
         ) : activeTab === 'ad-library' ? (
           items.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {items.map((item) => (
-                <AdLibraryCard
-                  key={item.id}
-                  item={item}
-                  isFavorite={!!favorites[item.id]}
-                  onToggleFavorite={() => toggleFavorite(item)}
-                  onPreview={() => setPreviewItem(item)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {items.slice(0, visibleCount).map((item) => (
+                  <AdLibraryCard
+                    key={item.id}
+                    item={item}
+                    isFavorite={!!favorites[item.id]}
+                    onToggleFavorite={() => toggleFavorite(item)}
+                    onPreview={() => setPreviewItem(item)}
+                  />
+                ))}
+              </div>
+              {visibleCount < items.length && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    className="rounded-full text-xs"
+                    onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                  >
+                    Meer laden ({items.length - visibleCount})
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <EmptyState label="Geen advertenties gevonden" />
           )
@@ -355,6 +375,27 @@ export default function AdsInspirationPage() {
                   </div>
                 )}
 
+                {previewItem.headline && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
+                    <p className="text-sm font-semibold text-foreground">{previewItem.headline}</p>
+                  </div>
+                )}
+
+                {previewItem.description && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
+                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{previewItem.description}</p>
+                  </div>
+                )}
+
+                {previewItem.cta && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
+                    <Badge variant="secondary" className="rounded-full">{previewItem.cta}</Badge>
+                  </div>
+                )}
+
                 {previewItem.publisher_platforms && previewItem.publisher_platforms.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Platformen</p>
@@ -406,6 +447,12 @@ function AdLibraryCard({
 }) {
   const previewSrc = getAdPreviewSrc(item);
   const platforms = item.publisher_platforms || [];
+  const carouselThumbs = (item.media_urls || []).filter((u) => u && u !== previewSrc).slice(0, 3);
+  const isCarousel = item.media_type === 'carousel' || carouselThumbs.length > 0;
+  const isVideo = item.media_type === 'video' || !!item.video_url;
+  const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
+    ? item.advertiser_name
+    : 'Onbekend';
 
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
@@ -420,26 +467,23 @@ function AdLibraryCard({
           <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
         </button>
 
-        <div className="flex items-center gap-1.5">
-          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-          <span className="text-[11px] font-medium text-foreground">Active</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+            <span className="text-[11px] font-medium text-foreground">Active</span>
+          </div>
+          {isVideo && <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0">Video</Badge>}
+          {isCarousel && !isVideo && <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0">Carousel</Badge>}
+          {platforms.includes('FACEBOOK') && <Facebook className="h-3 w-3 text-muted-foreground" />}
+          {platforms.includes('INSTAGRAM') && <Instagram className="h-3 w-3 text-muted-foreground" />}
         </div>
 
         {item.external_id && (
           <p className="text-[11px] text-muted-foreground">Library ID: {item.external_id}</p>
         )}
         {item.started_running && (
-          <p className="text-[11px] text-muted-foreground">Started running on {item.started_running}</p>
+          <p className="text-[11px] text-muted-foreground">Gestart op {item.started_running}</p>
         )}
-
-        <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
-          <span className="text-[11px] text-muted-foreground">Platforms</span>
-          {platforms.includes('FACEBOOK') && <Facebook className="h-3 w-3 text-muted-foreground" />}
-          {platforms.includes('INSTAGRAM') && <Instagram className="h-3 w-3 text-muted-foreground" />}
-          {platforms.length === 0 && (
-            <span className="text-[11px] text-muted-foreground">Niet beschikbaar</span>
-          )}
-        </div>
       </div>
 
       <div className="h-px bg-border/60 mx-4" />
@@ -449,11 +493,11 @@ function AdLibraryCard({
           <img src={item.advertiser_logo_url} alt="" className="h-9 w-9 rounded-full object-cover bg-muted" />
         ) : (
           <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-[11px] font-semibold text-muted-foreground">
-            {(item.advertiser_name || '?').charAt(0).toUpperCase()}
+            {advertiserDisplay.charAt(0).toUpperCase()}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
+          <p className="text-xs font-semibold text-foreground truncate">{advertiserDisplay}</p>
           <p className="text-[11px] text-muted-foreground">Sponsored</p>
         </div>
         {item.ad_library_url && (
@@ -465,22 +509,22 @@ function AdLibraryCard({
 
       {item.primary_text && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-foreground/85 leading-relaxed line-clamp-4">{item.primary_text}</p>
+          <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-5">{item.primary_text}</p>
         </div>
       )}
 
-      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden mt-auto relative">
+      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden relative">
         {previewSrc ? (
           <img
             src={previewSrc}
-            alt={item.advertiser_name || 'Advertentie'}
+            alt={advertiserDisplay}
             className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
             loading="lazy"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</div>
         )}
-        {item.media_type === 'video' && (
+        {isVideo && (
           <div className="absolute inset-0 bg-background/10 flex items-center justify-center">
             <div className="h-12 w-12 rounded-full bg-background/80 border border-border/70 flex items-center justify-center">
               <PlayCircle className="h-6 w-6 text-foreground" />
@@ -488,6 +532,28 @@ function AdLibraryCard({
           </div>
         )}
       </button>
+
+      {isCarousel && carouselThumbs.length > 0 && (
+        <div className="px-4 pt-3 flex gap-1.5 overflow-x-auto">
+          {carouselThumbs.map((url) => (
+            <img key={url} src={url} alt="" className="h-12 w-12 rounded-md object-cover bg-muted flex-shrink-0" loading="lazy" />
+          ))}
+        </div>
+      )}
+
+      {(item.headline || item.description || item.cta) && (
+        <div className="px-4 py-3 mt-auto border-t border-border/60 space-y-1">
+          {item.headline && (
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{item.headline}</p>
+          )}
+          {item.description && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
+          )}
+          {item.cta && (
+            <p className="text-[11px] text-primary font-medium">{item.cta}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

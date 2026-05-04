@@ -136,9 +136,16 @@ function extractImageCandidates(chunk: string): string[] {
 }
 
 function isBoilerplateText(text: string): boolean {
-  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie)$/i.test(text)
+  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
     || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text);
+}
+
+function isBoilerplateAdvertiserName(name: string | undefined | null): boolean {
+  if (!name) return true;
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 120) return true;
+  return /^(Onbekend|Unknown|Meer informatie|Learn More|Sponsored|Gesponsord|Sign Up|Aanmelden|Apply Now|Solliciteer|Bekijk meer|See more|Open Link|Niet beschikbaar)$/i.test(trimmed);
 }
 
 function adTextScore(text: string): number {
@@ -162,16 +169,19 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
 
   const badCount = items.filter((item) => {
     const text = typeof item.primary_text === "string" ? item.primary_text : "";
+    const advertiser = typeof item.advertiser_name === "string" ? item.advertiser_name : "";
     const media = typeof item.media_preview_url === "string"
       ? item.media_preview_url
       : typeof item.image_url === "string"
         ? item.image_url
         : "";
 
-    return (!!media && mediaCandidateScore(media) <= 0) || (!!text && isBoilerplateText(text));
+    return (!!media && mediaCandidateScore(media) <= 0)
+      || (!!text && isBoilerplateText(text))
+      || isBoilerplateAdvertiserName(advertiser);
   }).length;
 
-  return badCount > 0;
+  return badCount > Math.max(2, items.length * 0.3);
 }
 
 function buildAdsLibraryUrl(): string {
@@ -247,6 +257,7 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
     const resp = await fetch(snapshotUrl, {
       headers: {
         "user-agent": "Mozilla/5.0 (compatible; LovableBot/1.0)",
+        "accept-language": "nl-NL,nl;q=0.9,en;q=0.8",
       },
     });
 
@@ -259,18 +270,27 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
     const ogImage = html.match(/property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const ogVideo = html.match(/property=["']og:video(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const posterImage = html.match(/property=["']og:image:url["'][^>]+content=["']([^"']+)["']/i)?.[1];
-    const headline = html.match(/property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
-    const description = html.match(/property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const videoTag = html.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
     const imgCandidates = extractImageCandidates(html);
-    const bestImage = pickAdMediaUrl([ogImage || "", posterImage || "", ...imgCandidates].filter(Boolean));
+
+    // Collect all valid creative media URLs (deduped + scored)
+    const allMediaUrls = unique([ogImage || "", posterImage || "", ...imgCandidates].filter(Boolean).map(decodeScrapedUrl))
+      .map((url) => ({ url, score: mediaCandidateScore(url) }))
+      .filter((c) => c.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((c) => c.url);
+
+    const bestImage = allMediaUrls[0];
+    const videoUrl = decodeHtml(ogVideo || videoTag || "") || undefined;
+    const mediaUrls = videoUrl ? unique([videoUrl, ...allMediaUrls]) : allMediaUrls;
+    const mediaType = videoUrl ? "video" : (allMediaUrls.length > 1 ? "carousel" : "image");
 
     return {
       image_url: bestImage,
       media_preview_url: bestImage,
-      video_url: decodeHtml(ogVideo || videoTag || "") || undefined,
-      headline: normalizeText(decodeHtml(headline || "")) || undefined,
-      primary_text: normalizeText(decodeHtml(description || "")) || undefined,
+      media_urls: mediaUrls,
+      media_type: mediaType,
+      video_url: videoUrl,
       snapshot_url: snapshotUrl,
     };
   } catch (error) {
@@ -290,34 +310,37 @@ async function fetchMetaArchiveItems(accessToken: string): Promise<ParsedItem[]>
     const title = Array.isArray(ad.ad_creative_link_titles) ? ad.ad_creative_link_titles.find(Boolean) : undefined;
     const description = Array.isArray(ad.ad_creative_link_descriptions) ? ad.ad_creative_link_descriptions.find(Boolean) : undefined;
     const caption = Array.isArray(ad.ad_creative_link_captions) ? ad.ad_creative_link_captions.find(Boolean) : undefined;
-    const primaryText = normalizeText([body, title, description, caption].filter(Boolean).join("\n\n"));
     const snapshotUrl = ad.ad_snapshot_url || (ad.id ? `https://www.facebook.com/ads/library/?id=${ad.id}` : undefined);
+
+    const advertiserName = isBoilerplateAdvertiserName(ad.page_name) ? undefined : normalizeText(ad.page_name);
 
     return {
       external_id: ad.id,
-      advertiser_name: ad.page_name,
+      advertiser_name: advertiserName,
       advertiser_page_url: ad.page_id ? `https://www.facebook.com/${ad.page_id}` : undefined,
       ad_library_url: snapshotUrl,
       snapshot_url: snapshotUrl,
-      primary_text: primaryText || undefined,
+      primary_text: normalizeText(body) || undefined,
       headline: normalizeText(title) || undefined,
+      description: normalizeText(description) || undefined,
       cta: normalizeText(caption) || undefined,
       started_running: ad.ad_delivery_start_time,
       publisher_platforms: Array.isArray(ad.publisher_platforms) ? ad.publisher_platforms : [],
       raw_payload: ad,
     };
-  }).filter((item) => item.external_id && (item.primary_text || item.advertiser_name));
+  }).filter((item) => item.external_id && (item.primary_text || item.headline || item.advertiser_name));
 
   const enrichedItems = await Promise.all(baseItems.map(async (item, index) => {
-    const snapshotData = item.snapshot_url && index < 20 ? await enrichSnapshot(item.snapshot_url) : {};
-    const mergedText = normalizeText(snapshotData.primary_text || item.primary_text || "");
-    const hookText = extractHookText(mergedText || item.headline || "");
+    const snapshotData = item.snapshot_url && index < 24 ? await enrichSnapshot(item.snapshot_url) : {};
+    const primaryText = item.primary_text;
+    const hookText = extractHookText(primaryText || item.headline || "");
     return {
       ...item,
-      ...snapshotData,
-      primary_text: mergedText || item.primary_text,
       image_url: snapshotData.image_url || item.image_url,
       media_preview_url: snapshotData.media_preview_url || snapshotData.image_url || item.image_url,
+      media_urls: snapshotData.media_urls && snapshotData.media_urls.length > 0 ? snapshotData.media_urls : item.media_urls,
+      media_type: snapshotData.media_type || item.media_type,
+      video_url: snapshotData.video_url || item.video_url,
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,
       is_hook_candidate: !!hookText,
@@ -357,14 +380,38 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const externalId = idMatch[1];
 
     const startedRunning = chunk.match(/(?:Started running on|Gestart op|Uitgevoerd vanaf)\s+([^<\n]+?)(?:<|\n|$)/i)?.[1]?.trim();
-    const advertiserMatch = chunk.match(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/[^"'?#]+)["'][^>]*>([^<]{2,120})<\/a>/i);
-    const advertiserUrl = advertiserMatch?.[1];
-    const advertiserName = advertiserMatch ? stripTags(advertiserMatch[2]) : undefined;
+
+    // Try multiple advertiser candidates - prefer non-boilerplate page links
+    const advertiserCandidates: Array<{ name: string; url?: string }> = [];
+    const fbLinkMatches = Array.from(chunk.matchAll(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/(?!ads\/library)[^"'?#]+)["'][^>]*>([^<]{2,120})<\/a>/gi));
+    for (const m of fbLinkMatches) {
+      const name = stripTags(m[2]);
+      if (!isBoilerplateAdvertiserName(name)) {
+        advertiserCandidates.push({ name, url: m[1] });
+      }
+    }
+    // Fallback: <strong>/<h?> near "Sponsored"/"Gesponsord"
+    const strongMatch = chunk.match(/<(?:strong|h[1-6]|span|div)[^>]*>([^<]{2,80})<\/(?:strong|h[1-6]|span|div)>\s*<[^>]*>\s*(?:Sponsored|Gesponsord)/i);
+    if (strongMatch) {
+      const name = stripTags(strongMatch[1]);
+      if (!isBoilerplateAdvertiserName(name)) advertiserCandidates.push({ name });
+    }
+    const advertiser = advertiserCandidates[0];
+    const advertiserName = advertiser?.name;
+    const advertiserUrl = advertiser?.url;
 
     const imgCandidates = extractImageCandidates(chunk);
-    const imageUrl = pickAdMediaUrl(imgCandidates);
+    const allMedia = unique(imgCandidates.map(decodeScrapedUrl))
+      .map((url) => ({ url, score: mediaCandidateScore(url) }))
+      .filter((c) => c.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((c) => c.url);
+    const imageUrl = allMedia[0];
     const logoUrl = pickLogoUrl(imgCandidates);
     const videoUrl = chunk.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
+    const decodedVideo = decodeHtml(videoUrl || "") || undefined;
+    const mediaUrls = decodedVideo ? unique([decodedVideo, ...allMedia]) : allMedia;
+    const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : "image");
 
     const textNodes = Array.from(chunk.matchAll(/<(?:div|span|p)[^>]*>([^<]{20,1600})<\/(?:div|span|p)>/gi))
       .map((m) => normalizeText(decodeHtml(m[1])))
@@ -383,7 +430,9 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       snapshot_url: `https://www.facebook.com/ads/library/?id=${externalId}`,
       image_url: imageUrl,
       media_preview_url: imageUrl,
-      video_url: decodeHtml(videoUrl || "") || undefined,
+      media_urls: mediaUrls,
+      media_type: mediaType,
+      video_url: decodedVideo,
       primary_text: primaryText,
       started_running: startedRunning,
       hook_text: hookText || undefined,
@@ -538,9 +587,11 @@ serve(async (req) => {
         video_url: item.video_url || null,
         snapshot_url: item.snapshot_url || item.ad_library_url || null,
         primary_text: item.primary_text || null,
+        description: item.description || null,
         headline: item.headline || null,
         cta: item.cta || null,
-        media_type: item.video_url ? "video" : "image",
+        media_urls: item.media_urls && item.media_urls.length > 0 ? item.media_urls : (item.media_preview_url ? [item.media_preview_url] : []),
+        media_type: item.media_type || (item.video_url ? "video" : "image"),
         external_id: item.external_id || null,
         started_running: item.started_running || null,
         publisher_platforms: unique(item.publisher_platforms || []),
