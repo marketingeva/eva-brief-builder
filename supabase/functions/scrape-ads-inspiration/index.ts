@@ -453,9 +453,11 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
 
     const startedRunning = chunk.match(/(?:Started running on|Gestart op|Uitgevoerd vanaf)\s+([^<\n]+?)(?:<|\n|$)/i)?.[1]?.trim();
 
-    // Try multiple advertiser candidates - prefer non-boilerplate page links
+    const visibleLines = extractVisibleTextLines(chunk);
+
+    // Try multiple advertiser candidates - prefer non-boilerplate page links/text near Sponsored
     const advertiserCandidates: Array<{ name: string; url?: string }> = [];
-    const fbLinkMatches = Array.from(chunk.matchAll(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/(?!ads\/library)[^"'?#]+)["'][^>]*>([^<]{2,120})<\/a>/gi));
+    const fbLinkMatches = Array.from(chunk.matchAll(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/(?!ads\/library|help\/|privacy\/|policies\/)[^"'?#]+)["'][^>]*>([\s\S]{2,400}?)<\/a>/gi));
     for (const m of fbLinkMatches) {
       const name = stripTags(m[2]);
       if (!isBoilerplateAdvertiserName(name)) {
@@ -468,6 +470,8 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       const name = stripTags(strongMatch[1]);
       if (!isBoilerplateAdvertiserName(name)) advertiserCandidates.push({ name });
     }
+    const inferredAdvertiser = inferAdvertiserName(visibleLines);
+    if (inferredAdvertiser) advertiserCandidates.push({ name: inferredAdvertiser });
     const advertiser = advertiserCandidates[0];
     const advertiserName = advertiser?.name;
     const advertiserUrl = advertiser?.url;
@@ -480,17 +484,13 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       .map((c) => c.url);
     const imageUrl = allMedia[0];
     const logoUrl = pickLogoUrl(imgCandidates);
-    const videoUrl = chunk.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
-    const decodedVideo = decodeHtml(videoUrl || "") || undefined;
+    const decodedVideo = extractVideoCandidates(chunk)[0];
     const mediaUrls = decodedVideo ? unique([decodedVideo, ...allMedia]) : allMedia;
     const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : "image");
 
-    const textNodes = Array.from(chunk.matchAll(/<(?:div|span|p)[^>]*>([^<]{20,1600})<\/(?:div|span|p)>/gi))
-      .map((m) => normalizeText(decodeHtml(m[1])))
-      .filter((text) => text.length > 24)
-      .filter((text) => !isBoilerplateText(text));
-
-    const primaryText = pickPrimaryText(textNodes);
+    const primaryText = pickPrimaryText(visibleLines);
+    const headline = pickHeadlineText(visibleLines, primaryText);
+    const description = pickDescriptionText(visibleLines, primaryText, headline);
     const hookText = extractHookText(primaryText || "");
 
     items.push({
@@ -506,6 +506,8 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       media_type: mediaType,
       video_url: decodedVideo,
       primary_text: primaryText,
+      headline,
+      description,
       started_running: startedRunning,
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,
