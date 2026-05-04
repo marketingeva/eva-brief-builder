@@ -537,35 +537,40 @@ function AdLibraryCard({
         )}
       </div>
 
-      <button type="button" onClick={onPreview} className="px-4 pb-3 min-h-[88px] text-left w-full hover:bg-muted/20 transition-colors">
-        {primaryText ? (
+      {primaryText && (
+        <button
+          type="button"
+          onClick={onPreview}
+          className="px-4 pb-3 text-left w-full hover:bg-muted/20 transition-colors group/text"
+        >
           <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">Geen advertentietekst beschikbaar</p>
-        )}
-      </button>
+          {primaryText.length > 280 && (
+            <span className="text-[11px] text-primary font-medium mt-1 inline-block group-hover/text:underline">
+              Lees meer
+            </span>
+          )}
+        </button>
+      )}
 
       <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} fallbackItem={item} />
 
-      <div className="px-4 py-3 mt-auto border-t border-border/60 min-h-[68px] flex flex-col justify-center gap-1">
-        {hasFooter ? (
-          <>
-            {headline && (
-              <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              {description ? (
-                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 flex-1">{description}</p>
-              ) : <span className="flex-1" />}
-              {cta && (
-                <span className="text-[10px] uppercase tracking-wide text-primary font-semibold whitespace-nowrap">{cta}</span>
-              )}
+      {hasFooter && (
+        <div className="px-4 py-3 mt-auto border-t border-border/60 flex flex-col gap-1.5">
+          {headline && (
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
+          )}
+          {description && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">{description}</p>
+          )}
+          {cta && (
+            <div className="flex justify-end pt-1">
+              <span className="text-[10px] uppercase tracking-wide text-primary font-semibold whitespace-nowrap rounded-full bg-primary/10 px-2.5 py-1">
+                {cta}
+              </span>
             </div>
-          </>
-        ) : (
-          <p className="text-[11px] text-muted-foreground italic">Geen headline beschikbaar</p>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
