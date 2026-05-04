@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
   CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
@@ -6,9 +6,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
@@ -18,7 +16,6 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const FIXED_QUERY = 'Verzorgende IG';
-const SOURCE_LABELS = ['Nederland', 'Employment', 'Active', 'Media: all'];
 
 type HubTab = 'ad-library' | 'hooks';
 
@@ -58,10 +55,6 @@ interface SearchRow {
   source_url?: string | null;
 }
 
-interface ClientOption {
-  id: string;
-  name: string;
-}
 
 function getPreviewDimensions(url: string): { width: number; height: number } | null {
   const match = url.match(/(?:_|-)(?:s|p)(\d{2,4})x(\d{2,4})(?:_|\.|&|$)/i) || url.match(/[?&]stp=[^&]*(?:s|p)(\d{2,4})x(\d{2,4})/i);
@@ -154,28 +147,56 @@ function getMediaUrls(item: InspirationItem): string[] {
   return filtered;
 }
 
+interface GeneratedHook {
+  id: string;
+  hook_text: string;
+  hook_category: string;
+  rationale?: string;
+}
+
 export default function AdsInspirationPage() {
   const [activeTab, setActiveTab] = useState<HubTab>('ad-library');
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState<SearchRow | null>(null);
   const [items, setItems] = useState<InspirationItem[]>([]);
   const [favorites, setFavorites] = useState<Record<string, string>>({});
-  const [clients, setClients] = useState<ClientOption[]>([]);
-  const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [activeQuery, setActiveQuery] = useState<string>(FIXED_QUERY);
   const [queryInput, setQueryInput] = useState<string>(FIXED_QUERY);
+  const [generatedHooks, setGeneratedHooks] = useState<GeneratedHook[]>([]);
+  const [hooksLoading, setHooksLoading] = useState(false);
+  const [hooksRole, setHooksRole] = useState<string>('');
 
   const loadFavorites = useCallback(async () => {
-    const clientFilter = activeClient === 'global' ? null : activeClient;
-    let q = supabase.from('inspiration_favorites').select('id, item_id, client_id');
-    q = clientFilter ? q.eq('client_id', clientFilter) : q.is('client_id', null);
-    const { data } = await q;
+    const { data } = await supabase
+      .from('inspiration_favorites')
+      .select('id, item_id, client_id')
+      .is('client_id', null);
     const map: Record<string, string> = {};
     (data || []).forEach((f: any) => { map[f.item_id] = f.id; });
     setFavorites(map);
-  }, [activeClient]);
+  }, []);
+
+  const generateHooks = useCallback(async (role: string) => {
+    const trimmed = role.trim();
+    if (!trimmed) return;
+    setHooksLoading(true);
+    setHooksRole(trimmed);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-hooks-inspiration', {
+        body: { role: trimmed },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setGeneratedHooks(data.hooks || []);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || 'Hooks genereren mislukt');
+    } finally {
+      setHooksLoading(false);
+    }
+  }, []);
 
   const loadHub = useCallback(async (forceRefresh = false, queryOverride?: string) => {
     const queryToUse = (queryOverride ?? activeQuery).trim() || FIXED_QUERY;
@@ -200,17 +221,13 @@ export default function AdsInspirationPage() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: cs }, { data: latest }] = await Promise.all([
-        supabase.from('clients').select('id,name').order('name'),
-        supabase
-          .from('inspiration_searches')
-          .select('id, query, result_count, created_at, source_url')
-          .eq('query', activeQuery)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-      setClients(cs || []);
+      const { data: latest } = await supabase
+        .from('inspiration_searches')
+        .select('id, query, result_count, created_at, source_url')
+        .eq('query', activeQuery)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (latest) setSearch(latest as SearchRow);
     })();
   }, [activeQuery]);
@@ -231,15 +248,9 @@ export default function AdsInspirationPage() {
     loadFavorites();
   }, [loadFavorites, items.length]);
 
-  const hookItems = useMemo(() => {
-    return items
-      .filter((item) => item.hook_text || item.is_hook_candidate)
-      .sort((a, b) => (a.hook_category || '').localeCompare(b.hook_category || ''));
-  }, [items]);
 
   const toggleFavorite = async (item: InspirationItem) => {
     const existing = favorites[item.id];
-    const clientFilter = activeClient === 'global' ? null : activeClient;
     if (existing) {
       const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
       if (error) {
@@ -256,7 +267,7 @@ export default function AdsInspirationPage() {
 
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: clientFilter })
+      .insert({ item_id: item.id, client_id: null })
       .select('id')
       .single();
 
@@ -266,67 +277,46 @@ export default function AdsInspirationPage() {
     }
 
     setFavorites((prev) => ({ ...prev, [item.id]: data.id }));
-    toast.success(activeClient === 'global' ? 'Bewaard' : `Bewaard voor ${clients.find((c) => c.id === activeClient)?.name}`);
+    toast.success('Bewaard');
   };
 
   return (
     <div className="p-8 max-w-[1440px] mx-auto space-y-6 animate-fade-in">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="space-y-3">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span>
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {SOURCE_LABELS.map((label) => (
-              <Badge key={label} variant="secondary" className="rounded-full px-3 py-1 text-[11px] font-medium">
-                {label}
-              </Badge>
-            ))}
-          </div>
+        <div>
+          <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {activeTab === 'ad-library'
+              ? <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>
+              : <>Confronterende hooks gegenereerd op basis van een functie</>
+            }
+          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <form onSubmit={submitQuery} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              value={queryInput}
-              onChange={(e) => setQueryInput(e.target.value)}
-              placeholder="Zoekterm, bv. Verzorgende IG"
-              className="h-9 pl-8 pr-3 w-[240px] rounded-full text-xs bg-background"
-            />
-          </form>
-          <Button
-            onClick={() => submitQuery()}
-            disabled={loading || !queryInput.trim() || queryInput.trim() === activeQuery}
-            variant="outline"
-            className="rounded-full h-9 text-xs"
-          >
-            Zoeken
-          </Button>
-          <Select value={activeClient} onValueChange={setActiveClient}>
-            <SelectTrigger className="w-[190px] h-9 rounded-full text-xs">
-              <SelectValue placeholder="Favorieten voor..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="global">Algemeen</SelectItem>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => loadHub(true)} disabled={loading} className="rounded-full h-9 text-xs">
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            Vernieuwen uit Meta Ad Library
-          </Button>
+          {activeTab === 'ad-library' && (
+            <>
+              <form onSubmit={submitQuery} className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={queryInput}
+                  onChange={(e) => setQueryInput(e.target.value)}
+                  placeholder="Zoekterm, bv. Verzorgende IG"
+                  className="h-9 pl-8 pr-3 w-[260px] rounded-full text-xs bg-background"
+                />
+              </form>
+              <Button onClick={() => loadHub(true)} disabled={loading} className="rounded-full h-9 text-xs">
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                Vernieuwen uit Meta Ad Library
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="glass rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="rounded-2xl border border-border/60 bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           {([
             { key: 'ad-library', label: 'Ad Library' },
@@ -347,74 +337,73 @@ export default function AdsInspirationPage() {
           ))}
         </div>
 
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <BadgeInfo className="h-3.5 w-3.5" />
-          {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
-        </div>
+        {activeTab === 'ad-library' && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <BadgeInfo className="h-3.5 w-3.5" />
+            {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
+          </div>
+        )}
       </div>
 
-      <section className="glass rounded-3xl p-5 space-y-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
-            <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
-          </div>
-          {search?.source_url && (
-            <a href={search.source_url} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm" className="rounded-full text-xs">
-                <ExternalLink className="h-3 w-3 mr-1" /> Open bron
-              </Button>
-            </a>
-          )}
-        </div>
+      <section className="rounded-3xl border border-border/60 bg-card p-5 space-y-4">
+        {activeTab === 'ad-library' ? (
+          <>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
+                <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
+              </div>
+              {search?.source_url && (
+                <a href={search.source_url} target="_blank" rel="noreferrer">
+                  <Button variant="outline" size="sm" className="rounded-full text-xs">
+                    <ExternalLink className="h-3 w-3 mr-1" /> Open bron
+                  </Button>
+                </a>
+              )}
+            </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {Array.from({ length: activeTab === 'hooks' ? 6 : 8 }).map((_, i) => (
-              <Skeleton key={i} className={cn('rounded-2xl', activeTab === 'hooks' ? 'h-[220px]' : 'h-[520px]')} />
-            ))}
-          </div>
-        ) : activeTab === 'ad-library' ? (
-          items.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-                {items.slice(0, visibleCount).map((item) => (
-                  <AdLibraryCard
-                    key={item.id}
-                    item={item}
-                    isFavorite={!!favorites[item.id]}
-                    onToggleFavorite={() => toggleFavorite(item)}
-                    onPreview={() => setPreviewItem(item)}
-                  />
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="rounded-2xl h-[520px]" />
                 ))}
               </div>
-              {visibleCount < items.length && (
-                <div className="flex justify-center pt-4">
-                  <Button
-                    variant="outline"
-                    className="rounded-full text-xs"
-                    onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
-                  >
-                    Meer laden ({items.length - visibleCount})
-                  </Button>
+            ) : items.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+                  {items.slice(0, visibleCount).map((item) => (
+                    <AdLibraryCard
+                      key={item.id}
+                      item={item}
+                      isFavorite={!!favorites[item.id]}
+                      onToggleFavorite={() => toggleFavorite(item)}
+                      onPreview={() => setPreviewItem(item)}
+                    />
+                  ))}
                 </div>
-              )}
-            </>
-          ) : (
-            <EmptyState label="Geen advertenties gevonden" />
-          )
-        ) : hookItems.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {hookItems.map((item) => (
-              <HookCard
-                key={item.id}
-                item={item}
-                onOpen={() => setPreviewItem(item)}
-              />
-            ))}
-          </div>
+                {visibleCount < items.length && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      className="rounded-full text-xs"
+                      onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                    >
+                      Meer laden ({items.length - visibleCount})
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <EmptyState label="Geen advertenties gevonden" />
+            )}
+          </>
         ) : (
-          <EmptyState label="Nog geen hooks afgeleid uit deze advertenties" />
+          <HooksGenerator
+            loading={hooksLoading}
+            hooks={generatedHooks}
+            role={hooksRole}
+            onGenerate={generateHooks}
+          />
         )}
       </section>
 
@@ -764,36 +753,87 @@ function AdMediaFrame({
   );
 }
 
-function HookCard({ item, onOpen }: { item: InspirationItem; onOpen: () => void }) {
+function HooksGenerator({
+  loading,
+  hooks,
+  role,
+  onGenerate,
+}: {
+  loading: boolean;
+  hooks: GeneratedHook[];
+  role: string;
+  onGenerate: (role: string) => void;
+}) {
+  const [input, setInput] = useState('');
+
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const v = input.trim();
+    if (!v || loading) return;
+    onGenerate(v);
+  };
+
   return (
-    <button
-      onClick={onOpen}
-      className="text-left rounded-2xl border border-border/60 bg-card p-5 hover:border-border hover:shadow-md transition-all h-full"
-    >
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <Badge variant="secondary" className="rounded-full">
-          {item.hook_category || 'Algemene hook'}
-        </Badge>
-        {item.media_type === 'video' && (
-          <Badge variant="secondary" className="rounded-full">Video-ad</Badge>
-        )}
+    <div className="space-y-5">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Genereer hooks</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Vul een functie in (bv. <span className="text-foreground font-medium">Verzorgende IG</span>, <span className="text-foreground font-medium">BBL Verpleegkunde</span>, <span className="text-foreground font-medium">Helpende Plus</span>) en genereer 12 confronterende hooks.
+        </p>
       </div>
 
-      <p className="text-base font-medium text-foreground leading-snug mb-4">
-        {item.hook_text || item.primary_text || 'Geen hook gevonden'}
-      </p>
+      <form onSubmit={submit} className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[260px] max-w-[480px]">
+          <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary pointer-events-none" />
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Functie, bv. Verzorgende IG"
+            className="h-10 pl-9 pr-3 rounded-full text-sm bg-background"
+          />
+        </div>
+        <Button type="submit" disabled={loading || !input.trim()} className="rounded-full h-10 text-xs">
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+          Genereer hooks
+        </Button>
+      </form>
 
-      <div className="space-y-2 text-sm text-muted-foreground">
-        <p><span className="text-foreground font-medium">Adverteerder:</span> {item.advertiser_name || 'Onbekend'}</p>
-        {item.headline && <p><span className="text-foreground font-medium">Headline:</span> {item.headline}</p>}
-        {item.started_running && <p><span className="text-foreground font-medium">Sinds:</span> {item.started_running}</p>}
-      </div>
-
-      <div className="pt-4 mt-4 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Open bronadvertentie</span>
-        <ExternalLink className="h-3.5 w-3.5" />
-      </div>
-    </button>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="rounded-2xl h-[180px]" />
+          ))}
+        </div>
+      ) : hooks.length > 0 ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {hooks.map((h) => (
+              <div
+                key={h.id}
+                className="rounded-2xl border border-border/60 bg-background p-5 hover:border-border hover:shadow-md transition-all flex flex-col gap-3"
+              >
+                <Badge variant="secondary" className="rounded-full self-start text-[11px]">
+                  {h.hook_category || 'Algemeen'}
+                </Badge>
+                <p className="text-base font-medium text-foreground leading-snug flex-1">
+                  {h.hook_text}
+                </p>
+                {h.rationale && (
+                  <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/60">
+                    {h.rationale}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <EmptyState label="Vul een functie in en genereer hooks om te starten" />
+      )}
+    </div>
   );
 }
 
