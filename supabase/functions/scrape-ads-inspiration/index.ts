@@ -280,6 +280,7 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
 
     return (!!media && mediaCandidateScore(media) <= 0)
       || (!!text && isBoilerplateText(text))
+      || /(?:Bibliotheek-ID|Library ID|Advertentiegegevens bekijken|See ad details|Vervolgkeuzemenu openen)/i.test(text)
       || isBoilerplateAdvertiserName(advertiser);
   }).length;
 
