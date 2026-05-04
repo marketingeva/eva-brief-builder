@@ -291,6 +291,8 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
 
   const badCount = items.filter((item) => {
     const text = typeof item.primary_text === "string" ? item.primary_text : "";
+    const headline = typeof item.headline === "string" ? item.headline : "";
+    const description = typeof item.description === "string" ? item.description : "";
     const advertiser = typeof item.advertiser_name === "string" ? item.advertiser_name : "";
     const media = typeof item.media_preview_url === "string"
       ? item.media_preview_url
@@ -301,7 +303,9 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
     return (!!media && mediaCandidateScore(media) <= 0)
       || (!!text && isBoilerplateText(text))
       || /(?:Bibliotheek-ID|Library ID|Advertentiegegevens bekijken|See ad details|Vervolgkeuzemenu openen)/i.test(text)
-      || isBoilerplateAdvertiserName(advertiser);
+      || isBoilerplateAdvertiserName(advertiser)
+      || (!!headline && isShortCtaCaption(headline))
+      || (!!description && isBoilerplateText(description));
   }).length;
 
   return badCount > Math.max(2, items.length * 0.3);
