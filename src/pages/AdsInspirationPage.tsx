@@ -592,7 +592,10 @@ function AdMediaFrame({
   const activeUrl = urls[index] || null;
   const hasMultiple = urls.length > 1;
   const activeIsVideo = isVideoUrl(activeUrl);
-  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && fallbackItem?.media_type === 'story');
+  const isStory = fallbackItem?.media_type === 'story';
+  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && isStory);
+  // Default Meta feed creative is 4:5 portrait; use 9:16 voor story/portrait media.
+  const aspectClass = isPortrait || isStory ? 'aspect-[9/16]' : 'aspect-[4/5]';
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -603,7 +606,7 @@ function AdMediaFrame({
   return (
     <div className={cn(
       'w-full bg-muted/40 overflow-hidden relative',
-      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : isPortrait ? 'aspect-[9/16]' : 'aspect-square'
+      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : aspectClass
     )}>
       {activeUrl ? (
         activeIsVideo ? (
@@ -622,16 +625,22 @@ function AdMediaFrame({
           </button>
         )
       ) : (
-        <button onClick={onOpen} className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-muted/30">
-          <div className="w-full max-w-[180px] aspect-[9/16] rounded-2xl border border-border/70 bg-card shadow-sm flex flex-col justify-between p-4">
-            <div className="space-y-1 text-left">
-              <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
-              <p className="text-[10px] text-muted-foreground">Sponsored</p>
-            </div>
-            <p className="text-xs text-foreground/85 line-clamp-6 text-left">{fallbackItem?.primary_text || 'Story preview'}</p>
-            {fallbackItem?.cta && <span className="text-[10px] uppercase tracking-wide text-primary font-semibold text-left">{fallbackItem.cta}</span>}
+        <button
+          onClick={onOpen}
+          className="w-full h-full flex flex-col justify-between p-5 text-left bg-gradient-to-br from-muted/50 via-muted/20 to-background"
+        >
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
+            <p className="text-[10px] text-muted-foreground">Sponsored · Story-formaat</p>
           </div>
-          <span className="text-xs text-muted-foreground">Story-formaat</span>
+          <p className="text-xs text-foreground/85 line-clamp-[10] leading-relaxed">
+            {fallbackItem?.primary_text || 'Story preview'}
+          </p>
+          {fallbackItem?.cta ? (
+            <span className="self-start text-[10px] uppercase tracking-wide text-primary font-semibold rounded-full bg-primary/10 px-2.5 py-1">
+              {fallbackItem.cta}
+            </span>
+          ) : <span />}
         </button>
       )}
 
