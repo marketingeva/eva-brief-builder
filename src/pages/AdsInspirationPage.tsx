@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
   CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
