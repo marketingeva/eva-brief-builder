@@ -55,10 +55,6 @@ interface SearchRow {
   source_url?: string | null;
 }
 
-interface ClientOption {
-  id: string;
-  name: string;
-}
 
 function getPreviewDimensions(url: string): { width: number; height: number } | null {
   const match = url.match(/(?:_|-)(?:s|p)(\d{2,4})x(\d{2,4})(?:_|\.|&|$)/i) || url.match(/[?&]stp=[^&]*(?:s|p)(\d{2,4})x(\d{2,4})/i);
