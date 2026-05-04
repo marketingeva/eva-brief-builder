@@ -753,36 +753,87 @@ function AdMediaFrame({
   );
 }
 
-function HookCard({ item, onOpen }: { item: InspirationItem; onOpen: () => void }) {
+function HooksGenerator({
+  loading,
+  hooks,
+  role,
+  onGenerate,
+}: {
+  loading: boolean;
+  hooks: GeneratedHook[];
+  role: string;
+  onGenerate: (role: string) => void;
+}) {
+  const [input, setInput] = useState('');
+
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const v = input.trim();
+    if (!v || loading) return;
+    onGenerate(v);
+  };
+
   return (
-    <button
-      onClick={onOpen}
-      className="text-left rounded-2xl border border-border/60 bg-card p-5 hover:border-border hover:shadow-md transition-all h-full"
-    >
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <Badge variant="secondary" className="rounded-full">
-          {item.hook_category || 'Algemene hook'}
-        </Badge>
-        {item.media_type === 'video' && (
-          <Badge variant="secondary" className="rounded-full">Video-ad</Badge>
-        )}
+    <div className="space-y-5">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Genereer hooks</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Vul een functie in (bv. <span className="text-foreground font-medium">Verzorgende IG</span>, <span className="text-foreground font-medium">BBL Verpleegkunde</span>, <span className="text-foreground font-medium">Helpende Plus</span>) en genereer 12 confronterende hooks.
+        </p>
       </div>
 
-      <p className="text-base font-medium text-foreground leading-snug mb-4">
-        {item.hook_text || item.primary_text || 'Geen hook gevonden'}
-      </p>
+      <form onSubmit={submit} className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[260px] max-w-[480px]">
+          <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary pointer-events-none" />
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Functie, bv. Verzorgende IG"
+            className="h-10 pl-9 pr-3 rounded-full text-sm bg-background"
+          />
+        </div>
+        <Button type="submit" disabled={loading || !input.trim()} className="rounded-full h-10 text-xs">
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+          Genereer hooks
+        </Button>
+      </form>
 
-      <div className="space-y-2 text-sm text-muted-foreground">
-        <p><span className="text-foreground font-medium">Adverteerder:</span> {item.advertiser_name || 'Onbekend'}</p>
-        {item.headline && <p><span className="text-foreground font-medium">Headline:</span> {item.headline}</p>}
-        {item.started_running && <p><span className="text-foreground font-medium">Sinds:</span> {item.started_running}</p>}
-      </div>
-
-      <div className="pt-4 mt-4 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Open bronadvertentie</span>
-        <ExternalLink className="h-3.5 w-3.5" />
-      </div>
-    </button>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="rounded-2xl h-[180px]" />
+          ))}
+        </div>
+      ) : hooks.length > 0 ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {hooks.map((h) => (
+              <div
+                key={h.id}
+                className="rounded-2xl border border-border/60 bg-background p-5 hover:border-border hover:shadow-md transition-all flex flex-col gap-3"
+              >
+                <Badge variant="secondary" className="rounded-full self-start text-[11px]">
+                  {h.hook_category || 'Algemeen'}
+                </Badge>
+                <p className="text-base font-medium text-foreground leading-snug flex-1">
+                  {h.hook_text}
+                </p>
+                {h.rationale && (
+                  <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/60">
+                    {h.rationale}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <EmptyState label="Vul een functie in en genereer hooks om te starten" />
+      )}
+    </div>
   );
 }
 
