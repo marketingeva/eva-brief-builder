@@ -291,6 +291,23 @@ export default function AdsInspirationPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <form onSubmit={submitQuery} className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              placeholder="Zoekterm, bv. Verzorgende IG"
+              className="h-9 pl-8 pr-3 w-[240px] rounded-full text-xs bg-background"
+            />
+          </form>
+          <Button
+            onClick={() => submitQuery()}
+            disabled={loading || !queryInput.trim() || queryInput.trim() === activeQuery}
+            variant="outline"
+            className="rounded-full h-9 text-xs"
+          >
+            Zoeken
+          </Button>
           <Select value={activeClient} onValueChange={setActiveClient}>
             <SelectTrigger className="w-[190px] h-9 rounded-full text-xs">
               <SelectValue placeholder="Favorieten voor..." />
