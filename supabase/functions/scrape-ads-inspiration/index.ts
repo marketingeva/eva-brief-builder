@@ -209,9 +209,11 @@ function isLikelyHeadline(text: string): boolean {
   return false;
 }
 
-function pickHeadlineText(texts: string[], primaryText?: string): string | undefined {
+function pickHeadlineText(texts: string[], primaryText?: string, advertiserName?: string): string | undefined {
+  const advNorm = advertiserName ? normalizeText(advertiserName).toLowerCase() : "";
   return unique(texts.map((text) => normalizeText(decodeHtml(text))))
     .filter((text) => text !== primaryText)
+    .filter((text) => !advNorm || text.toLowerCase() !== advNorm)
     .filter((text) => isLikelyHeadline(text))
     .sort((a, b) => {
       const score = (text: string) =>
@@ -233,6 +235,8 @@ function pickDescriptionText(texts: string[], primaryText?: string, headline?: s
     .filter((text) => text !== primaryText && text !== headline && text !== cta)
     .filter((text) => text.length >= 18 && text.length <= 220)
     .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text))
+    // Description must NOT be a fragment of the primary text (often happens when body bullets get split)
+    .filter((text) => !primaryText || !primaryText.toLowerCase().includes(text.toLowerCase()))
     .sort((a, b) => b.length - a.length)[0];
 }
 
