@@ -378,9 +378,6 @@ export default function AdsInspirationPage() {
                   {previewItem.media_type === 'video' && (
                     <Badge variant="secondary" className="rounded-full">Video</Badge>
                   )}
-                  {previewItem.external_id && (
-                    <Badge variant="secondary" className="rounded-full">Library ID: {previewItem.external_id}</Badge>
-                  )}
                 </div>
 
                 {previewItem.started_running && (
