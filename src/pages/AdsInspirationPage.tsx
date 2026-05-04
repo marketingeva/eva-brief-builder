@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
-  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight,
+  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -163,6 +164,8 @@ export default function AdsInspirationPage() {
   const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const [activeQuery, setActiveQuery] = useState<string>(FIXED_QUERY);
+  const [queryInput, setQueryInput] = useState<string>(FIXED_QUERY);
 
   const loadFavorites = useCallback(async () => {
     const clientFilter = activeClient === 'global' ? null : activeClient;
@@ -174,11 +177,12 @@ export default function AdsInspirationPage() {
     setFavorites(map);
   }, [activeClient]);
 
-  const loadHub = useCallback(async (forceRefresh = false) => {
+  const loadHub = useCallback(async (forceRefresh = false, queryOverride?: string) => {
+    const queryToUse = (queryOverride ?? activeQuery).trim() || FIXED_QUERY;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('scrape-ads-inspiration', {
-        body: { forceRefresh, tab: activeTab },
+        body: { forceRefresh, tab: activeTab, query: queryToUse },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -192,7 +196,7 @@ export default function AdsInspirationPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, activeQuery]);
 
   useEffect(() => {
     (async () => {
@@ -201,7 +205,7 @@ export default function AdsInspirationPage() {
         supabase
           .from('inspiration_searches')
           .select('id, query, result_count, created_at, source_url')
-          .eq('query', FIXED_QUERY)
+          .eq('query', activeQuery)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -209,12 +213,19 @@ export default function AdsInspirationPage() {
       setClients(cs || []);
       if (latest) setSearch(latest as SearchRow);
     })();
-  }, []);
+  }, [activeQuery]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     loadHub(false);
   }, [loadHub]);
+
+  const submitQuery = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const next = queryInput.trim();
+    if (!next || next === activeQuery) return;
+    setActiveQuery(next);
+  };
 
   useEffect(() => {
     loadFavorites();
@@ -267,7 +278,7 @@ export default function AdsInspirationPage() {
               <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{FIXED_QUERY}</span>
+              Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -280,6 +291,23 @@ export default function AdsInspirationPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <form onSubmit={submitQuery} className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              placeholder="Zoekterm, bv. Verzorgende IG"
+              className="h-9 pl-8 pr-3 w-[240px] rounded-full text-xs bg-background"
+            />
+          </form>
+          <Button
+            onClick={() => submitQuery()}
+            disabled={loading || !queryInput.trim() || queryInput.trim() === activeQuery}
+            variant="outline"
+            className="rounded-full h-9 text-xs"
+          >
+            Zoeken
+          </Button>
           <Select value={activeClient} onValueChange={setActiveClient}>
             <SelectTrigger className="w-[190px] h-9 rounded-full text-xs">
               <SelectValue placeholder="Favorieten voor..." />
@@ -329,7 +357,7 @@ export default function AdsInspirationPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
-            <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · Verzorgende IG · Nederland · Employment</p>
+            <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
           </div>
           {search?.source_url && (
             <a href={search.source_url} target="_blank" rel="noreferrer">

@@ -336,24 +336,24 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
   return badCount > Math.max(2, items.length * 0.3);
 }
 
-function buildAdsLibraryUrl(): string {
+function buildAdsLibraryUrl(query: string = FIXED_QUERY): string {
   const params = new URLSearchParams();
   params.set("active_status", "active");
   params.set("ad_type", "employment_ads");
   params.set("country", FIXED_COUNTRY);
   params.set("is_targeted_country", "false");
   params.set("media_type", FIXED_MEDIA_TYPE);
-  params.set("q", FIXED_QUERY);
+  params.set("q", query);
   params.set("search_type", "keyword_unordered");
   params.set("sort_data[direction]", "desc");
   params.set("sort_data[mode]", "total_impressions");
   return `${ADS_LIBRARY_BASE}?${params.toString()}`;
 }
 
-function buildMetaArchiveUrl(accessToken: string): string {
+function buildMetaArchiveUrl(accessToken: string, query: string = FIXED_QUERY): string {
   const params = new URLSearchParams({
     access_token: accessToken,
-    search_terms: FIXED_QUERY,
+    search_terms: query,
     ad_reached_countries: JSON.stringify([FIXED_COUNTRY]),
     ad_type: FIXED_AD_TYPE,
     media_type: "ALL",
@@ -451,8 +451,8 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
   }
 }
 
-async function fetchMetaArchiveItems(accessToken: string): Promise<ParsedItem[]> {
-  const resp = await fetch(buildMetaArchiveUrl(accessToken));
+async function fetchMetaArchiveItems(accessToken: string, query: string = FIXED_QUERY): Promise<ParsedItem[]> {
+  const resp = await fetch(buildMetaArchiveUrl(accessToken, query));
   const data = await resp.json();
   if (!resp.ok) throw new Error(data?.error?.message || `Meta archive ${resp.status}`);
 
@@ -616,6 +616,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const forceRefresh = !!body.forceRefresh;
     const wantedTab = body.tab === "hooks" ? "hooks" : "ad-library";
+    const rawQuery = typeof body.query === "string" ? body.query.trim() : "";
+    const activeQuery = rawQuery || FIXED_QUERY;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -623,14 +625,14 @@ serve(async (req) => {
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
 
     const sb = createClient(supabaseUrl, serviceKey);
-    const sourceUrl = buildAdsLibraryUrl();
+    const sourceUrl = buildAdsLibraryUrl(activeQuery);
 
     if (!forceRefresh) {
       const since = new Date(Date.now() - CACHE_TTL_MS).toISOString();
       const { data: cached } = await sb
         .from("inspiration_searches")
         .select("id, query, ai_summary, result_count, created_at, source_url, ad_type, source_type, sort_mode")
-        .eq("query", FIXED_QUERY)
+        .eq("query", activeQuery)
         .eq("country", FIXED_COUNTRY)
         .eq("media_type", FIXED_MEDIA_TYPE)
         .eq("ad_type", FIXED_AD_TYPE)
@@ -661,7 +663,7 @@ serve(async (req) => {
     let parsed: ParsedItem[] = [];
     if (metaToken) {
       try {
-        parsed = await fetchMetaArchiveItems(metaToken);
+        parsed = await fetchMetaArchiveItems(metaToken, activeQuery);
         console.log(`Fetched ${parsed.length} ads from Meta archive`);
       } catch (err) {
         console.warn("Meta archive fetch failed, falling back to Firecrawl:", (err as Error).message);
@@ -733,7 +735,7 @@ serve(async (req) => {
     const { data: searchRow, error: searchErr } = await sb
       .from("inspiration_searches")
       .insert({
-        query: FIXED_QUERY,
+        query: activeQuery,
         country: FIXED_COUNTRY,
         media_type: FIXED_MEDIA_TYPE,
         ad_type: FIXED_AD_TYPE,
@@ -746,7 +748,7 @@ serve(async (req) => {
           country: FIXED_COUNTRY,
           is_targeted_country: false,
           media_type: FIXED_MEDIA_TYPE,
-          q: FIXED_QUERY,
+          q: activeQuery,
           search_type: "keyword_unordered",
           sort_mode: "total_impressions",
           sort_direction: "desc",
