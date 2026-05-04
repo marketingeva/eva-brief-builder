@@ -503,11 +503,11 @@ function AdLibraryCard({
   const platforms = item.publisher_platforms || [];
   const isCarousel = item.media_type === 'carousel' || mediaUrls.length > 1;
   const isVideo = item.media_type === 'video' || !!item.video_url || mediaUrls.some(isVideoUrl);
-  const { primaryText, headline, description, cta } = getDisplayTextParts(item);
+  const { primaryText, destinationLabel, headline, description, cta } = getDisplayTextParts(item);
   const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
     ? item.advertiser_name
     : 'Onbekend';
-  const hasFooter = !!(headline || description || cta);
+  const hasFooter = !!(destinationLabel || headline || description || cta);
 
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
@@ -581,6 +581,9 @@ function AdLibraryCard({
 
       {hasFooter && (
         <div className="px-4 py-3 mt-auto border-t border-border/60 flex flex-col gap-1.5">
+          {destinationLabel && (
+            <p className="text-[10px] font-medium uppercase text-muted-foreground leading-none truncate">{destinationLabel}</p>
+          )}
           {headline && (
             <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
           )}
