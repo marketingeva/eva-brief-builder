@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const FIXED_QUERY = 'Verzorgende IG';
-const SOURCE_LABELS = ['Nederland', 'Employment', 'Active', 'Media: all'];
 
 type HubTab = 'ad-library' | 'hooks';
 
