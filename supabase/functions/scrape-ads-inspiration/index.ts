@@ -170,16 +170,17 @@ function splitCompositeAdText(text: string, advertiserName?: string): { primaryT
 
   value = value
     .replace(/^(?:Bibliotheek-ID|Library ID|Ad Library ID)[:\s]*\d+\s*/i, "")
-    .replace(/^(?:Uitgevoerd vanaf|Gestart op|Started running on)\s+[^A-ZÀ-Ý]+/i, "")
-    .replace(/^(?:Platformen|Platforms?|Categorieën|Categories|Transparantie voor de EU|EU transparency|Vervolgkeuzemenu openen|Open dropdown|Advertentiegegevens bekijken|See ad details)\b\s*/i, "");
+    .replace(/^(?:Uitgevoerd vanaf|Gestart op|Started running on)\s+.*?(?=(?:Sponsored|Gesponsord|[A-ZÀ-Ý][A-Za-zÀ-ÿ0-9&'. -]{2,80}\s+(?:Sponsored|Gesponsord)))/i, "")
+    .replace(/^.*?(?:Advertentiegegevens bekijken|See ad details)\s*/i, "");
 
   if (advertiserName) {
-    value = value.replace(new RegExp(`^${advertiserName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "");
+    value = value.replace(new RegExp(`^.*?${advertiserName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:Sponsored|Gesponsord)?\\s*`, "i"), "");
   }
 
   value = value
     .replace(/^(?:Sponsored|Gesponsord)\s*/i, "")
-    .replace(/\s+(?:FB\.ME|L\.FACEBOOK\.COM|HTTPS?:\/\/\S+)\s+.{8,160?}\s+(?:Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up|Aanmelden)(?=\s|$)[\s\S]*$/i, "")
+    .replace(/^.*?(?:Sponsored|Gesponsord)\s*/i, "")
+    .replace(/\s+(?:FB\.ME|L\.FACEBOOK\.COM|HTTPS?:\/\/\S+)\s+.{8,160}?\s+(?:Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up|Aanmelden)(?=\s|$)[\s\S]*$/i, "")
     .replace(/\s+(?:Actief|Active)\s*$/i, "")
     .trim();
 
