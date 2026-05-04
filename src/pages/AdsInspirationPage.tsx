@@ -205,15 +205,74 @@ export default function AdsInspirationPage() {
   const [savedFavoriteItems, setSavedFavoriteItems] = useState<Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>>([]);
 
 
+  const resolvedClientId = hookClient === GENERAL_CLIENT_VALUE ? null : hookClient;
+  const resolvedLocationId = hookLocation === ALL_LOCATIONS_VALUE ? null : hookLocation;
+  const currentLocations = hookClient === GENERAL_CLIENT_VALUE ? [] : (locationsByClient[hookClient] || []);
+
   const loadFavorites = useCallback(async () => {
     const { data } = await supabase
       .from('inspiration_favorites')
-      .select('id, item_id, client_id')
-      .is('client_id', null);
+      .select('id, item_id, client_id');
     const map: Record<string, string> = {};
-    (data || []).forEach((f: any) => { map[f.item_id] = f.id; });
+    (data || []).forEach((f: any) => {
+      // Use a composite key so the same item can be favorited under different clients
+      const key = `${f.item_id}::${f.client_id || 'global'}`;
+      map[key] = f.id;
+    });
     setFavorites(map);
   }, []);
+
+  const loadClients = useCallback(async () => {
+    const { data } = await supabase.from('clients').select('id, name').order('name');
+    setClients((data || []) as ClientOption[]);
+  }, []);
+
+  const loadLocationsForClient = useCallback(async (clientId: string) => {
+    if (locationsByClient[clientId]) return;
+    const { data } = await supabase
+      .from('client_locations')
+      .select('id, name, city')
+      .eq('client_id', clientId)
+      .order('name');
+    setLocationsByClient((prev) => ({ ...prev, [clientId]: (data || []) as LocationOption[] }));
+  }, [locationsByClient]);
+
+  const loadSavedHooks = useCallback(async () => {
+    const { data } = await supabase
+      .from('saved_inspiration_hooks')
+      .select('id, client_id, location_id, location_label, role_query, hook_text, hook_category, rationale, created_at, client:clients(name)')
+      .order('created_at', { ascending: false });
+    const rows = (data || []) as SavedHookRow[];
+    setSavedHooks(rows);
+    setSavedHookKeys(new Set(rows.map((r) => `${r.client_id || 'global'}::${normalizeHookText(r.hook_text)}`)));
+  }, []);
+
+  const loadSavedFavoriteItems = useCallback(async () => {
+    const { data: favs } = await supabase
+      .from('inspiration_favorites')
+      .select('id, item_id, client_id, client:clients(name)')
+      .order('created_at', { ascending: false });
+    const itemIds = [...new Set((favs || []).map((f: any) => f.item_id))];
+    if (itemIds.length === 0) {
+      setSavedFavoriteItems([]);
+      return;
+    }
+    const { data: rawItems } = await supabase
+      .from('inspiration_items')
+      .select('*')
+      .in('id', itemIds);
+    const itemMap = new Map<string, InspirationItem>();
+    (rawItems || []).forEach((it: any) => itemMap.set(it.id, it as InspirationItem));
+    setSavedFavoriteItems(
+      (favs || [])
+        .map((f: any) => {
+          const item = itemMap.get(f.item_id);
+          return item ? { favorite_id: f.id, client_id: f.client_id, client: f.client, item } : null;
+        })
+        .filter(Boolean) as Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>
+    );
+  }, []);
+
 
   const generateHooks = useCallback(async (role: string) => {
     const trimmed = role.trim();
