@@ -331,15 +331,16 @@ async function fetchMetaArchiveItems(accessToken: string): Promise<ParsedItem[]>
   }).filter((item) => item.external_id && (item.primary_text || item.headline || item.advertiser_name));
 
   const enrichedItems = await Promise.all(baseItems.map(async (item, index) => {
-    const snapshotData = item.snapshot_url && index < 20 ? await enrichSnapshot(item.snapshot_url) : {};
-    const mergedText = normalizeText(snapshotData.primary_text || item.primary_text || "");
-    const hookText = extractHookText(mergedText || item.headline || "");
+    const snapshotData = item.snapshot_url && index < 24 ? await enrichSnapshot(item.snapshot_url) : {};
+    const primaryText = item.primary_text;
+    const hookText = extractHookText(primaryText || item.headline || "");
     return {
       ...item,
-      ...snapshotData,
-      primary_text: mergedText || item.primary_text,
       image_url: snapshotData.image_url || item.image_url,
       media_preview_url: snapshotData.media_preview_url || snapshotData.image_url || item.image_url,
+      media_urls: snapshotData.media_urls && snapshotData.media_urls.length > 0 ? snapshotData.media_urls : item.media_urls,
+      media_type: snapshotData.media_type || item.media_type,
+      video_url: snapshotData.video_url || item.video_url,
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,
       is_hook_candidate: !!hookText,
