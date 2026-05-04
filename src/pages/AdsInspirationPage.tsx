@@ -133,6 +133,7 @@ export default function AdsInspirationPage() {
   }, []);
 
   useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
     loadHub(false);
   }, [loadHub]);
 
