@@ -269,17 +269,30 @@ export default function AdsInspirationPage() {
           </div>
         ) : activeTab === 'ad-library' ? (
           items.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              {items.map((item) => (
-                <AdLibraryCard
-                  key={item.id}
-                  item={item}
-                  isFavorite={!!favorites[item.id]}
-                  onToggleFavorite={() => toggleFavorite(item)}
-                  onPreview={() => setPreviewItem(item)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {items.slice(0, visibleCount).map((item) => (
+                  <AdLibraryCard
+                    key={item.id}
+                    item={item}
+                    isFavorite={!!favorites[item.id]}
+                    onToggleFavorite={() => toggleFavorite(item)}
+                    onPreview={() => setPreviewItem(item)}
+                  />
+                ))}
+              </div>
+              {visibleCount < items.length && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    className="rounded-full text-xs"
+                    onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                  >
+                    Meer laden ({items.length - visibleCount})
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <EmptyState label="Geen advertenties gevonden" />
           )
