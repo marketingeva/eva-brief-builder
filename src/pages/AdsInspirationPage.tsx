@@ -278,7 +278,7 @@ export default function AdsInspirationPage() {
               <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{FIXED_QUERY}</span>
+              Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
