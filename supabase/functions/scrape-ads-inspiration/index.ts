@@ -168,7 +168,7 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
     return (!!media && mediaCandidateScore(media) <= 0) || (!!text && isBoilerplateText(text));
   }).length;
 
-  return badCount / items.length > 0.2;
+  return badCount > 0;
 }
 
 function buildAdsLibraryUrl(): string {
