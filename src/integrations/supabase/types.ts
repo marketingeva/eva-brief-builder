@@ -1179,12 +1179,21 @@ export type Database = {
           cta: string | null
           external_id: string | null
           headline: string | null
+          hook_category: string | null
+          hook_text: string | null
           id: string
           image_url: string | null
+          is_hook_candidate: boolean
+          media_preview_url: string | null
           media_type: string | null
           primary_text: string | null
+          publisher_platforms: string[]
+          raw_payload: Json
           search_id: string | null
+          snapshot_url: string | null
+          source_type: string
           started_running: string | null
+          video_url: string | null
         }
         Insert: {
           ad_library_url?: string | null
@@ -1195,12 +1204,21 @@ export type Database = {
           cta?: string | null
           external_id?: string | null
           headline?: string | null
+          hook_category?: string | null
+          hook_text?: string | null
           id?: string
           image_url?: string | null
+          is_hook_candidate?: boolean
+          media_preview_url?: string | null
           media_type?: string | null
           primary_text?: string | null
+          publisher_platforms?: string[]
+          raw_payload?: Json
           search_id?: string | null
+          snapshot_url?: string | null
+          source_type?: string
           started_running?: string | null
+          video_url?: string | null
         }
         Update: {
           ad_library_url?: string | null
@@ -1211,12 +1229,21 @@ export type Database = {
           cta?: string | null
           external_id?: string | null
           headline?: string | null
+          hook_category?: string | null
+          hook_text?: string | null
           id?: string
           image_url?: string | null
+          is_hook_candidate?: boolean
+          media_preview_url?: string | null
           media_type?: string | null
           primary_text?: string | null
+          publisher_platforms?: string[]
+          raw_payload?: Json
           search_id?: string | null
+          snapshot_url?: string | null
+          source_type?: string
           started_running?: string | null
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -1230,6 +1257,7 @@ export type Database = {
       }
       inspiration_searches: {
         Row: {
+          ad_type: string
           ai_summary: string | null
           country: string
           created_at: string
@@ -1239,8 +1267,13 @@ export type Database = {
           query: string
           raw_markdown: string | null
           result_count: number
+          sort_mode: string | null
+          source_filters: Json
+          source_type: string
+          source_url: string | null
         }
         Insert: {
+          ad_type?: string
           ai_summary?: string | null
           country?: string
           created_at?: string
@@ -1250,8 +1283,13 @@ export type Database = {
           query: string
           raw_markdown?: string | null
           result_count?: number
+          sort_mode?: string | null
+          source_filters?: Json
+          source_type?: string
+          source_url?: string | null
         }
         Update: {
+          ad_type?: string
           ai_summary?: string | null
           country?: string
           created_at?: string
@@ -1261,6 +1299,10 @@ export type Database = {
           query?: string
           raw_markdown?: string | null
           result_count?: number
+          sort_mode?: string | null
+          source_filters?: Json
+          source_type?: string
+          source_url?: string | null
         }
         Relationships: []
       }

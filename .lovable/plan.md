@@ -1,104 +1,96 @@
-## Wat gaan we doen
+Doel
+De Inspiration Hub wordt omgebouwd naar 2 duidelijke tabs:
+1. Ad Library
+2. Hooks
 
-Drie aanpassingen, in deze volgorde:
+Wat ik ga aanpassen
 
-### 1. Klantpagina tabbladen opschonen
+1. Inspiration Hub herstructureren
+- De huidige modus “Afbeeldingen” / “Afbeeldingen + hooks” verwijderen.
+- Bovenin 2 tabs maken:
+  - Ad Library
+  - Hooks
+- De Ad Library-tab krijgt een vaste bron en vaste filters gebaseerd op jouw link:
+  - land: Nederland
+  - categorie: Employment
+  - status: Active
+  - zoekterm: Verzorgende IG
+  - media: all
+- De vrije zoekbalk verdwijnt hier dus als primaire input; de hub wordt een vaste inspiratiebron voor deze doelgroep.
 
-In `src/pages/ClientWorkspace.tsx` de tabs-array reduceren tot alleen:
-**Overzicht · Learning · Live Ads**
+2. Ad Library-tab functioneel opnieuw opzetten
+- De scraper aanpassen zodat hij exact op de Meta Ad Library URL en parameters werkt die jij doorgaf, in plaats van de huidige lossere query-opbouw.
+- De huidige fout corrigeren waarbij de edge function nu nog `ad_type=all` gebruikt voor de scrape-fallback, terwijl jij expliciet employment ads wilt.
+- Resultaten opslaan als echte “ad library snapshots” met per advertentie:
+  - adverteerder
+  - advertentietekst
+  - afbeelding of video-indicatie
+  - ad library link
+  - library ID
+  - startdatum
+  - platformen indien beschikbaar
+- UI van de cards aanpassen zodat image en video beide goed weergegeven worden. Voor video’s toon ik een duidelijke video-state/thumbnail-link in plaats van ze als afbeelding te behandelen.
 
-De rendering van `BriefingsTab`, `CreativesCopyTab` en `AITeamTab` haal ik uit de switch (de bestanden zelf laat ik staan — nog bereikbaar via de globale **Briefings** tool in de sidebar, en niet wegzouden andere features).
+3. Datamodel uitbreiden voor Ad Library-items
+- De bestaande inspiratietabellen blijven de basis, maar ik voeg gerichte velden toe zodat Ad Library-data niet meer “half” in het huidige images-model wordt geperst.
+- Waarschijnlijke extra velden:
+  - tab_type / source_type
+  - media_preview_url
+  - video_url of snapshot_url
+  - publisher_platforms
+  - raw_payload / metadata
+  - sort_mode / source_url op search-niveau
+- Bestaande favorieten en opslag blijven werken.
 
-Ook in `src/pages/client-workspace/OverviewTab.tsx` de quick-action knoppen *Briefings*, *Creatives* en *AI Team* uit `quickActions` halen, zodat alleen Learning + Live Ads overblijven onder de klantnaam.
+4. Scrape-logica betrouwbaarder maken
+- Eerst de officiële archive API-resultaten gebruiken voor stabiele metadata.
+- Daarna per ad de snapshot/render-pagina gebruiken om creatives betrouwbaarder uit te lezen, omdat de listing-pagina zelf niet alle media volledig en consistent bevat.
+- Fall-back scraping op de listing alleen gebruiken als aanvullende bron, niet meer als primaire waarheid.
+- Deduplicatie verbeteren op library ID.
+- Cache-key aanscherpen zodat resultaten specifiek zijn voor:
+  - query
+  - country
+  - ad_type
+  - media_type
+  - sort_mode
+- Oude generieke cache wordt dus niet meer per ongeluk hergebruikt.
 
-### 2. Care-type label verbergen voor Wijdezorg
+5. Hooks-tab toevoegen
+- Nieuwe Hooks-tab bouwen die niet simpelweg hetzelfde overzicht met tekst toont, maar echte hook-inspiratie uit de gescrapete advertentieteksten haalt.
+- Per hook laat ik zien:
+  - hook-zin of opener
+  - type hook (bijv. collega’s, betekenisvol werk, flexibiliteit, waardering, ontwikkeling)
+  - voorbeeldadvertentie / bron
+  - gekoppelde adverteerder
+- Hooks worden afgeleid uit de opgeslagen Ad Library-items voor “Verzorgende IG” in Nederland, zodat deze tab direct gevoed wordt vanuit echte advertenties.
 
-In `ClientWorkspace.tsx` (regel 92-96) de `care_type` pill conditioneel verbergen wanneer de klantnaam Wijdezorg is. Andere klanten houden hun label gewoon.
+6. UX en gedrag verbeteren
+- In de Ad Library-tab een duidelijke knop “Vernieuwen uit Meta Ad Library” toevoegen.
+- Recente zoekopdrachten vervangen of versimpelen naar een vaste dataset-weergave, omdat deze hub nu niet meer generiek zoekgedreven is maar bron-gedreven.
+- Favorieten behouden op itemniveau.
+- Detailmodal behouden, maar uitbreiden voor advertentietekst en media-type.
 
-```tsx
-{client.care_type && client.name.toLowerCase() !== 'wijdezorg' && (...)}
-```
+Waarom dit nodig is
+- De huidige implementatie is nog te generiek en gebruikt niet exact jouw Meta Ad Library-scope.
+- In de edge function zit nu al een inhoudelijke mismatch: de scrape-URL gebruikt `ad_type=all`, terwijl jouw use case `employment_ads` vereist.
+- De huidige UI probeert hooks als view-mode boven op dezelfde resultaten te tonen, terwijl jij eigenlijk 2 aparte werkmodi wilt: echte ads bekijken en hooks analyseren.
 
-### 3. Eva — globale AI-assistent (Jarvis-stijl)
+Technische details
+- Bestanden die ik verwacht aan te passen:
+  - `src/pages/AdsInspirationPage.tsx`
+  - `supabase/functions/scrape-ads-inspiration/index.ts`
+  - mogelijk `src/integrations/supabase/types.ts` (automatisch bijgewerkt na schemawijziging)
+  - nieuwe migratie voor extra inspiratievelden
+- Database:
+  - bestaande tabellen `inspiration_searches`, `inspiration_items`, `inspiration_favorites` blijven bruikbaar
+  - schema wordt uitgebreid i.p.v. vervangen
+- Backend:
+  - edge function gebruikt bestaande secrets en connectoren; er zijn geen nieuwe geheimen nodig
+- Beperkingen:
+  - De officiële archive API geeft metadata heel goed terug, maar media-assets vereisen vaak extra scraping van de snapshot/ad detail pagina. Daarom combineer ik beide bronnen.
 
-**Plek in de UI:** in de sidebar footer (`AppLayout.tsx`), direct **boven** de `ThemeToggle`. Een opvallende Eva-knop met een kleine pulserende cirkel als icoon. Klikken opent een **fullscreen overlay** (geen route-wissel, blijft over de huidige pagina heen) zodat je Eva overal kunt aanroepen.
-
-**De interface:**
-
-```text
-┌──────────────────────────────────────────────┐
-│  ✕                                    Eva    │
-│                                              │
-│              ╭─────────╮                     │
-│             ╱  ◉ ◉ ◉  ╲    ← levende       │
-│            │  ◉◉◉◉◉◉◉  │     SVG-orb        │
-│             ╲  ◉ ◉ ◉  ╱     (pulseert/      │
-│              ╰─────────╯      glowt als     │
-│                                praat)        │
-│                                              │
-│  ─────── chat history ────────────           │
-│  Eva: Hoi, ik ben Eva. Vraag me iets…       │
-│  Jij: Hoeveel leads had Wijdezorg…           │
-│  Eva: Wijdezorg had 47 leads…                │
-│                                              │
-│  ┌────────────────────────────────────┐ ⌃   │
-│  │ Vraag Eva iets...                  │ →   │
-│  └────────────────────────────────────┘     │
-└──────────────────────────────────────────────┘
-```
-
-- **Orb**: SVG met meerdere concentrische ringen + binnenste cirkel die op AI-state animeert
-  - *idle*: zachte pulse, paarse gloed
-  - *thinking*: ringen draaien sneller, gele accenten
-  - *speaking*: golfpatroon, sterke glow
-  - Pure CSS/SVG-animatie (geen extra dependencies)
-- **Chat**: clean message-list met markdown rendering, streaming tokens, copy-knop per Eva-bericht
-- **Input**: groot textarea aan de onderkant, Enter om te versturen, Shift+Enter voor nieuwe regel
-- **Quick suggestions** bij lege chat: knoppen als "Hoe presteert Wijdezorg deze week?" / "Lanceer een advertentie voor…" / "Welke klant heeft de hoogste CTR?"
-
-**Wat Eva kan (tool-calling):**
-
-Eva is een nieuwe edge function `eva-chat` die OpenAI-compatible tool-calling gebruikt via Lovable AI Gateway (`google/gemini-3-flash-preview` als default, fallback `openai/gpt-5-mini` voor zware tool-loops). Eva krijgt een **agent-loop** die tools achter elkaar mag aanroepen tot het antwoord rond is. Tools die ik registreer:
-
-| Tool | Doet |
-|---|---|
-| `list_clients` | Geeft alle klanten + slug + care_type |
-| `get_client_summary(client_name_or_id)` | Klantprofiel: learning, USPs, locaties, brand |
-| `get_live_ads_metrics(client_name?, date_range?)` | Roept intern `fetch-meta-ads` aan; geeft spend / leads / CTR / CPL terug, optioneel per klant |
-| `list_active_campaigns(client_name?)` | Actieve Meta campagnes met basis-metrics |
-| `toggle_campaign_status(campaign_id, active)` | Herbruikt `toggle-meta-status` edge function |
-| `launch_ad(...)` | Stap-voor-stap: vraagt Eva eerst om bevestiging in chat (klant, campagne/adset, creative-URL of recente upload, copy, CTA) en roept dan `meta-upload-creative` aan |
-| `create_adset(...)` | Roept `meta-create-adset` aan met de parameters die Eva via vraaggesprek heeft verzameld |
-| `search_briefings(client_name?, week?)` | Geeft recente briefings terug |
-
-Eva voert tools server-side uit (in de edge function) zodat geen API-keys naar de client lekken. Voor destructieve acties (launch_ad, toggle, create_adset) **vraagt Eva altijd eerst expliciet om "Ja, doe maar"** voordat de tool draait — system prompt regelt dit.
-
-**Persistente conversatie:** nieuwe tabel `eva_conversations` (één rij per gebruiker met `messages jsonb`) zodat Eva context behoudt tussen sessies. RLS: gebruiker ziet alleen eigen rij.
-
-**System prompt:** Eva is een Nederlandse, grounded recruitment-marketing assistent voor Eva AI Marketeer (sluit aan op de bestaande project-persona). Mag tools gebruiken, mag niet hallucineren over campagnes/cijfers, vraagt door bij onduidelijkheid, bevestigt destructieve acties.
-
-**Streaming:** SSE token-by-token, met een aparte event-stream voor tool-call status (`🔧 Live Ads ophalen…`) zodat de gebruiker ziet wat Eva doet.
-
-## Bestanden die ik aanmaak/aanpas
-
-**Aanpassen**
-- `src/pages/ClientWorkspace.tsx` — tabs reduceren + Wijdezorg-label verbergen
-- `src/pages/client-workspace/OverviewTab.tsx` — quickActions reduceren
-- `src/components/AppLayout.tsx` — Eva-knop boven ThemeToggle + overlay mounten
-
-**Nieuw**
-- `src/components/eva/EvaOverlay.tsx` — fullscreen overlay met chat
-- `src/components/eva/EvaOrb.tsx` — geanimeerde Jarvis-orb (SVG)
-- `src/components/eva/EvaMessage.tsx` — chat bubble met markdown
-- `src/contexts/EvaContext.tsx` — open/close state, conversatie-state, streamhandler
-- `supabase/functions/eva-chat/index.ts` — agent-loop met tool-calling
-- DB-migratie: tabel `eva_conversations` (user_id, messages jsonb, updated_at) + RLS
-
-## Aannames die ik maak
-
-- "Creative and Coffee" = **Creatives & Copy** tab — die haal ik weg
-- Eva-knop alleen in de globale sidebar (niet ook nog elders)
-- Eva-overlay sluit met Esc of het kruisje, geen aparte route nodig
-- Voor markdown installeer ik `react-markdown` + `remark-gfm` (lichtgewicht, breed gebruikt)
-
-Klopt dit zo? Dan bouw ik het in deze volgorde: eerst stap 1+2 (snelle opschoning), dan Eva van backend → orb → chat → integratie in sidebar.
+Resultaat na implementatie
+- Een Inspiration Hub met:
+  - Tab 1: Ad Library — echte Nederlandse employment ads voor “Verzorgende IG” inclusief tekst + afbeelding/video
+  - Tab 2: Hooks — afgeleide hook-inspiratie uit dezelfde advertentiebron
+- Resultaten die veel dichter aansluiten op jouw gedeelde link en screenshot.

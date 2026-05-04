@@ -1,9 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Search, RefreshCw, Heart, ExternalLink,
-  Image as ImageIcon, Sparkles, Loader2, CheckCircle2, Facebook, Instagram,
+  Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
+  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo,
 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -12,11 +11,15 @@ import {
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-type ViewMode = 'images' | 'images_hooks';
+const FIXED_QUERY = 'Verzorgende IG';
+const SOURCE_LABELS = ['Nederland', 'Employment', 'Active', 'Media: all'];
+
+type HubTab = 'ad-library' | 'hooks';
 
 interface InspirationItem {
   id: string;
@@ -26,17 +29,27 @@ interface InspirationItem {
   advertiser_logo_url: string | null;
   ad_library_url: string | null;
   image_url: string | null;
+  media_preview_url?: string | null;
+  video_url?: string | null;
+  snapshot_url?: string | null;
   primary_text: string | null;
   external_id: string | null;
   started_running: string | null;
+  headline?: string | null;
+  cta?: string | null;
+  media_type?: string | null;
+  publisher_platforms?: string[] | null;
+  hook_text?: string | null;
+  hook_category?: string | null;
+  is_hook_candidate?: boolean | null;
 }
 
 interface SearchRow {
   id: string;
   query: string;
-  ai_summary: string | null;
   result_count: number;
   created_at: string;
+  source_url?: string | null;
 }
 
 interface ClientOption {
@@ -44,16 +57,8 @@ interface ClientOption {
   name: string;
 }
 
-const hasStaleMetaResult = (item: InspirationItem) => {
-  const imageUrl = item.image_url || '';
-  const text = item.primary_text || '';
-  return /(?:s|p)(?:40|50|60|64|72|80|90|100|120|160)x(?:40|50|60|64|72|80|90|100|120|160)/i.test(imageUrl) ||
-    /facebook\.com\/ads\/about|Over advertenties en het gebruik van gegevens/i.test(text);
-};
-
 export default function AdsInspirationPage() {
-  const [query, setQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('images_hooks');
+  const [activeTab, setActiveTab] = useState<HubTab>('ad-library');
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState<SearchRow | null>(null);
   const [items, setItems] = useState<InspirationItem[]>([]);
@@ -61,20 +66,6 @@ export default function AdsInspirationPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
-  const [recentSearches, setRecentSearches] = useState<SearchRow[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      const { data: cs } = await supabase.from('clients').select('id,name').order('name');
-      setClients(cs || []);
-      const { data: rs } = await supabase
-        .from('inspiration_searches')
-        .select('id, query, ai_summary, result_count, created_at')
-        .order('created_at', { ascending: false })
-        .limit(8);
-      setRecentSearches(rs || []);
-    })();
-  }, []);
 
   const loadFavorites = useCallback(async () => {
     const clientFilter = activeClient === 'global' ? null : activeClient;
@@ -86,217 +77,283 @@ export default function AdsInspirationPage() {
     setFavorites(map);
   }, [activeClient]);
 
-  useEffect(() => { loadFavorites(); }, [loadFavorites, items.length]);
-
-  const runSearch = async (forceRefresh = false) => {
-    const q = query.trim();
-    if (!q) { toast.error('Voer een zoekterm in'); return; }
+  const loadHub = useCallback(async (forceRefresh = false) => {
     setLoading(true);
-    setSearch(null);
-    setItems([]);
     try {
       const { data, error } = await supabase.functions.invoke('scrape-ads-inspiration', {
-        body: {
-          query: q, mediaType: 'image', forceRefresh,
-          wantSummary: viewMode === 'images_hooks',
-        },
+        body: { forceRefresh, tab: activeTab },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (data.cached && !forceRefresh && (data.items || []).some(hasStaleMetaResult)) {
-        toast.info('Oude cache gevonden, ik haal automatisch verse resultaten op');
-        await runSearch(true);
-        return;
-      }
-      setSearch(data.search);
+      setSearch(data.search || null);
       setItems(data.items || []);
-      if (data.cached) toast.info('Resultaten uit cache (laatste 6 uur)');
-      else toast.success(`${data.items?.length || 0} advertenties gevonden`);
-      const { data: rs } = await supabase
-        .from('inspiration_searches')
-        .select('id, query, ai_summary, result_count, created_at')
-        .order('created_at', { ascending: false }).limit(8);
-      setRecentSearches(rs || []);
+      if (forceRefresh) toast.success('Ad Library vernieuwd');
     } catch (e: any) {
       console.error(e);
-      toast.error(e.message || 'Scrapen mislukt');
+      toast.error(e.message || 'Meta Ad Library ophalen mislukt');
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
 
-  const loadHistoricalSearch = async (s: SearchRow) => {
-    setLoading(true);
-    setSearch(s);
-    setQuery(s.query);
-    const { data: its } = await supabase
-      .from('inspiration_items').select('*').eq('search_id', s.id).order('created_at');
-    setItems(its || []);
-    setLoading(false);
-  };
+  useEffect(() => {
+    (async () => {
+      const [{ data: cs }, { data: latest }] = await Promise.all([
+        supabase.from('clients').select('id,name').order('name'),
+        supabase
+          .from('inspiration_searches')
+          .select('id, query, result_count, created_at, source_url')
+          .eq('query', FIXED_QUERY)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      setClients(cs || []);
+      if (latest) setSearch(latest as SearchRow);
+    })();
+  }, []);
+
+  useEffect(() => {
+    loadHub(false);
+  }, [loadHub]);
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites, items.length]);
+
+  const hookItems = useMemo(() => {
+    return items
+      .filter((item) => item.hook_text || item.is_hook_candidate)
+      .sort((a, b) => (a.hook_category || '').localeCompare(b.hook_category || ''));
+  }, [items]);
 
   const toggleFavorite = async (item: InspirationItem) => {
     const existing = favorites[item.id];
     const clientFilter = activeClient === 'global' ? null : activeClient;
     if (existing) {
       const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
-      if (error) { toast.error('Verwijderen mislukt'); return; }
-      setFavorites(f => { const c = { ...f }; delete c[item.id]; return c; });
-    } else {
-      const { data, error } = await supabase
-        .from('inspiration_favorites')
-        .insert({ item_id: item.id, client_id: clientFilter })
-        .select('id').single();
-      if (error) { toast.error('Opslaan mislukt'); return; }
-      setFavorites(f => ({ ...f, [item.id]: data.id }));
-      toast.success(activeClient === 'global' ? 'Bewaard' : `Bewaard voor ${clients.find(c => c.id === activeClient)?.name}`);
+      if (error) {
+        toast.error('Verwijderen mislukt');
+        return;
+      }
+      setFavorites((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      return;
     }
+
+    const { data, error } = await supabase
+      .from('inspiration_favorites')
+      .insert({ item_id: item.id, client_id: clientFilter })
+      .select('id')
+      .single();
+
+    if (error) {
+      toast.error('Opslaan mislukt');
+      return;
+    }
+
+    setFavorites((prev) => ({ ...prev, [item.id]: data.id }));
+    toast.success(activeClient === 'global' ? 'Bewaard' : `Bewaard voor ${clients.find((c) => c.id === activeClient)?.name}`);
   };
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Statische advertentie-inspiratie uit de Facebook Ads Library
-          </p>
+    <div className="p-8 max-w-[1440px] mx-auto space-y-6 animate-fade-in">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-3">
+          <div>
+            <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{FIXED_QUERY}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {SOURCE_LABELS.map((label) => (
+              <Badge key={label} variant="secondary" className="rounded-full px-3 py-1 text-[11px] font-medium">
+                {label}
+              </Badge>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Select value={viewMode} onValueChange={(v: ViewMode) => setViewMode(v)}>
-            <SelectTrigger className="w-[200px] h-9 text-xs rounded-full border-0 glass">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="images">Alleen afbeeldingen</SelectItem>
-              <SelectItem value="images_hooks">Afbeeldingen + hooks</SelectItem>
-            </SelectContent>
-          </Select>
+
+        <div className="flex items-center gap-2 flex-wrap">
           <Select value={activeClient} onValueChange={setActiveClient}>
-            <SelectTrigger className="w-[180px] h-9 text-xs rounded-full border-0 glass">
+            <SelectTrigger className="w-[190px] h-9 rounded-full text-xs">
               <SelectValue placeholder="Favorieten voor..." />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="global">Algemeen</SelectItem>
-              {clients.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              {clients.map((client) => (
+                <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <Button onClick={() => loadHub(true)} disabled={loading} className="rounded-full h-9 text-xs">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+            Vernieuwen uit Meta Ad Library
+          </Button>
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="glass rounded-2xl p-4 flex items-center gap-2">
-        <Search className="h-4 w-4 text-muted-foreground ml-2" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !loading && runSearch(false)}
-          placeholder='Bijv. "verpleegkundige", "thuiszorg", "Buurtzorg", IG-handle...'
-          className="border-0 bg-transparent focus-visible:ring-0 text-sm"
-          disabled={loading}
-        />
-        <Button onClick={() => runSearch(false)} disabled={loading || !query.trim()} className="rounded-full h-9 text-xs">
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Zoeken'}
-        </Button>
-        {search && (
-          <Button onClick={() => runSearch(true)} disabled={loading} variant="ghost" className="rounded-full h-9 text-xs" title="Cache negeren en opnieuw scrapen">
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
-        )}
+      <div className="glass rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {([
+            { key: 'ad-library', label: 'Ad Library' },
+            { key: 'hooks', label: 'Hooks' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                'h-10 px-4 rounded-full text-sm transition-colors',
+                activeTab === tab.key
+                  ? 'bg-primary text-primary-foreground shadow-soft'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <BadgeInfo className="h-3.5 w-3.5" />
+          {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
+        </div>
       </div>
 
-      {!search && !loading && recentSearches.length > 0 && (
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 px-1">Recente zoekopdrachten</p>
-          <div className="flex flex-wrap gap-1.5">
-            {recentSearches.map(s => (
-              <button key={s.id} onClick={() => loadHistoricalSearch(s)}
-                className="px-3 h-8 rounded-full glass glass-hover text-xs text-foreground flex items-center gap-1.5">
-                {s.query}<span className="text-muted-foreground">· {s.result_count}</span>
-              </button>
+      <section className="glass rounded-3xl p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
+            <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · Verzorgende IG · Nederland · Employment</p>
+          </div>
+          {search?.source_url && (
+            <a href={search.source_url} target="_blank" rel="noreferrer">
+              <Button variant="outline" size="sm" className="rounded-full text-xs">
+                <ExternalLink className="h-3 w-3 mr-1" /> Open bron
+              </Button>
+            </a>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {Array.from({ length: activeTab === 'hooks' ? 6 : 8 }).map((_, i) => (
+              <Skeleton key={i} className={cn('rounded-2xl', activeTab === 'hooks' ? 'h-[220px]' : 'h-[520px]')} />
             ))}
           </div>
-        </div>
-      )}
-
-      {viewMode === 'images_hooks' && search?.ai_summary && (
-        <div className="glass rounded-2xl p-5 border border-primary/15">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <p className="text-xs font-semibold text-foreground">AI patroon-analyse voor "{search.query}"</p>
+        ) : activeTab === 'ad-library' ? (
+          items.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {items.map((item) => (
+                <AdLibraryCard
+                  key={item.id}
+                  item={item}
+                  isFavorite={!!favorites[item.id]}
+                  onToggleFavorite={() => toggleFavorite(item)}
+                  onPreview={() => setPreviewItem(item)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState label="Geen advertenties gevonden" />
+          )
+        ) : hookItems.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {hookItems.map((item) => (
+              <HookCard
+                key={item.id}
+                item={item}
+                onOpen={() => setPreviewItem(item)}
+              />
+            ))}
           </div>
-          <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{search.ai_summary}</p>
-        </div>
-      )}
+        ) : (
+          <EmptyState label="Nog geen hooks afgeleid uit deze advertenties" />
+        )}
+      </section>
 
-      {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-[480px] rounded-2xl" />
-          ))}
-        </div>
-      )}
-
-      {!loading && items.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {items.map(item => (
-            <AdLibraryCard
-              key={item.id}
-              item={item}
-              isFavorite={!!favorites[item.id]}
-              onToggleFavorite={() => toggleFavorite(item)}
-              onPreview={() => setPreviewItem(item)}
-              showText={viewMode === 'images_hooks'}
-            />
-          ))}
-        </div>
-      )}
-
-      {!loading && search && items.length === 0 && (
-        <div className="glass rounded-2xl p-12 text-center">
-          <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-          <p className="text-sm text-foreground font-medium">Geen advertenties gevonden voor "{search.query}"</p>
-          <p className="text-xs text-muted-foreground mt-1">Probeer een bredere of andere zoekterm.</p>
-        </div>
-      )}
-
-      {/* Preview dialog */}
-      <Dialog open={!!previewItem} onOpenChange={(o) => !o && setPreviewItem(null)}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-background/95 backdrop-blur-xl">
+      <Dialog open={!!previewItem} onOpenChange={(open) => !open && setPreviewItem(null)}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-background/95 backdrop-blur-xl">
           {previewItem && (
-            <div className="grid md:grid-cols-2 gap-0">
-              <div className="bg-muted/30 flex items-center justify-center p-4 max-h-[80vh] overflow-auto">
-                {previewItem.image_url ? (
-                  <img src={previewItem.image_url} alt="" className="w-full h-auto object-contain rounded" />
+            <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0">
+              <div className="bg-muted/30 p-4 flex items-center justify-center min-h-[420px] max-h-[82vh] overflow-auto">
+                {previewItem.video_url ? (
+                  <video src={previewItem.video_url} controls className="w-full rounded-lg bg-background" />
+                ) : previewItem.media_preview_url || previewItem.image_url ? (
+                  <img
+                    src={previewItem.media_preview_url || previewItem.image_url || ''}
+                    alt={previewItem.advertiser_name || 'Advertentie preview'}
+                    className="w-full h-auto object-contain rounded-lg"
+                  />
                 ) : (
-                  <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                  <div className="text-sm text-muted-foreground">Geen media-preview beschikbaar</div>
                 )}
               </div>
-              <div className="p-6 space-y-3 max-h-[80vh] overflow-auto">
-                <div className="flex items-center gap-2">
-                  {previewItem.advertiser_logo_url && (
-                    <img src={previewItem.advertiser_logo_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+
+              <div className="p-6 space-y-4 max-h-[82vh] overflow-auto">
+                <div className="flex items-center gap-3">
+                  {previewItem.advertiser_logo_url ? (
+                    <img src={previewItem.advertiser_logo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                      {(previewItem.advertiser_name || '?').charAt(0).toUpperCase()}
+                    </div>
                   )}
                   <div>
-                    <p className="text-sm font-semibold">{previewItem.advertiser_name || 'Onbekend'}</p>
-                    <p className="text-[11px] text-muted-foreground">Sponsored</p>
+                    <p className="text-sm font-semibold text-foreground">{previewItem.advertiser_name || 'Onbekend'}</p>
+                    <p className="text-xs text-muted-foreground">Sponsored</p>
                   </div>
                 </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="rounded-full">Active</Badge>
+                  {previewItem.media_type === 'video' && (
+                    <Badge variant="secondary" className="rounded-full">Video</Badge>
+                  )}
+                  {previewItem.external_id && (
+                    <Badge variant="secondary" className="rounded-full">Library ID: {previewItem.external_id}</Badge>
+                  )}
+                </div>
+
                 {previewItem.started_running && (
-                  <p className="text-[11px] text-muted-foreground">Started running on {previewItem.started_running}</p>
+                  <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
                 )}
+
+                {previewItem.hook_text && (
+                  <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Hook</p>
+                    <p className="text-sm font-medium text-foreground">{previewItem.hook_text}</p>
+                    {previewItem.hook_category && (
+                      <p className="text-xs text-muted-foreground">Categorie: {previewItem.hook_category}</p>
+                    )}
+                  </div>
+                )}
+
                 {previewItem.primary_text && (
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Advertentietekst</p>
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Advertentietekst</p>
                     <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{previewItem.primary_text}</p>
                   </div>
                 )}
-                <div className="flex gap-2 pt-2">
+
+                {previewItem.publisher_platforms && previewItem.publisher_platforms.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Platformen</p>
+                    <div className="flex flex-wrap gap-2">
+                      {previewItem.publisher_platforms.map((platform) => (
+                        <Badge key={platform} variant="secondary" className="rounded-full">{platform}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2 flex-wrap">
                   {previewItem.ad_library_url && (
                     <a href={previewItem.ad_library_url} target="_blank" rel="noreferrer">
                       <Button variant="outline" size="sm" className="rounded-full text-xs">
@@ -304,8 +361,12 @@ export default function AdsInspirationPage() {
                       </Button>
                     </a>
                   )}
-                  <Button onClick={() => toggleFavorite(previewItem)}
-                    variant={favorites[previewItem.id] ? 'default' : 'outline'} size="sm" className="rounded-full text-xs">
+                  <Button
+                    onClick={() => toggleFavorite(previewItem)}
+                    variant={favorites[previewItem.id] ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-full text-xs"
+                  >
                     <Heart className={cn('h-3 w-3 mr-1', favorites[previewItem.id] && 'fill-current')} />
                     {favorites[previewItem.id] ? 'Bewaard' : 'Bewaar'}
                   </Button>
@@ -320,17 +381,21 @@ export default function AdsInspirationPage() {
 }
 
 function AdLibraryCard({
-  item, isFavorite, onToggleFavorite, onPreview, showText,
+  item,
+  isFavorite,
+  onToggleFavorite,
+  onPreview,
 }: {
   item: InspirationItem;
   isFavorite: boolean;
   onToggleFavorite: () => void;
   onPreview: () => void;
-  showText: boolean;
 }) {
+  const previewSrc = item.media_preview_url || item.image_url;
+  const platforms = item.publisher_platforms || [];
+
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
-      {/* Top metadata strip - Meta Ad Library style */}
       <div className="px-4 pt-4 pb-3 space-y-1.5 relative">
         <button
           onClick={onToggleFavorite}
@@ -341,27 +406,31 @@ function AdLibraryCard({
         >
           <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
         </button>
+
         <div className="flex items-center gap-1.5">
           <CheckCircle2 className="h-3 w-3 text-emerald-500" />
           <span className="text-[11px] font-medium text-foreground">Active</span>
         </div>
+
         {item.external_id && (
           <p className="text-[11px] text-muted-foreground">Library ID: {item.external_id}</p>
         )}
         {item.started_running && (
           <p className="text-[11px] text-muted-foreground">Started running on {item.started_running}</p>
         )}
-        <div className="flex items-center gap-1.5 pt-0.5">
+
+        <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
           <span className="text-[11px] text-muted-foreground">Platforms</span>
-          <Facebook className="h-3 w-3 text-muted-foreground" />
-          <Instagram className="h-3 w-3 text-muted-foreground" />
+          {platforms.includes('FACEBOOK') && <Facebook className="h-3 w-3 text-muted-foreground" />}
+          {platforms.includes('INSTAGRAM') && <Instagram className="h-3 w-3 text-muted-foreground" />}
+          {platforms.length === 0 && (
+            <span className="text-[11px] text-muted-foreground">Niet beschikbaar</span>
+          )}
         </div>
       </div>
 
-      {/* Divider */}
       <div className="h-px bg-border/60 mx-4" />
 
-      {/* Advertiser header */}
       <div className="px-4 py-3 flex items-center gap-2.5">
         {item.advertiser_logo_url ? (
           <img src={item.advertiser_logo_url} alt="" className="h-9 w-9 rounded-full object-cover bg-muted" />
@@ -375,38 +444,79 @@ function AdLibraryCard({
           <p className="text-[11px] text-muted-foreground">Sponsored</p>
         </div>
         {item.ad_library_url && (
-          <a href={item.ad_library_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:text-foreground">
+          <a href={item.ad_library_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-muted-foreground hover:text-foreground">
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         )}
       </div>
 
-      {/* Primary text */}
-      {showText && item.primary_text && (
+      {item.primary_text && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-foreground/85 leading-relaxed line-clamp-4">
-            {item.primary_text}
-          </p>
+          <p className="text-xs text-foreground/85 leading-relaxed line-clamp-4">{item.primary_text}</p>
         </div>
       )}
 
-      {/* Creative image */}
-      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden mt-auto">
-        {item.image_url ? (
+      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden mt-auto relative">
+        {previewSrc ? (
           <img
-            src={item.image_url}
-            alt={item.advertiser_name || ''}
+            src={previewSrc}
+            alt={item.advertiser_name || 'Advertentie'}
             className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
             loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.2'; }}
           />
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <ImageIcon className="h-8 w-8 text-muted-foreground" />
+          <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</div>
+        )}
+        {item.media_type === 'video' && (
+          <div className="absolute inset-0 bg-background/10 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-full bg-background/80 border border-border/70 flex items-center justify-center">
+              <PlayCircle className="h-6 w-6 text-foreground" />
+            </div>
           </div>
         )}
       </button>
+    </div>
+  );
+}
+
+function HookCard({ item, onOpen }: { item: InspirationItem; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="text-left rounded-2xl border border-border/60 bg-card p-5 hover:border-border hover:shadow-md transition-all h-full"
+    >
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <Badge variant="secondary" className="rounded-full">
+          {item.hook_category || 'Algemene hook'}
+        </Badge>
+        {item.media_type === 'video' && (
+          <Badge variant="secondary" className="rounded-full">Video-ad</Badge>
+        )}
+      </div>
+
+      <p className="text-base font-medium text-foreground leading-snug mb-4">
+        {item.hook_text || item.primary_text || 'Geen hook gevonden'}
+      </p>
+
+      <div className="space-y-2 text-sm text-muted-foreground">
+        <p><span className="text-foreground font-medium">Adverteerder:</span> {item.advertiser_name || 'Onbekend'}</p>
+        {item.headline && <p><span className="text-foreground font-medium">Headline:</span> {item.headline}</p>}
+        {item.started_running && <p><span className="text-foreground font-medium">Sinds:</span> {item.started_running}</p>}
+      </div>
+
+      <div className="pt-4 mt-4 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
+        <span>Open bronadvertentie</span>
+        <ExternalLink className="h-3.5 w-3.5" />
+      </div>
+    </button>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card p-12 text-center">
+      <p className="text-sm font-medium text-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground mt-1">Ververs de bron om opnieuw uit Meta Ad Library te laden.</p>
     </div>
   );
 }
