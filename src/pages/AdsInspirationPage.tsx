@@ -378,9 +378,6 @@ export default function AdsInspirationPage() {
                   {previewItem.media_type === 'video' && (
                     <Badge variant="secondary" className="rounded-full">Video</Badge>
                   )}
-                  {previewItem.external_id && (
-                    <Badge variant="secondary" className="rounded-full">Library ID: {previewItem.external_id}</Badge>
-                  )}
                 </div>
 
                 {previewItem.started_running && (
@@ -425,16 +422,7 @@ export default function AdsInspirationPage() {
                   </div>
                 )}
 
-                {previewItem.publisher_platforms && previewItem.publisher_platforms.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Platformen</p>
-                    <div className="flex flex-wrap gap-2">
-                      {previewItem.publisher_platforms.map((platform) => (
-                        <Badge key={platform} variant="secondary" className="rounded-full">{platform}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Platformen sectie verwijderd – meestal leeg */}
 
                 <div className="flex gap-2 pt-2 flex-wrap">
                   {previewItem.ad_library_url && (
@@ -537,35 +525,40 @@ function AdLibraryCard({
         )}
       </div>
 
-      <button type="button" onClick={onPreview} className="px-4 pb-3 min-h-[88px] text-left w-full hover:bg-muted/20 transition-colors">
-        {primaryText ? (
+      {primaryText && (
+        <button
+          type="button"
+          onClick={onPreview}
+          className="px-4 pb-3 text-left w-full hover:bg-muted/20 transition-colors group/text"
+        >
           <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">Geen advertentietekst beschikbaar</p>
-        )}
-      </button>
+          {primaryText.length > 280 && (
+            <span className="text-[11px] text-primary font-medium mt-1 inline-block group-hover/text:underline">
+              Lees meer
+            </span>
+          )}
+        </button>
+      )}
 
       <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} fallbackItem={item} />
 
-      <div className="px-4 py-3 mt-auto border-t border-border/60 min-h-[68px] flex flex-col justify-center gap-1">
-        {hasFooter ? (
-          <>
-            {headline && (
-              <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              {description ? (
-                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 flex-1">{description}</p>
-              ) : <span className="flex-1" />}
-              {cta && (
-                <span className="text-[10px] uppercase tracking-wide text-primary font-semibold whitespace-nowrap">{cta}</span>
-              )}
+      {hasFooter && (
+        <div className="px-4 py-3 mt-auto border-t border-border/60 flex flex-col gap-1.5">
+          {headline && (
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
+          )}
+          {description && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">{description}</p>
+          )}
+          {cta && (
+            <div className="flex justify-end pt-1">
+              <span className="text-[10px] uppercase tracking-wide text-primary font-semibold whitespace-nowrap rounded-full bg-primary/10 px-2.5 py-1">
+                {cta}
+              </span>
             </div>
-          </>
-        ) : (
-          <p className="text-[11px] text-muted-foreground italic">Geen headline beschikbaar</p>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -587,7 +580,10 @@ function AdMediaFrame({
   const activeUrl = urls[index] || null;
   const hasMultiple = urls.length > 1;
   const activeIsVideo = isVideoUrl(activeUrl);
-  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && fallbackItem?.media_type === 'story');
+  const isStory = fallbackItem?.media_type === 'story';
+  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && isStory);
+  // Default Meta feed creative is 4:5 portrait; use 9:16 voor story/portrait media.
+  const aspectClass = isPortrait || isStory ? 'aspect-[9/16]' : 'aspect-[4/5]';
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -598,7 +594,7 @@ function AdMediaFrame({
   return (
     <div className={cn(
       'w-full bg-muted/40 overflow-hidden relative',
-      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : isPortrait ? 'aspect-[9/16]' : 'aspect-square'
+      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : aspectClass
     )}>
       {activeUrl ? (
         activeIsVideo ? (
@@ -617,16 +613,22 @@ function AdMediaFrame({
           </button>
         )
       ) : (
-        <button onClick={onOpen} className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-muted/30">
-          <div className="w-full max-w-[180px] aspect-[9/16] rounded-2xl border border-border/70 bg-card shadow-sm flex flex-col justify-between p-4">
-            <div className="space-y-1 text-left">
-              <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
-              <p className="text-[10px] text-muted-foreground">Sponsored</p>
-            </div>
-            <p className="text-xs text-foreground/85 line-clamp-6 text-left">{fallbackItem?.primary_text || 'Story preview'}</p>
-            {fallbackItem?.cta && <span className="text-[10px] uppercase tracking-wide text-primary font-semibold text-left">{fallbackItem.cta}</span>}
+        <button
+          onClick={onOpen}
+          className="w-full h-full flex flex-col justify-between p-5 text-left bg-gradient-to-br from-muted/50 via-muted/20 to-background"
+        >
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
+            <p className="text-[10px] text-muted-foreground">Sponsored · Story-formaat</p>
           </div>
-          <span className="text-xs text-muted-foreground">Story-formaat</span>
+          <p className="text-xs text-foreground/85 line-clamp-[10] leading-relaxed">
+            {fallbackItem?.primary_text || 'Story preview'}
+          </p>
+          {fallbackItem?.cta ? (
+            <span className="self-start text-[10px] uppercase tracking-wide text-primary font-semibold rounded-full bg-primary/10 px-2.5 py-1">
+              {fallbackItem.cta}
+            </span>
+          ) : <span />}
         </button>
       )}
 

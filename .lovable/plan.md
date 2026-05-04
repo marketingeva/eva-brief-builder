@@ -1,58 +1,60 @@
-Ik ga de Inspiration Hub zo aanpassen dat de kaarten meer lijken op de echte Meta Ad Library-opbouw: organisatie bovenaan, advertentietekst boven de creative, headline/description onder de creative, en alleen 12 advertenties initieel zichtbaar met een knop om meer te laden.
+## Doel
 
-Plan:
+De ad-library kaart in de Inspiration Hub aanpassen zodat hij dezelfde leesvolgorde heeft als een Meta Ad Library kaart, zonder lege ruimtes en met nette weergave voor story-formaten.
 
-1. Datamodel en types afronden
-- De databasekolommen `media_urls` en `description` bestaan al.
-- Ik werk de frontend-types bij zodat `description` en `media_urls` echt gebruikt worden in de UI.
-- Ik zorg dat inserts vanuit de scraper deze velden ook vullen; nu worden ze nog niet opgeslagen.
+## Nieuwe kaartstructuur (top → bottom)
 
-2. Scraper corrigeren: advertentietekst vs description
-- `primary_text` wordt uitsluitend de echte advertentietekst/body boven de afbeelding.
-- `headline` wordt de link/headline tekst.
-- `description` wordt de linkbeschrijving/description onder de afbeelding.
-- `cta` blijft apart voor CTA/caption als die beschikbaar is.
-- De huidige fout waarbij `title + description + caption` in `primary_text` wordt geplakt, haal ik eruit.
-- De snapshot fallback mag niet langer automatisch `og:description` als advertentietekst opslaan, omdat dat precies de verwarring veroorzaakt.
+```text
+┌──────────────────────────────────────────┐
+│ ✓ Active   [Video|Carousel]   FB IG       │  ← status header (blijft)
+│ Library ID: 123…                          │
+│ Gestart op 2024-…                         │
+├──────────────────────────────────────────┤
+│ 🟣 Logo  Adverteerder                     │  ← adverteerder header (blijft)
+│         Sponsored                  ↗      │
+├──────────────────────────────────────────┤
+│ Primary text – tot ~6 regels…             │  ← klikbaar; opent dialog met
+│ "Lees meer" indicator wanneer afgekapt    │     volledige tekst
+├──────────────────────────────────────────┤
+│ [ Media: image / carousel / video / story]│  ← strak in 1:1, 4:5 of 9:16
+├──────────────────────────────────────────┤
+│ Headline (bold)                           │
+│ Description (klein, muted)                │
+│                            [ CTA ]        │
+└──────────────────────────────────────────┘
+```
 
-3. Organisatienaam verbeteren
-- Als de officiële Meta API geen toegang geeft, valt de scraper terug op HTML-scraping. Daar komt nu vaak `Onbekend` of `Meer informatie` uit.
-- Ik maak de HTML-parser strenger: boilerplate zoals `Meer informatie`, `Sponsored`, `Onbekend` wordt nooit als organisatie gebruikt.
-- Ik voeg heuristieken toe om de organisatie uit betere bronnen te halen: Facebook page links, aria-labels, nearby sponsored block, en eventueel tekst op/onder de creative zoals `van Savelberg` of `bij Liante` als fallback.
-- Als er echt niets betrouwbaar is, blijft de fallback netjes leeg/`Onbekend`, maar niet meer foutief `Meer informatie`.
+De volgorde primary text → media → headline/description/CTA is exact zoals in de Meta Ad Library screenshot.
 
-4. Media: afbeeldingen, video’s en carousels
-- De scraper verzamelt meerdere geldige media-URL’s per advertentie in `media_urls`.
-- Video-URL’s/posters worden apart gedetecteerd en `media_type` wordt `video`, `carousel` of `image`.
-- Ik pas de scoring aan zodat kleine logo’s/avatars niet als advertentiecreative eindigen.
-- In de UI toon ik:
-  - video met play-overlay / video player in preview,
-  - carousel als meerdere thumbnails/strip,
-  - gewone image als één creative.
+## Wijzigingen
 
-5. UI layout corrigeren
-- Het kopje/platformblok met `Platforms Niet beschikbaar` verdwijnt van de kaart.
-- De kaartvolgorde wordt:
-  1. status + Library ID + startdatum,
-  2. organisatie + Sponsored,
-  3. advertentietekst boven de media,
-  4. image/video/carousel,
-  5. headline/description/CTA onder de media indien aanwezig.
-- In de detail-popup toon ik dezelfde scheiding expliciet met labels: `Advertentietekst`, `Headline`, `Beschrijving`, `CTA`.
+### 1. `src/pages/AdsInspirationPage.tsx` — `AdLibraryCard`
+- Verwijder de vaste `min-h-[88px]` op de primary-text knop en `min-h-[68px]` op de footer; gebruik natuurlijke hoogte zodat er geen lege ruimte ontstaat.
+- Toon primary text met `line-clamp-6` (default) en een subtiele "Lees meer" link onderaan wanneer de tekst afgekapt is. Klik opent reeds de dialog met de volledige tekst.
+- Verwijder fallback-tekst zoals "Geen headline beschikbaar" — laat de footer-sectie weg als er niets is, in plaats van een lege block te tonen.
+- Footer toont in deze volgorde: **headline** (bold, max 2 regels) → **description** (muted, max 3 regels) → **CTA** rechts onderin als badge.
 
-6. Eerst 12 laden, daarna “Meer laden”
-- De scraper mag nog steeds meer resultaten ophalen en opslaan, maar de UI toont initieel 12 advertenties.
-- Onderaan komt een knop `Meer laden` die telkens 12 extra advertenties zichtbaar maakt.
-- Bij verversen, tabwissel of nieuwe resultaten reset de zichtbare teller terug naar 12.
-- De Hooks-tab krijgt vergelijkbaar limietgedrag als daar veel resultaten staan, of blijft afgeleid van de geladen advertenties als dat beter aansluit bij de bestaande UX.
+### 2. `src/pages/AdsInspirationPage.tsx` — `AdMediaFrame`
+- Bepaal de aspect-ratio strikt op basis van `media_type` en gedetecteerde dimensies:
+  - `story` of portrait media → `aspect-[9/16]`
+  - default afbeelding/video → `aspect-[4/5]` (Meta feed default) i.p.v. `aspect-square`, omdat dit beter aansluit bij de meeste Meta ads.
+  - vierkante media (gedetecteerd uit dimensies) → `aspect-square`
+- Bij story-fallback zonder media: laat de "telefoonkaart" placeholder de **volledige 9:16 frame** vullen (geen kleine kaart op een grijs vlak), met de primary text + CTA er netjes in. Geen overbodige witruimte meer.
+- Carousel arrows en dots blijven werken binnen het frame.
 
-7. Cache en bestaande foute data
-- Omdat er nu al fout gecachte items staan, laat ik de kwaliteitscontrole ook letten op ontbrekende `description/media_urls`, boilerplate organisatie, en verkeerd gevulde `primary_text`.
-- Daardoor wordt bij de eerstvolgende refresh automatisch nieuwe data opgehaald in plaats van oude foutieve cache te tonen.
-- Na de codewijziging deploy ik de backendfunctie opnieuw zodat de knop direct de nieuwe logica gebruikt.
+### 3. `src/pages/AdsInspirationPage.tsx` — Detail dialog
+- Houd de huidige volgorde (advertentietekst → headline → beschrijving → CTA) in het rechterpaneel; verwijder de "Platformen" sectie die meestal leeg is en die de gebruiker eerder al weg wilde hebben.
+- Verwijder de redundante "Library ID" badge bovenin de dialog (staat al in de kaart).
 
-Technische details:
-- Bestanden die ik aanpas: `supabase/functions/scrape-ads-inspiration/index.ts` en `src/pages/AdsInspirationPage.tsx`.
-- Ik wijzig geen gegenereerde backend client/types-bestanden handmatig.
-- Er is waarschijnlijk geen nieuwe database-migratie nodig, omdat `media_urls` en `description` al bestaan.
-- De officiële Meta API faalt momenteel met permissies en valt terug op scraping; ik verbeter daarom vooral de fallback-parser, zodat de pagina ook zonder die permissie bruikbaar is.
+### 4. Scraper (`supabase/functions/scrape-ads-inspiration/index.ts`)
+- Geen functionele logica-wijziging nodig: `media_type = 'story'` wordt al gezet wanneer er geen image/video gevonden is.
+- Kleine controle: als enrich-snapshot een 9:16 image vindt, blijf `media_type = 'image'` maar laat de frontend portrait detecteren via dimensies (al aanwezig in `isPortraitMedia`).
+
+## Acceptatiecriteria
+
+- Kaart heeft geen grote witruimte meer onder de media.
+- Primary text is zichtbaar, afgekapt op ~6 regels, klikbaar voor volledige weergave.
+- Headline en description staan onder de media, niet erboven.
+- Story-formaten vullen netjes een 9:16 frame zonder grijze randen rondom.
+- Carousels blijven binnen hetzelfde frame doorklikbaar.
+- "Geen headline beschikbaar" / lege "Platformen"-blok verschijnen niet meer.
