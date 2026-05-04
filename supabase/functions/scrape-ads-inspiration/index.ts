@@ -235,7 +235,7 @@ function inferAdvertiserName(texts: string[]): string | undefined {
 }
 
 function isBoilerplateText(text: string): boolean {
-  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
+  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Platformen|Categories|Categorieën|EU transparency|Transparantie voor de EU|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
     || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text);
 }
