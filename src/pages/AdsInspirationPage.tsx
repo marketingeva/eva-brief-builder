@@ -93,9 +93,15 @@ function getDisplayTextParts(item: InspirationItem) {
 
 function getMediaUrls(item: InspirationItem): string[] {
   const fallback = getAdPreviewSrc(item);
-  const urls = [item.video_url, ...(item.media_urls || []), fallback, item.image_url]
+  const urls = [item.video_url, ...(item.media_urls || []), fallback, item.image_url, item.media_preview_url]
     .filter(Boolean) as string[];
-  return [...new Set(urls)].filter((url) => isVideoUrl(url) || !getPreviewDimensions(url) || Math.max(getPreviewDimensions(url)!.width, getPreviewDimensions(url)!.height) > 120);
+  const deduped = [...new Set(urls)];
+  const filtered = deduped.filter((url) =>
+    isVideoUrl(url) || !getPreviewDimensions(url) || Math.max(getPreviewDimensions(url)!.width, getPreviewDimensions(url)!.height) > 120,
+  );
+  // Always make sure we have at least one entry if any raw url exists, even if it looks like a logo
+  if (filtered.length === 0 && deduped.length > 0) return [deduped[0]];
+  return filtered;
 }
 
 export default function AdsInspirationPage() {
