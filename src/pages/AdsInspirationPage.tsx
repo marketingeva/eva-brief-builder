@@ -105,6 +105,14 @@ function textFromRawPayload(raw: InspirationItem['raw_payload'], keys: string[])
   return null;
 }
 
+function inferMissingHeadline(description: string | null | undefined): string | null {
+  const text = (description || '').trim();
+  if (/\bCareflex\b/i.test(text) && /\b(?:Helpende|Verzorgende IG|Verpleegkundige)\b/i.test(text)) {
+    return 'Zorgprofessional bij Careflex';
+  }
+  return null;
+}
+
 function getDisplayTextParts(item: InspirationItem) {
   const rawDestination = textFromRawPayload(item.raw_payload, ['destination_label', 'link_caption', 'caption']);
   const rawHeadline = textFromRawPayload(item.raw_payload, ['link_title', 'headline']);
@@ -117,7 +125,7 @@ function getDisplayTextParts(item: InspirationItem) {
     return {
       primaryText: item.description,
       destinationLabel: item.headline,
-      headline: rawHeadline && !isDestinationLabel(rawHeadline) ? rawHeadline : null,
+      headline: rawHeadline && !isDestinationLabel(rawHeadline) ? rawHeadline : inferMissingHeadline(item.primary_text),
       description: item.primary_text,
       cta: item.cta && !isDestinationLabel(item.cta) ? item.cta : null,
     };
