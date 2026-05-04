@@ -537,15 +537,15 @@ function AdLibraryCard({
         )}
       </div>
 
-      <div className="px-4 pb-3 min-h-[88px]">
+      <button type="button" onClick={onPreview} className="px-4 pb-3 min-h-[88px] text-left w-full hover:bg-muted/20 transition-colors">
         {primaryText ? (
           <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
         ) : (
           <p className="text-xs text-muted-foreground italic">Geen advertentietekst beschikbaar</p>
         )}
-      </div>
+      </button>
 
-      <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} />
+      <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} fallbackItem={item} />
 
       <div className="px-4 py-3 mt-auto border-t border-border/60 min-h-[68px] flex flex-col justify-center gap-1">
         {hasFooter ? (
@@ -570,11 +570,24 @@ function AdLibraryCard({
   );
 }
 
-function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; onOpen: () => void }) {
+function AdMediaFrame({
+  urls,
+  label,
+  onOpen,
+  fallbackItem,
+  mode = 'card',
+}: {
+  urls: string[];
+  label: string;
+  onOpen?: () => void;
+  fallbackItem?: InspirationItem;
+  mode?: 'card' | 'detail';
+}) {
   const [index, setIndex] = useState(0);
   const activeUrl = urls[index] || null;
   const hasMultiple = urls.length > 1;
   const activeIsVideo = isVideoUrl(activeUrl);
+  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && fallbackItem?.media_type === 'story');
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -583,7 +596,10 @@ function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; 
   };
 
   return (
-    <div className="w-full bg-muted/40 aspect-square overflow-hidden relative">
+    <div className={cn(
+      'w-full bg-muted/40 overflow-hidden relative',
+      mode === 'detail' ? 'max-h-[76vh] rounded-lg' : isPortrait ? 'aspect-[9/16]' : 'aspect-square'
+    )}>
       {activeUrl ? (
         activeIsVideo ? (
           <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full object-cover bg-muted" />
@@ -592,13 +608,26 @@ function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; 
             <img
               src={activeUrl}
               alt={label}
-              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+              className={cn(
+                'w-full h-full transition-transform duration-300',
+                mode === 'detail' ? 'object-contain' : 'object-cover group-hover:scale-[1.02]'
+              )}
               loading="lazy"
             />
           </button>
         )
       ) : (
-        <button onClick={onOpen} className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</button>
+        <button onClick={onOpen} className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-muted/30">
+          <div className="w-full max-w-[180px] aspect-[9/16] rounded-2xl border border-border/70 bg-card shadow-sm flex flex-col justify-between p-4">
+            <div className="space-y-1 text-left">
+              <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
+              <p className="text-[10px] text-muted-foreground">Sponsored</p>
+            </div>
+            <p className="text-xs text-foreground/85 line-clamp-6 text-left">{fallbackItem?.primary_text || 'Story preview'}</p>
+            {fallbackItem?.cta && <span className="text-[10px] uppercase tracking-wide text-primary font-semibold text-left">{fallbackItem.cta}</span>}
+          </div>
+          <span className="text-xs text-muted-foreground">Story-formaat</span>
+        </button>
       )}
 
       {activeIsVideo && (
