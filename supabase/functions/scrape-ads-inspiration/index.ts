@@ -518,8 +518,10 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const mediaUrls = decodedVideo ? unique([decodedVideo, ...allMedia]) : allMedia;
     const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : "image");
 
-    const primaryText = pickPrimaryText(visibleLines);
-    const headline = pickHeadlineText(visibleLines, primaryText);
+    const pickedPrimaryText = pickPrimaryText(visibleLines);
+    const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
+    const primaryText = splitText.primaryText || pickedPrimaryText;
+    const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText);
     const description = pickDescriptionText(visibleLines, primaryText, headline);
     const hookText = extractHookText(primaryText || "");
 
@@ -538,6 +540,7 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       primary_text: primaryText,
       headline,
       description,
+      cta: splitText.cta,
       started_running: startedRunning,
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,
