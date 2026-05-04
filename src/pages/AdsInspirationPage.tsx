@@ -248,11 +248,6 @@ export default function AdsInspirationPage() {
     loadFavorites();
   }, [loadFavorites, items.length]);
 
-  const hookItems = useMemo(() => {
-    return items
-      .filter((item) => item.hook_text || item.is_hook_candidate)
-      .sort((a, b) => (a.hook_category || '').localeCompare(b.hook_category || ''));
-  }, [items]);
 
   const toggleFavorite = async (item: InspirationItem) => {
     const existing = favorites[item.id];
