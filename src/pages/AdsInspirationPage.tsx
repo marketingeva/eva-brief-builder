@@ -78,6 +78,12 @@ function isVideoUrl(url: string | null | undefined): boolean {
   return !!url && /\.mp4(?:[?&]|$)|video|playable_url/i.test(url);
 }
 
+function isPortraitMedia(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const dimensions = getPreviewDimensions(url);
+  return !!dimensions && dimensions.height > dimensions.width * 1.2;
+}
+
 function getDisplayTextParts(item: InspirationItem) {
   // The bottom-bar of a Meta ad has: <link title (headline)> + small <link description> + CTA button.
   // Map our fields directly so the card mirrors what users see in the Ad Library.
@@ -344,17 +350,12 @@ export default function AdsInspirationPage() {
           {previewItem && (
             <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0">
               <div className="bg-muted/30 p-4 flex items-center justify-center min-h-[420px] max-h-[82vh] overflow-auto">
-                {previewItem.video_url ? (
-                  <video src={previewItem.video_url} controls className="w-full rounded-lg bg-background" />
-                ) : getAdPreviewSrc(previewItem) ? (
-                  <img
-                    src={getAdPreviewSrc(previewItem) || ''}
-                    alt={previewItem.advertiser_name || 'Advertentie preview'}
-                    className="w-full h-auto object-contain rounded-lg"
-                  />
-                ) : (
-                  <div className="text-sm text-muted-foreground">Geen media-preview beschikbaar</div>
-                )}
+                <AdMediaFrame
+                  urls={getMediaUrls(previewItem)}
+                  label={previewItem.advertiser_name || 'Advertentie preview'}
+                  fallbackItem={previewItem}
+                  mode="detail"
+                />
               </div>
 
               <div className="p-6 space-y-4 max-h-[82vh] overflow-auto">
