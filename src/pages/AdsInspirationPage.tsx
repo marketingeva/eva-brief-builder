@@ -44,6 +44,7 @@ interface InspirationItem {
   hook_text?: string | null;
   hook_category?: string | null;
   is_hook_candidate?: boolean | null;
+  raw_payload?: Record<string, unknown> | null;
 }
 
 const PAGE_SIZE = 12;
@@ -84,14 +85,50 @@ function isPortraitMedia(url: string | null | undefined): boolean {
   return !!dimensions && dimensions.height > dimensions.width * 1.2;
 }
 
+function isDestinationLabel(value: string | null | undefined): boolean {
+  const text = (value || '').trim();
+  return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/|\b)/i.test(text) && !/[?]/.test(text);
+}
+
+function looksLikePrimaryText(value: string | null | undefined): boolean {
+  const text = (value || '').trim();
+  if (!text || isDestinationLabel(text)) return false;
+  return /[?]/.test(text) || /\b(?:jij|jouw|je|wil je|ben jij|word jij|zoek je|kom werken)\b/i.test(text);
+}
+
+function textFromRawPayload(raw: InspirationItem['raw_payload'], keys: string[]): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 function getDisplayTextParts(item: InspirationItem) {
-  // The bottom-bar of a Meta ad has: <link title (headline)> + small <link description> + CTA button.
-  // Map our fields directly so the card mirrors what users see in the Ad Library.
+  const rawDestination = textFromRawPayload(item.raw_payload, ['destination_label', 'link_caption', 'caption']);
+  const rawHeadline = textFromRawPayload(item.raw_payload, ['link_title', 'headline']);
+  const headlineIsDestination = isDestinationLabel(item.headline);
+  const descriptionLooksPrimary = looksLikePrimaryText(item.description);
+
+  // Repair older cached scrapes where Meta's order was captured as:
+  // link-preview description -> destination URL -> primary text.
+  if (headlineIsDestination && descriptionLooksPrimary) {
+    return {
+      primaryText: item.description,
+      destinationLabel: item.headline,
+      headline: rawHeadline && !isDestinationLabel(rawHeadline) ? rawHeadline : null,
+      description: item.primary_text,
+      cta: item.cta && !isDestinationLabel(item.cta) ? item.cta : null,
+    };
+  }
+
   return {
     primaryText: item.primary_text,
-    headline: item.headline,
+    destinationLabel: rawDestination || (headlineIsDestination ? item.headline : null),
+    headline: headlineIsDestination ? (rawHeadline && !isDestinationLabel(rawHeadline) ? rawHeadline : null) : item.headline,
     description: item.description,
-    cta: item.cta,
+    cta: item.cta && !isDestinationLabel(item.cta) ? item.cta : null,
   };
 }
 
