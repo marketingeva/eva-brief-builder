@@ -164,6 +164,8 @@ export default function AdsInspirationPage() {
   const [activeClient, setActiveClient] = useState<string>('global');
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const [activeQuery, setActiveQuery] = useState<string>(FIXED_QUERY);
+  const [queryInput, setQueryInput] = useState<string>(FIXED_QUERY);
 
   const loadFavorites = useCallback(async () => {
     const clientFilter = activeClient === 'global' ? null : activeClient;
@@ -175,11 +177,12 @@ export default function AdsInspirationPage() {
     setFavorites(map);
   }, [activeClient]);
 
-  const loadHub = useCallback(async (forceRefresh = false) => {
+  const loadHub = useCallback(async (forceRefresh = false, queryOverride?: string) => {
+    const queryToUse = (queryOverride ?? activeQuery).trim() || FIXED_QUERY;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('scrape-ads-inspiration', {
-        body: { forceRefresh, tab: activeTab },
+        body: { forceRefresh, tab: activeTab, query: queryToUse },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -193,7 +196,7 @@ export default function AdsInspirationPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, activeQuery]);
 
   useEffect(() => {
     (async () => {
@@ -202,7 +205,7 @@ export default function AdsInspirationPage() {
         supabase
           .from('inspiration_searches')
           .select('id, query, result_count, created_at, source_url')
-          .eq('query', FIXED_QUERY)
+          .eq('query', activeQuery)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -210,12 +213,19 @@ export default function AdsInspirationPage() {
       setClients(cs || []);
       if (latest) setSearch(latest as SearchRow);
     })();
-  }, []);
+  }, [activeQuery]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     loadHub(false);
   }, [loadHub]);
+
+  const submitQuery = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const next = queryInput.trim();
+    if (!next || next === activeQuery) return;
+    setActiveQuery(next);
+  };
 
   useEffect(() => {
     loadFavorites();
