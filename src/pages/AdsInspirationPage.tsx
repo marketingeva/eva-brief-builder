@@ -327,7 +327,7 @@ export default function AdsInspirationPage() {
         </div>
       </div>
 
-      <div className="glass rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="rounded-2xl border border-border/60 bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           {([
             { key: 'ad-library', label: 'Ad Library' },
@@ -348,74 +348,73 @@ export default function AdsInspirationPage() {
           ))}
         </div>
 
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <BadgeInfo className="h-3.5 w-3.5" />
-          {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
-        </div>
+        {activeTab === 'ad-library' && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <BadgeInfo className="h-3.5 w-3.5" />
+            {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
+          </div>
+        )}
       </div>
 
-      <section className="glass rounded-3xl p-5 space-y-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
-            <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
-          </div>
-          {search?.source_url && (
-            <a href={search.source_url} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm" className="rounded-full text-xs">
-                <ExternalLink className="h-3 w-3 mr-1" /> Open bron
-              </Button>
-            </a>
-          )}
-        </div>
+      <section className="rounded-3xl border border-border/60 bg-card p-5 space-y-4">
+        {activeTab === 'ad-library' ? (
+          <>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
+                <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
+              </div>
+              {search?.source_url && (
+                <a href={search.source_url} target="_blank" rel="noreferrer">
+                  <Button variant="outline" size="sm" className="rounded-full text-xs">
+                    <ExternalLink className="h-3 w-3 mr-1" /> Open bron
+                  </Button>
+                </a>
+              )}
+            </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {Array.from({ length: activeTab === 'hooks' ? 6 : 8 }).map((_, i) => (
-              <Skeleton key={i} className={cn('rounded-2xl', activeTab === 'hooks' ? 'h-[220px]' : 'h-[520px]')} />
-            ))}
-          </div>
-        ) : activeTab === 'ad-library' ? (
-          items.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-                {items.slice(0, visibleCount).map((item) => (
-                  <AdLibraryCard
-                    key={item.id}
-                    item={item}
-                    isFavorite={!!favorites[item.id]}
-                    onToggleFavorite={() => toggleFavorite(item)}
-                    onPreview={() => setPreviewItem(item)}
-                  />
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="rounded-2xl h-[520px]" />
                 ))}
               </div>
-              {visibleCount < items.length && (
-                <div className="flex justify-center pt-4">
-                  <Button
-                    variant="outline"
-                    className="rounded-full text-xs"
-                    onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
-                  >
-                    Meer laden ({items.length - visibleCount})
-                  </Button>
+            ) : items.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+                  {items.slice(0, visibleCount).map((item) => (
+                    <AdLibraryCard
+                      key={item.id}
+                      item={item}
+                      isFavorite={!!favorites[item.id]}
+                      onToggleFavorite={() => toggleFavorite(item)}
+                      onPreview={() => setPreviewItem(item)}
+                    />
+                  ))}
                 </div>
-              )}
-            </>
-          ) : (
-            <EmptyState label="Geen advertenties gevonden" />
-          )
-        ) : hookItems.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {hookItems.map((item) => (
-              <HookCard
-                key={item.id}
-                item={item}
-                onOpen={() => setPreviewItem(item)}
-              />
-            ))}
-          </div>
+                {visibleCount < items.length && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      className="rounded-full text-xs"
+                      onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                    >
+                      Meer laden ({items.length - visibleCount})
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <EmptyState label="Geen advertenties gevonden" />
+            )}
+          </>
         ) : (
-          <EmptyState label="Nog geen hooks afgeleid uit deze advertenties" />
+          <HooksGenerator
+            loading={hooksLoading}
+            hooks={generatedHooks}
+            role={hooksRole}
+            onGenerate={generateHooks}
+          />
         )}
       </section>
 
