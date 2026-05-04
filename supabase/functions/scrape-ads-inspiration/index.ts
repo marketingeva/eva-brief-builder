@@ -438,11 +438,12 @@ serve(async (req) => {
           .order("created_at", { ascending: true });
 
         const cachedItems = items || [];
-        if (cachedItems.length > 0) {
+        if (cachedItems.length > 0 && !hasBadCachedScrape(cachedItems)) {
           return new Response(JSON.stringify({ search: cached, items: cachedItems, cached: true, tab: wantedTab }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+        if (cachedItems.length > 0) console.warn("Skipping stale inspiration cache with logo/media or boilerplate text artifacts");
       }
     }
 
