@@ -133,7 +133,7 @@ function extractImageCandidates(chunk: string): string[] {
 }
 
 function isBoilerplateText(text: string): boolean {
-  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Niet beschikbaar|Onbekend|Meer informatie)$/i.test(text)
+  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
     || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text);
 }
