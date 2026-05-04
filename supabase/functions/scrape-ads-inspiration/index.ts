@@ -257,6 +257,7 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
     const resp = await fetch(snapshotUrl, {
       headers: {
         "user-agent": "Mozilla/5.0 (compatible; LovableBot/1.0)",
+        "accept-language": "nl-NL,nl;q=0.9,en;q=0.8",
       },
     });
 
@@ -269,18 +270,27 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
     const ogImage = html.match(/property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const ogVideo = html.match(/property=["']og:video(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const posterImage = html.match(/property=["']og:image:url["'][^>]+content=["']([^"']+)["']/i)?.[1];
-    const headline = html.match(/property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
-    const description = html.match(/property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const videoTag = html.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
     const imgCandidates = extractImageCandidates(html);
-    const bestImage = pickAdMediaUrl([ogImage || "", posterImage || "", ...imgCandidates].filter(Boolean));
+
+    // Collect all valid creative media URLs (deduped + scored)
+    const allMediaUrls = unique([ogImage || "", posterImage || "", ...imgCandidates].filter(Boolean).map(decodeScrapedUrl))
+      .map((url) => ({ url, score: mediaCandidateScore(url) }))
+      .filter((c) => c.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((c) => c.url);
+
+    const bestImage = allMediaUrls[0];
+    const videoUrl = decodeHtml(ogVideo || videoTag || "") || undefined;
+    const mediaUrls = videoUrl ? unique([videoUrl, ...allMediaUrls]) : allMediaUrls;
+    const mediaType = videoUrl ? "video" : (allMediaUrls.length > 1 ? "carousel" : "image");
 
     return {
       image_url: bestImage,
       media_preview_url: bestImage,
-      video_url: decodeHtml(ogVideo || videoTag || "") || undefined,
-      headline: normalizeText(decodeHtml(headline || "")) || undefined,
-      primary_text: normalizeText(decodeHtml(description || "")) || undefined,
+      media_urls: mediaUrls,
+      media_type: mediaType,
+      video_url: videoUrl,
       snapshot_url: snapshotUrl,
     };
   } catch (error) {
