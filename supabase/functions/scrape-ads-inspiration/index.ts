@@ -341,22 +341,24 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const advertiserUrl = advertiserMatch?.[1];
     const advertiserName = advertiserMatch ? stripTags(advertiserMatch[2]) : undefined;
 
-    const imgCandidates = Array.from(chunk.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)).map((m) => decodeHtml(m[1]));
-    const imageUrl = imgCandidates.find((url) => /scontent|fbcdn|jpg|png|webp/i.test(url));
+    const imgCandidates = extractImageCandidates(chunk);
+    const imageUrl = pickAdMediaUrl(imgCandidates);
+    const logoUrl = pickLogoUrl(imgCandidates);
     const videoUrl = chunk.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
 
     const textNodes = Array.from(chunk.matchAll(/<(?:div|span|p)[^>]*>([^<]{20,1600})<\/(?:div|span|p)>/gi))
       .map((m) => normalizeText(decodeHtml(m[1])))
       .filter((text) => text.length > 24)
-      .filter((text) => !/^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details)/i.test(text));
+      .filter((text) => !isBoilerplateText(text));
 
-    const primaryText = textNodes.sort((a, b) => b.length - a.length)[0];
+    const primaryText = pickPrimaryText(textNodes);
     const hookText = extractHookText(primaryText || "");
 
     items.push({
       external_id: externalId,
       advertiser_name: advertiserName,
       advertiser_page_url: advertiserUrl,
+      advertiser_logo_url: logoUrl,
       ad_library_url: `https://www.facebook.com/ads/library/?id=${externalId}`,
       snapshot_url: `https://www.facebook.com/ads/library/?id=${externalId}`,
       image_url: imageUrl,
