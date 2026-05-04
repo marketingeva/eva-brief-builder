@@ -630,14 +630,11 @@ function AdMediaFrame({
   const hasMultiple = urls.length > 1;
   const activeIsVideo = isVideoUrl(activeUrl);
   const isStory = fallbackItem?.media_type === 'story';
-  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && isStory);
-  // Default Meta feed creative is 4:5 portrait; use 9:16 voor portrait/story media met écht beeld.
-  // Bij story-fallback zonder media gebruiken we een compactere 4:5 placeholder zodat
-  // de kaart niet onnodig hoog wordt en geen lege ruimte heeft.
-  const hasMedia = !!activeUrl;
-  const aspectClass = hasMedia
-    ? (isPortrait ? 'aspect-[9/16]' : 'aspect-[4/5]')
-    : 'aspect-[4/5]';
+  // Eén consistente frame voor alle kaarten zodat 1:1, 4:5 én 9:16 creatives netjes
+  // gecentreerd worden uitgelijnd binnen dezelfde grid-cel (zoals Meta Ad Library).
+  // We gebruiken 4:5 als basis en `object-contain` op een neutrale achtergrond,
+  // zodat geen enkel formaat wordt bijgesneden.
+  const aspectClass = 'aspect-[4/5]';
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -647,21 +644,18 @@ function AdMediaFrame({
 
   return (
     <div className={cn(
-      'w-full bg-muted/40 overflow-hidden relative',
-      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : aspectClass
+      'w-full overflow-hidden relative',
+      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg bg-muted/40' : cn(aspectClass, 'bg-muted/30')
     )}>
       {activeUrl ? (
         activeIsVideo ? (
-          <video src={activeUrl} controls playsInline preload="metadata" className={cn('w-full h-full bg-muted', mode === 'detail' ? 'object-contain' : 'object-cover')} />
+          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full bg-muted object-contain" />
         ) : (
           <button onClick={onOpen} className="block w-full h-full">
             <img
               src={activeUrl}
               alt={label}
-              className={cn(
-                'w-full h-full transition-transform duration-300',
-                mode === 'detail' ? 'object-contain' : 'object-cover group-hover:scale-[1.02]'
-              )}
+              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
               loading="lazy"
             />
           </button>
