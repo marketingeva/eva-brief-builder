@@ -630,11 +630,6 @@ function AdMediaFrame({
   const hasMultiple = urls.length > 1;
   const activeIsVideo = isVideoUrl(activeUrl);
   const isStory = fallbackItem?.media_type === 'story';
-  // Eén consistente frame voor alle kaarten zodat 1:1, 4:5 én 9:16 creatives netjes
-  // gecentreerd worden uitgelijnd binnen dezelfde grid-cel (zoals Meta Ad Library).
-  // We gebruiken 4:5 als basis en `object-contain` op een neutrale achtergrond,
-  // zodat geen enkel formaat wordt bijgesneden.
-  const aspectClass = 'aspect-[4/5]';
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -642,20 +637,31 @@ function AdMediaFrame({
     setIndex((nextIndex + total) % total);
   };
 
+  // Geen vaste aspect-ratio: de afbeelding bepaalt zelf de hoogte op basis van zijn
+  // natuurlijke verhouding, zodat 1:1, 4:5 en 9:16 creatives geen witruimte boven of
+  // onder krijgen. Voor video en story-fallback gebruiken we een sensible default.
+  const needsFixedAspect = !activeUrl || activeIsVideo;
+  const fallbackAspect = isStory ? 'aspect-[9/16]' : 'aspect-[4/5]';
+
   return (
     <div className={cn(
-      'w-full overflow-hidden relative',
-      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg bg-muted/40' : cn(aspectClass, 'bg-muted/30')
+      'w-full overflow-hidden relative bg-muted/30',
+      mode === 'detail'
+        ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg flex items-center justify-center'
+        : (needsFixedAspect ? fallbackAspect : '')
     )}>
       {activeUrl ? (
         activeIsVideo ? (
           <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full bg-muted object-contain" />
         ) : (
-          <button onClick={onOpen} className="block w-full h-full">
+          <button onClick={onOpen} className="block w-full">
             <img
               src={activeUrl}
               alt={label}
-              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.01]"
+              className={cn(
+                'w-full transition-transform duration-300 group-hover:scale-[1.01]',
+                mode === 'detail' ? 'max-h-[76vh] object-contain' : 'h-auto block'
+              )}
               loading="lazy"
             />
           </button>
