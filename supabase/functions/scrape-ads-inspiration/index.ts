@@ -41,6 +41,11 @@ interface ParsedItem {
   raw_payload?: Record<string, unknown>;
 }
 
+function isDestinationLabel(value: string | null | undefined): boolean {
+  const text = normalizeText(value || "");
+  return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/|\b)/i.test(text) && !/[?]/.test(text);
+}
+
 function normalizeText(value: string | null | undefined): string {
   return (value || "").replace(/\s+/g, " ").trim();
 }
@@ -202,6 +207,7 @@ function isShortCtaCaption(text: string): boolean {
 function isLikelyHeadline(text: string): boolean {
   const normalized = normalizeText(text);
   if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
+  if (isDestinationLabel(normalized)) return false;
   if (isShortCtaCaption(normalized)) return false;
   // Hard reject: Library/Bibliotheek IDs, dates, "Sponsored" banners
   if (/^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(normalized)) return false;
@@ -234,14 +240,20 @@ function pickCtaCaption(texts: string[], primaryText?: string, headline?: string
     .find((text) => isShortCtaCaption(text));
 }
 
-function pickDescriptionText(texts: string[], primaryText?: string, headline?: string, cta?: string): string | undefined {
+function pickDescriptionText(texts: string[], primaryText?: string, headline?: string, cta?: string, destinationLabel?: string): string | undefined {
   return unique(texts.map((text) => normalizeText(decodeHtml(text))))
-    .filter((text) => text !== primaryText && text !== headline && text !== cta)
+    .filter((text) => text !== primaryText && text !== headline && text !== cta && text !== destinationLabel)
     .filter((text) => text.length >= 18 && text.length <= 220)
-    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text))
+    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text) && !isDestinationLabel(text))
     // Description must NOT be a fragment of the primary text (often happens when body bullets get split)
     .filter((text) => !primaryText || !primaryText.toLowerCase().includes(text.toLowerCase()))
     .sort((a, b) => b.length - a.length)[0];
+}
+
+function pickDestinationLabel(texts: string[], primaryText?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText)
+    .find((text) => isDestinationLabel(text));
 }
 
 function inferAdvertiserName(texts: string[]): string | undefined {
@@ -559,9 +571,10 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const pickedPrimaryText = pickPrimaryText(visibleLines);
     const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
     const primaryText = splitText.primaryText || pickedPrimaryText;
+    const destinationLabel = pickDestinationLabel(visibleLines, primaryText);
     const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText, advertiserName);
     const cta = splitText.cta || pickCtaCaption(visibleLines, primaryText, headline);
-    const description = pickDescriptionText(visibleLines, primaryText, headline, cta);
+    const description = pickDescriptionText(visibleLines, primaryText, headline, cta, destinationLabel);
     const hookText = extractHookText(primaryText || "");
 
     items.push({
@@ -584,7 +597,7 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,
       is_hook_candidate: !!hookText,
-      raw_payload: { source: "listing_scrape" },
+      raw_payload: { source: "listing_scrape", destination_label: destinationLabel || null },
     });
   }
 

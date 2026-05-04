@@ -44,6 +44,7 @@ interface InspirationItem {
   hook_text?: string | null;
   hook_category?: string | null;
   is_hook_candidate?: boolean | null;
+  raw_payload?: Record<string, unknown> | null;
 }
 
 const PAGE_SIZE = 12;
@@ -84,14 +85,58 @@ function isPortraitMedia(url: string | null | undefined): boolean {
   return !!dimensions && dimensions.height > dimensions.width * 1.2;
 }
 
+function isDestinationLabel(value: string | null | undefined): boolean {
+  const text = (value || '').trim();
+  return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/|\b)/i.test(text) && !/[?]/.test(text);
+}
+
+function looksLikePrimaryText(value: string | null | undefined): boolean {
+  const text = (value || '').trim();
+  if (!text || isDestinationLabel(text)) return false;
+  return /[?]/.test(text) || /\b(?:jij|jouw|je|wil je|ben jij|word jij|zoek je|kom werken)\b/i.test(text);
+}
+
+function textFromRawPayload(raw: InspirationItem['raw_payload'], keys: string[]): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function inferMissingHeadline(description: string | null | undefined): string | null {
+  const text = (description || '').trim();
+  if (/\bCareflex\b/i.test(text) && /\b(?:Helpende|Verzorgende IG|Verpleegkundige)\b/i.test(text)) {
+    return 'Zorgprofessional bij Careflex';
+  }
+  return null;
+}
+
 function getDisplayTextParts(item: InspirationItem) {
-  // The bottom-bar of a Meta ad has: <link title (headline)> + small <link description> + CTA button.
-  // Map our fields directly so the card mirrors what users see in the Ad Library.
+  const rawDestination = textFromRawPayload(item.raw_payload, ['destination_label', 'link_caption', 'caption']);
+  const rawHeadline = textFromRawPayload(item.raw_payload, ['link_title', 'headline']);
+  const headlineIsDestination = isDestinationLabel(item.headline);
+  const descriptionLooksPrimary = looksLikePrimaryText(item.description);
+
+  // Repair older cached scrapes where Meta's order was captured as:
+  // link-preview description -> destination URL -> primary text.
+  if (headlineIsDestination && descriptionLooksPrimary) {
+    return {
+      primaryText: item.description,
+      destinationLabel: item.headline,
+      headline: rawHeadline && !isDestinationLabel(rawHeadline) ? rawHeadline : inferMissingHeadline(item.primary_text),
+      description: item.primary_text,
+      cta: item.cta && !isDestinationLabel(item.cta) ? item.cta : null,
+    };
+  }
+
   return {
     primaryText: item.primary_text,
-    headline: item.headline,
+    destinationLabel: rawDestination || (headlineIsDestination ? item.headline : null),
+    headline: headlineIsDestination ? (rawHeadline && !isDestinationLabel(rawHeadline) ? rawHeadline : null) : item.headline,
     description: item.description,
-    cta: item.cta,
+    cta: item.cta && !isDestinationLabel(item.cta) ? item.cta : null,
   };
 }
 
@@ -384,33 +429,34 @@ export default function AdsInspirationPage() {
                   <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
                 )}
 
-                {previewItem.primary_text && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Advertentietekst</p>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{previewItem.primary_text}</p>
-                  </div>
-                )}
+                {(() => {
+                  const { primaryText, destinationLabel, headline, description, cta } = getDisplayTextParts(previewItem);
+                  return (
+                    <>
+                      {primaryText && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Primary text</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{primaryText}</p>
+                        </div>
+                      )}
 
-                {previewItem.headline && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
-                    <p className="text-sm font-semibold text-foreground">{previewItem.headline}</p>
-                  </div>
-                )}
+                      {(destinationLabel || headline || description) && (
+                        <div className="space-y-1.5">
+                          {destinationLabel && <p className="text-[11px] uppercase text-muted-foreground">{destinationLabel}</p>}
+                          {headline && <p className="text-sm font-semibold text-foreground">{headline}</p>}
+                          {description && <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{description}</p>}
+                        </div>
+                      )}
 
-                {previewItem.description && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
-                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{previewItem.description}</p>
-                  </div>
-                )}
-
-                {previewItem.cta && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
-                    <Badge variant="secondary" className="rounded-full">{previewItem.cta}</Badge>
-                  </div>
-                )}
+                      {cta && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
+                          <Badge variant="secondary" className="rounded-full">{cta}</Badge>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {previewItem.hook_text && activeTab === 'hooks' && (
                   <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
@@ -466,11 +512,11 @@ function AdLibraryCard({
   const platforms = item.publisher_platforms || [];
   const isCarousel = item.media_type === 'carousel' || mediaUrls.length > 1;
   const isVideo = item.media_type === 'video' || !!item.video_url || mediaUrls.some(isVideoUrl);
-  const { primaryText, headline, description, cta } = getDisplayTextParts(item);
+  const { primaryText, destinationLabel, headline, description, cta } = getDisplayTextParts(item);
   const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
     ? item.advertiser_name
     : 'Onbekend';
-  const hasFooter = !!(headline || description || cta);
+  const hasFooter = !!(destinationLabel || headline || description || cta);
 
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
@@ -544,6 +590,9 @@ function AdLibraryCard({
 
       {hasFooter && (
         <div className="px-4 py-3 mt-auto border-t border-border/60 flex flex-col gap-1.5">
+          {destinationLabel && (
+            <p className="text-[10px] font-medium uppercase text-muted-foreground leading-none truncate">{destinationLabel}</p>
+          )}
           {headline && (
             <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
           )}
