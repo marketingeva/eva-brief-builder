@@ -451,8 +451,8 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
   }
 }
 
-async function fetchMetaArchiveItems(accessToken: string): Promise<ParsedItem[]> {
-  const resp = await fetch(buildMetaArchiveUrl(accessToken));
+async function fetchMetaArchiveItems(accessToken: string, query: string = FIXED_QUERY): Promise<ParsedItem[]> {
+  const resp = await fetch(buildMetaArchiveUrl(accessToken, query));
   const data = await resp.json();
   if (!resp.ok) throw new Error(data?.error?.message || `Meta archive ${resp.status}`);
 
