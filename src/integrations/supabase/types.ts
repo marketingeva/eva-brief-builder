@@ -1333,6 +1333,63 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_inspiration_hooks: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          hook_category: string | null
+          hook_text: string
+          id: string
+          location_id: string | null
+          location_label: string | null
+          notes: string | null
+          rationale: string | null
+          role_query: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          hook_category?: string | null
+          hook_text: string
+          id?: string
+          location_id?: string | null
+          location_label?: string | null
+          notes?: string | null
+          rationale?: string | null
+          role_query: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          hook_category?: string | null
+          hook_text?: string
+          id?: string
+          location_id?: string | null
+          location_label?: string | null
+          notes?: string | null
+          rationale?: string | null
+          role_query?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_inspiration_hooks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_inspiration_hooks_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "client_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

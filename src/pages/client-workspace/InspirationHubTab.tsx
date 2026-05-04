@@ -1,0 +1,182 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Sparkles, Heart, MapPin, Trash2, Bookmark } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface SavedHook {
+  id: string;
+  location_label: string | null;
+  role_query: string;
+  hook_text: string;
+  hook_category: string | null;
+  rationale: string | null;
+  created_at: string;
+}
+
+interface SavedAdItem {
+  favorite_id: string;
+  advertiser_name: string | null;
+  primary_text: string | null;
+  headline: string | null;
+  ad_library_url: string | null;
+  image_url: string | null;
+}
+
+export default function InspirationHubTab({ clientId }: { clientId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [hooks, setHooks] = useState<SavedHook[]>([]);
+  const [ads, setAds] = useState<SavedAdItem[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [{ data: hookRows }, { data: favs }] = await Promise.all([
+      supabase
+        .from('saved_inspiration_hooks')
+        .select('id, location_label, role_query, hook_text, hook_category, rationale, created_at')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('inspiration_favorites')
+        .select('id, item_id')
+        .eq('client_id', clientId),
+    ]);
+
+    setHooks((hookRows || []) as SavedHook[]);
+
+    const itemIds = [...new Set((favs || []).map((f: any) => f.item_id))];
+    if (itemIds.length === 0) {
+      setAds([]);
+    } else {
+      const { data: items } = await supabase
+        .from('inspiration_items')
+        .select('id, advertiser_name, primary_text, headline, ad_library_url, image_url')
+        .in('id', itemIds);
+      const itemMap = new Map<string, any>();
+      (items || []).forEach((it: any) => itemMap.set(it.id, it));
+      setAds(
+        (favs || [])
+          .map((f: any) => {
+            const it = itemMap.get(f.item_id);
+            return it ? { favorite_id: f.id, ...it } as SavedAdItem : null;
+          })
+          .filter(Boolean) as SavedAdItem[]
+      );
+    }
+
+    setLoading(false);
+  }, [clientId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const deleteHook = async (id: string) => {
+    const { error } = await supabase.from('saved_inspiration_hooks').delete().eq('id', id);
+    if (error) { toast.error('Verwijderen mislukt'); return; }
+    toast.success('Verwijderd');
+    load();
+  };
+
+  const deleteFav = async (id: string) => {
+    const { error } = await supabase.from('inspiration_favorites').delete().eq('id', id);
+    if (error) { toast.error('Verwijderen mislukt'); return; }
+    toast.success('Verwijderd');
+    load();
+  };
+
+  if (loading) {
+    return (
+      <div className="p-8 space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 space-y-8 max-w-[1440px] mx-auto">
+      <div>
+        <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Hooks en advertenties die je voor deze klant hebt opgeslagen.
+        </p>
+      </div>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Bookmark className="h-3.5 w-3.5 text-primary" /> Opgeslagen hooks
+          <span className="text-xs font-normal text-muted-foreground">({hooks.length})</span>
+        </h2>
+        {hooks.length === 0 ? (
+          <div className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">
+            Nog geen hooks bewaard voor deze klant. Ga naar Inspiration Hub om hooks te genereren en op te slaan.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {hooks.map((h) => (
+              <div key={h.id} className="rounded-2xl border border-border/60 bg-card p-5 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="secondary" className="rounded-full text-[11px]">{h.hook_category || 'Algemeen'}</Badge>
+                    <Badge variant="outline" className="rounded-full text-[10px]">
+                      <MapPin className="h-2.5 w-2.5 mr-1" /> {h.location_label || 'Alle locaties'}
+                    </Badge>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => deleteHook(h.id)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-base font-medium text-foreground leading-snug">{h.hook_text}</p>
+                {h.rationale && (
+                  <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/60 pt-2">{h.rationale}</p>
+                )}
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Functie: {h.role_query}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Heart className="h-3.5 w-3.5 text-primary" /> Opgeslagen advertenties
+          <span className="text-xs font-normal text-muted-foreground">({ads.length})</span>
+        </h2>
+        {ads.length === 0 ? (
+          <div className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">
+            Nog geen advertenties bewaard voor deze klant.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {ads.map((a) => (
+              <div key={a.favorite_id} className="rounded-2xl border border-border/60 bg-card p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground truncate">{a.advertiser_name || 'Onbekend'}</p>
+                  <Button variant="ghost" size="icon" onClick={() => deleteFav(a.favorite_id)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                {a.primary_text && (
+                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{a.primary_text}</p>
+                )}
+                {a.headline && (
+                  <p className="text-xs font-medium text-foreground line-clamp-2">{a.headline}</p>
+                )}
+                {a.ad_library_url && (
+                  <a href={a.ad_library_url} target="_blank" rel="noreferrer" className="text-[11px] text-primary hover:underline mt-auto">
+                    Open in Meta Ad Library →
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

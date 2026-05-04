@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
   CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
+  Bookmark, BookmarkCheck, Trash2, MapPin, Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
@@ -16,8 +19,14 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const FIXED_QUERY = 'Verzorgende IG';
+const GENERAL_CLIENT_VALUE = '__general__';
+const ALL_LOCATIONS_VALUE = '__all__';
 
-type HubTab = 'ad-library' | 'hooks';
+type HubTab = 'ad-library' | 'hooks' | 'saved';
+
+function normalizeHookText(text: string): string {
+  return (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 interface InspirationItem {
   id: string;
@@ -154,6 +163,30 @@ interface GeneratedHook {
   rationale?: string;
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface LocationOption {
+  id: string;
+  name: string;
+  city: string | null;
+}
+
+interface SavedHookRow {
+  id: string;
+  client_id: string | null;
+  location_id: string | null;
+  location_label: string | null;
+  role_query: string;
+  hook_text: string;
+  hook_category: string | null;
+  rationale: string | null;
+  created_at: string;
+  client?: { name: string } | null;
+}
+
 export default function AdsInspirationPage() {
   const [activeTab, setActiveTab] = useState<HubTab>('ad-library');
   const [loading, setLoading] = useState(false);
@@ -167,16 +200,83 @@ export default function AdsInspirationPage() {
   const [generatedHooks, setGeneratedHooks] = useState<GeneratedHook[]>([]);
   const [hooksLoading, setHooksLoading] = useState(false);
   const [hooksRole, setHooksRole] = useState<string>('');
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [locationsByClient, setLocationsByClient] = useState<Record<string, LocationOption[]>>({});
+  const [hookClient, setHookClient] = useState<string>(GENERAL_CLIENT_VALUE);
+  const [hookLocation, setHookLocation] = useState<string>(ALL_LOCATIONS_VALUE);
+  const [savedHooks, setSavedHooks] = useState<SavedHookRow[]>([]);
+  const [savedHookKeys, setSavedHookKeys] = useState<Set<string>>(new Set());
+  const [savedFavoriteItems, setSavedFavoriteItems] = useState<Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>>([]);
+
+
+  const resolvedClientId = hookClient === GENERAL_CLIENT_VALUE ? null : hookClient;
+  const resolvedLocationId = hookLocation === ALL_LOCATIONS_VALUE ? null : hookLocation;
+  const currentLocations = hookClient === GENERAL_CLIENT_VALUE ? [] : (locationsByClient[hookClient] || []);
 
   const loadFavorites = useCallback(async () => {
     const { data } = await supabase
       .from('inspiration_favorites')
-      .select('id, item_id, client_id')
-      .is('client_id', null);
+      .select('id, item_id, client_id');
     const map: Record<string, string> = {};
-    (data || []).forEach((f: any) => { map[f.item_id] = f.id; });
+    (data || []).forEach((f: any) => {
+      // Use a composite key so the same item can be favorited under different clients
+      const key = `${f.item_id}::${f.client_id || 'global'}`;
+      map[key] = f.id;
+    });
     setFavorites(map);
   }, []);
+
+  const loadClients = useCallback(async () => {
+    const { data } = await supabase.from('clients').select('id, name').order('name');
+    setClients((data || []) as ClientOption[]);
+  }, []);
+
+  const loadLocationsForClient = useCallback(async (clientId: string) => {
+    if (locationsByClient[clientId]) return;
+    const { data } = await supabase
+      .from('client_locations')
+      .select('id, name, city')
+      .eq('client_id', clientId)
+      .order('name');
+    setLocationsByClient((prev) => ({ ...prev, [clientId]: (data || []) as LocationOption[] }));
+  }, [locationsByClient]);
+
+  const loadSavedHooks = useCallback(async () => {
+    const { data } = await supabase
+      .from('saved_inspiration_hooks')
+      .select('id, client_id, location_id, location_label, role_query, hook_text, hook_category, rationale, created_at, client:clients(name)')
+      .order('created_at', { ascending: false });
+    const rows = (data || []) as SavedHookRow[];
+    setSavedHooks(rows);
+    setSavedHookKeys(new Set(rows.map((r) => `${r.client_id || 'global'}::${normalizeHookText(r.hook_text)}`)));
+  }, []);
+
+  const loadSavedFavoriteItems = useCallback(async () => {
+    const { data: favs } = await supabase
+      .from('inspiration_favorites')
+      .select('id, item_id, client_id, client:clients(name)')
+      .order('created_at', { ascending: false });
+    const itemIds = [...new Set((favs || []).map((f: any) => f.item_id))];
+    if (itemIds.length === 0) {
+      setSavedFavoriteItems([]);
+      return;
+    }
+    const { data: rawItems } = await supabase
+      .from('inspiration_items')
+      .select('*')
+      .in('id', itemIds);
+    const itemMap = new Map<string, InspirationItem>();
+    (rawItems || []).forEach((it: any) => itemMap.set(it.id, it as InspirationItem));
+    setSavedFavoriteItems(
+      (favs || [])
+        .map((f: any) => {
+          const item = itemMap.get(f.item_id);
+          return item ? { favorite_id: f.id, client_id: f.client_id, client: f.client, item } : null;
+        })
+        .filter(Boolean) as Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>
+    );
+  }, []);
+
 
   const generateHooks = useCallback(async (role: string) => {
     const trimmed = role.trim();
@@ -248,9 +348,24 @@ export default function AdsInspirationPage() {
     loadFavorites();
   }, [loadFavorites, items.length]);
 
+  useEffect(() => {
+    loadClients();
+    loadSavedHooks();
+    loadSavedFavoriteItems();
+  }, [loadClients, loadSavedHooks, loadSavedFavoriteItems]);
+
+  useEffect(() => {
+    if (hookClient !== GENERAL_CLIENT_VALUE) {
+      loadLocationsForClient(hookClient);
+    }
+    setHookLocation(ALL_LOCATIONS_VALUE);
+  }, [hookClient, loadLocationsForClient]);
+
+  const favoriteKeyFor = (itemId: string) => `${itemId}::${resolvedClientId || 'global'}`;
 
   const toggleFavorite = async (item: InspirationItem) => {
-    const existing = favorites[item.id];
+    const key = favoriteKeyFor(item.id);
+    const existing = favorites[key];
     if (existing) {
       const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
       if (error) {
@@ -259,15 +374,16 @@ export default function AdsInspirationPage() {
       }
       setFavorites((prev) => {
         const next = { ...prev };
-        delete next[item.id];
+        delete next[key];
         return next;
       });
+      loadSavedFavoriteItems();
       return;
     }
 
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: null })
+      .insert({ item_id: item.id, client_id: resolvedClientId })
       .select('id')
       .single();
 
@@ -276,9 +392,61 @@ export default function AdsInspirationPage() {
       return;
     }
 
-    setFavorites((prev) => ({ ...prev, [item.id]: data.id }));
-    toast.success('Bewaard');
+    setFavorites((prev) => ({ ...prev, [key]: data.id }));
+    const clientName = resolvedClientId ? clients.find((c) => c.id === resolvedClientId)?.name : null;
+    toast.success(clientName ? `Bewaard voor ${clientName}` : 'Bewaard');
+    loadSavedFavoriteItems();
   };
+
+  const saveHook = async (hook: GeneratedHook) => {
+    const locationLabel = resolvedLocationId
+      ? currentLocations.find((l) => l.id === resolvedLocationId)?.name || null
+      : (resolvedClientId ? 'Alle locaties' : null);
+
+    const { error } = await supabase
+      .from('saved_inspiration_hooks')
+      .insert({
+        client_id: resolvedClientId,
+        location_id: resolvedLocationId,
+        location_label: locationLabel,
+        role_query: hooksRole,
+        hook_text: hook.hook_text,
+        hook_category: hook.hook_category || null,
+        rationale: hook.rationale || null,
+      });
+
+    if (error) {
+      toast.error('Opslaan mislukt');
+      return;
+    }
+
+    const clientName = resolvedClientId ? clients.find((c) => c.id === resolvedClientId)?.name : null;
+    const ctxParts = [clientName || 'Algemeen', locationLabel].filter(Boolean);
+    toast.success(`Hook bewaard (${ctxParts.join(' · ')})`);
+    loadSavedHooks();
+  };
+
+  const deleteSavedHook = async (id: string) => {
+    const { error } = await supabase.from('saved_inspiration_hooks').delete().eq('id', id);
+    if (error) {
+      toast.error('Verwijderen mislukt');
+      return;
+    }
+    toast.success('Verwijderd');
+    loadSavedHooks();
+  };
+
+  const deleteSavedFavorite = async (favoriteId: string) => {
+    const { error } = await supabase.from('inspiration_favorites').delete().eq('id', favoriteId);
+    if (error) {
+      toast.error('Verwijderen mislukt');
+      return;
+    }
+    toast.success('Verwijderd');
+    loadFavorites();
+    loadSavedFavoriteItems();
+  };
+
 
   return (
     <div className="p-8 max-w-[1440px] mx-auto space-y-6 animate-fade-in">
@@ -288,10 +456,9 @@ export default function AdsInspirationPage() {
             <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {activeTab === 'ad-library'
-              ? <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>
-              : <>Confronterende hooks gegenereerd op basis van een functie</>
-            }
+            {activeTab === 'ad-library' && <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>}
+            {activeTab === 'hooks' && <>Confronterende hooks gegenereerd op basis van een functie</>}
+            {activeTab === 'saved' && <>Al je opgeslagen advertenties en hooks op één plek</>}
           </p>
         </div>
 
@@ -321,6 +488,7 @@ export default function AdsInspirationPage() {
           {([
             { key: 'ad-library', label: 'Ad Library' },
             { key: 'hooks', label: 'Hooks' },
+            { key: 'saved', label: 'Opgeslagen' },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -343,7 +511,46 @@ export default function AdsInspirationPage() {
             {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
           </div>
         )}
+        {activeTab === 'saved' && (
+          <div className="text-xs text-muted-foreground">
+            {savedHooks.length} hooks · {savedFavoriteItems.length} advertenties
+          </div>
+        )}
       </div>
+
+      {(activeTab === 'hooks' || activeTab === 'ad-library') && (
+        <div className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+            <Bookmark className="h-3.5 w-3.5" /> Opslaan voor
+          </div>
+          <Select value={hookClient} onValueChange={setHookClient}>
+            <SelectTrigger className="w-[220px] h-9 rounded-full text-xs">
+              <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hookClient !== GENERAL_CLIENT_VALUE && (
+            <Select value={hookLocation} onValueChange={setHookLocation}>
+              <SelectTrigger className="w-[240px] h-9 rounded-full text-xs">
+                <MapPin className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_LOCATIONS_VALUE}>Alle locaties</SelectItem>
+                {currentLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}{l.city ? ` · ${l.city}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
 
       <section className="rounded-3xl border border-border/60 bg-card p-5 space-y-4">
         {activeTab === 'ad-library' ? (
@@ -375,7 +582,7 @@ export default function AdsInspirationPage() {
                     <AdLibraryCard
                       key={item.id}
                       item={item}
-                      isFavorite={!!favorites[item.id]}
+                      isFavorite={!!favorites[favoriteKeyFor(item.id)]}
                       onToggleFavorite={() => toggleFavorite(item)}
                       onPreview={() => setPreviewItem(item)}
                     />
@@ -397,12 +604,31 @@ export default function AdsInspirationPage() {
               <EmptyState label="Geen advertenties gevonden" />
             )}
           </>
-        ) : (
+        ) : activeTab === 'hooks' ? (
           <HooksGenerator
             loading={hooksLoading}
             hooks={generatedHooks}
             role={hooksRole}
             onGenerate={generateHooks}
+            onSave={saveHook}
+            isSaved={(text) => savedHookKeys.has(`${resolvedClientId || 'global'}::${normalizeHookText(text)}`)}
+            saveContextLabel={
+              hookClient === GENERAL_CLIENT_VALUE
+                ? 'Algemeen'
+                : `${clients.find((c) => c.id === hookClient)?.name || 'Klant'}${
+                    hookLocation === ALL_LOCATIONS_VALUE
+                      ? ' · Alle locaties'
+                      : ` · ${currentLocations.find((l) => l.id === hookLocation)?.name || ''}`
+                  }`
+            }
+          />
+        ) : (
+          <SavedOverview
+            savedHooks={savedHooks}
+            savedFavoriteItems={savedFavoriteItems}
+            onDeleteHook={deleteSavedHook}
+            onDeleteFavorite={deleteSavedFavorite}
+            onPreview={(item) => setPreviewItem(item)}
           />
         )}
       </section>
@@ -758,11 +984,17 @@ function HooksGenerator({
   hooks,
   role,
   onGenerate,
+  onSave,
+  isSaved,
+  saveContextLabel,
 }: {
   loading: boolean;
   hooks: GeneratedHook[];
   role: string;
   onGenerate: (role: string) => void;
+  onSave: (hook: GeneratedHook) => void;
+  isSaved: (text: string) => boolean;
+  saveContextLabel: string;
 }) {
   const [input, setInput] = useState('');
 
@@ -806,33 +1038,168 @@ function HooksGenerator({
         </div>
       ) : hooks.length > 0 ? (
         <>
-          <p className="text-xs text-muted-foreground">
-            {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
-          </p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs text-muted-foreground">
+              {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <Bookmark className="h-3 w-3" /> Bewaarcontext: <span className="text-foreground font-medium">{saveContextLabel}</span>
+            </p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {hooks.map((h) => (
-              <div
-                key={h.id}
-                className="rounded-2xl border border-border/60 bg-background p-5 hover:border-border hover:shadow-md transition-all flex flex-col gap-3"
-              >
-                <Badge variant="secondary" className="rounded-full self-start text-[11px]">
-                  {h.hook_category || 'Algemeen'}
-                </Badge>
-                <p className="text-base font-medium text-foreground leading-snug flex-1">
-                  {h.hook_text}
-                </p>
-                {h.rationale && (
-                  <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/60">
-                    {h.rationale}
+            {hooks.map((h) => {
+              const saved = isSaved(h.hook_text);
+              return (
+                <div
+                  key={h.id}
+                  className="rounded-2xl border border-border/60 bg-background p-5 hover:border-border hover:shadow-md transition-all flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge variant="secondary" className="rounded-full text-[11px]">
+                      {h.hook_category || 'Algemeen'}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant={saved ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => onSave(h)}
+                      disabled={saved}
+                      className="rounded-full h-7 text-[11px] px-2.5"
+                    >
+                      {saved ? (
+                        <><BookmarkCheck className="h-3 w-3 mr-1" /> Bewaard</>
+                      ) : (
+                        <><Bookmark className="h-3 w-3 mr-1" /> Bewaar</>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-base font-medium text-foreground leading-snug flex-1">
+                    {h.hook_text}
                   </p>
-                )}
-              </div>
-            ))}
+                  {h.rationale && (
+                    <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/60">
+                      {h.rationale}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       ) : (
         <EmptyState label="Vul een functie in en genereer hooks om te starten" />
       )}
+    </div>
+  );
+}
+
+function SavedOverview({
+  savedHooks,
+  savedFavoriteItems,
+  onDeleteHook,
+  onDeleteFavorite,
+  onPreview,
+}: {
+  savedHooks: SavedHookRow[];
+  savedFavoriteItems: Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>;
+  onDeleteHook: (id: string) => void;
+  onDeleteFavorite: (id: string) => void;
+  onPreview: (item: InspirationItem) => void;
+}) {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> Opgeslagen hooks
+            <span className="text-xs font-normal text-muted-foreground">({savedHooks.length})</span>
+          </h2>
+        </div>
+        {savedHooks.length === 0 ? (
+          <EmptyState label="Nog geen hooks bewaard" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {savedHooks.map((h) => (
+              <div
+                key={h.id}
+                className="rounded-2xl border border-border/60 bg-background p-5 flex flex-col gap-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="secondary" className="rounded-full text-[11px]">
+                      {h.hook_category || 'Algemeen'}
+                    </Badge>
+                    <Badge variant="outline" className="rounded-full text-[10px]">
+                      <Building2 className="h-2.5 w-2.5 mr-1" /> {h.client?.name || 'Algemeen'}
+                    </Badge>
+                    {(h.location_label || h.client_id) && (
+                      <Badge variant="outline" className="rounded-full text-[10px]">
+                        <MapPin className="h-2.5 w-2.5 mr-1" /> {h.location_label || 'Alle locaties'}
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDeleteHook(h.id)}
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-base font-medium text-foreground leading-snug">{h.hook_text}</p>
+                {h.rationale && (
+                  <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/60 pt-2">{h.rationale}</p>
+                )}
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Functie: {h.role_query}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Heart className="h-3.5 w-3.5 text-primary" /> Opgeslagen advertenties
+          <span className="text-xs font-normal text-muted-foreground">({savedFavoriteItems.length})</span>
+        </h2>
+        {savedFavoriteItems.length === 0 ? (
+          <EmptyState label="Nog geen advertenties bewaard" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {savedFavoriteItems.map(({ favorite_id, client, item }) => (
+              <div key={favorite_id} className="rounded-2xl border border-border/60 bg-background p-4 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <Badge variant="outline" className="rounded-full text-[10px]">
+                    <Building2 className="h-2.5 w-2.5 mr-1" /> {client?.name || 'Algemeen'}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDeleteFavorite(favorite_id)}
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <button onClick={() => onPreview(item)} className="text-left space-y-2">
+                  <p className="text-sm font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
+                  {item.primary_text && (
+                    <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{item.primary_text}</p>
+                  )}
+                  {item.headline && (
+                    <p className="text-xs font-medium text-foreground line-clamp-2">{item.headline}</p>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
