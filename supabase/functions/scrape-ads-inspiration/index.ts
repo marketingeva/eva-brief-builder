@@ -338,8 +338,12 @@ serve(async (req) => {
 
     let parsed: ParsedItem[] = [];
     if (metaToken) {
-      parsed = await fetchMetaArchiveItems(metaToken);
-      console.log(`Fetched ${parsed.length} ads from Meta archive`);
+      try {
+        parsed = await fetchMetaArchiveItems(metaToken);
+        console.log(`Fetched ${parsed.length} ads from Meta archive`);
+      } catch (err) {
+        console.warn("Meta archive fetch failed, falling back to Firecrawl:", (err as Error).message);
+      }
     }
 
     if (parsed.length === 0 && firecrawlKey) {
