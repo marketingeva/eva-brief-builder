@@ -456,10 +456,9 @@ export default function AdsInspirationPage() {
             <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {activeTab === 'ad-library'
-              ? <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>
-              : <>Confronterende hooks gegenereerd op basis van een functie</>
-            }
+            {activeTab === 'ad-library' && <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>}
+            {activeTab === 'hooks' && <>Confronterende hooks gegenereerd op basis van een functie</>}
+            {activeTab === 'saved' && <>Al je opgeslagen advertenties en hooks op één plek</>}
           </p>
         </div>
 
@@ -489,6 +488,7 @@ export default function AdsInspirationPage() {
           {([
             { key: 'ad-library', label: 'Ad Library' },
             { key: 'hooks', label: 'Hooks' },
+            { key: 'saved', label: 'Opgeslagen' },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -511,7 +511,46 @@ export default function AdsInspirationPage() {
             {search ? `${search.result_count} advertenties opgeslagen` : 'Bron wordt geladen'}
           </div>
         )}
+        {activeTab === 'saved' && (
+          <div className="text-xs text-muted-foreground">
+            {savedHooks.length} hooks · {savedFavoriteItems.length} advertenties
+          </div>
+        )}
       </div>
+
+      {(activeTab === 'hooks' || activeTab === 'ad-library') && (
+        <div className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+            <Bookmark className="h-3.5 w-3.5" /> Opslaan voor
+          </div>
+          <Select value={hookClient} onValueChange={setHookClient}>
+            <SelectTrigger className="w-[220px] h-9 rounded-full text-xs">
+              <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hookClient !== GENERAL_CLIENT_VALUE && (
+            <Select value={hookLocation} onValueChange={setHookLocation}>
+              <SelectTrigger className="w-[240px] h-9 rounded-full text-xs">
+                <MapPin className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_LOCATIONS_VALUE}>Alle locaties</SelectItem>
+                {currentLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}{l.city ? ` · ${l.city}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
 
       <section className="rounded-3xl border border-border/60 bg-card p-5 space-y-4">
         {activeTab === 'ad-library' ? (
@@ -543,7 +582,7 @@ export default function AdsInspirationPage() {
                     <AdLibraryCard
                       key={item.id}
                       item={item}
-                      isFavorite={!!favorites[item.id]}
+                      isFavorite={!!favorites[favoriteKeyFor(item.id)]}
                       onToggleFavorite={() => toggleFavorite(item)}
                       onPreview={() => setPreviewItem(item)}
                     />
@@ -565,12 +604,31 @@ export default function AdsInspirationPage() {
               <EmptyState label="Geen advertenties gevonden" />
             )}
           </>
-        ) : (
+        ) : activeTab === 'hooks' ? (
           <HooksGenerator
             loading={hooksLoading}
             hooks={generatedHooks}
             role={hooksRole}
             onGenerate={generateHooks}
+            onSave={saveHook}
+            isSaved={(text) => savedHookKeys.has(`${resolvedClientId || 'global'}::${normalizeHookText(text)}`)}
+            saveContextLabel={
+              hookClient === GENERAL_CLIENT_VALUE
+                ? 'Algemeen'
+                : `${clients.find((c) => c.id === hookClient)?.name || 'Klant'}${
+                    hookLocation === ALL_LOCATIONS_VALUE
+                      ? ' · Alle locaties'
+                      : ` · ${currentLocations.find((l) => l.id === hookLocation)?.name || ''}`
+                  }`
+            }
+          />
+        ) : (
+          <SavedOverview
+            savedHooks={savedHooks}
+            savedFavoriteItems={savedFavoriteItems}
+            onDeleteHook={deleteSavedHook}
+            onDeleteFavorite={deleteSavedFavorite}
+            onPreview={(item) => setPreviewItem(item)}
           />
         )}
       </section>
