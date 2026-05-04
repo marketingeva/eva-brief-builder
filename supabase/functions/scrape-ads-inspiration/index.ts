@@ -41,6 +41,11 @@ interface ParsedItem {
   raw_payload?: Record<string, unknown>;
 }
 
+function isDestinationLabel(value: string | null | undefined): boolean {
+  const text = normalizeText(value || "");
+  return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/|\b)/i.test(text) && !/[?]/.test(text);
+}
+
 function normalizeText(value: string | null | undefined): string {
   return (value || "").replace(/\s+/g, " ").trim();
 }
@@ -202,6 +207,7 @@ function isShortCtaCaption(text: string): boolean {
 function isLikelyHeadline(text: string): boolean {
   const normalized = normalizeText(text);
   if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
+  if (isDestinationLabel(normalized)) return false;
   if (isShortCtaCaption(normalized)) return false;
   // Hard reject: Library/Bibliotheek IDs, dates, "Sponsored" banners
   if (/^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(normalized)) return false;
