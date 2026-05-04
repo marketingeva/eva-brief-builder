@@ -191,11 +191,21 @@ function splitCompositeAdText(text: string, advertiserName?: string): { primaryT
   };
 }
 
+// Short imperative CTAs like "Solliciteer nu!", "Solliciteer direct!", "Bekijk vacature"
+// They look like headlines but are really the link description / CTA caption.
+function isShortCtaCaption(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized || normalized.length > 60) return false;
+  return /^(?:solliciteer(?:\s+(?:nu|direct|hier|vandaag))?|bekijk\s+(?:vacature|hier|nu)|meer\s+informatie|lees\s+meer|aanmelden|sign\s+up|apply\s+now|learn\s+more|ontdek\s+(?:nu|hier|meer)|reageer\s+(?:nu|direct))[!.\s]*$/i.test(normalized);
+}
+
 function isLikelyHeadline(text: string): boolean {
   const normalized = normalizeText(text);
   if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
-  if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(normalized)) return true;
-  if (/^[A-ZÀ-Ý0-9].{6,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
+  if (isShortCtaCaption(normalized)) return false;
+  // Real headlines are link titles: brand/role-based, not a single imperative verb
+  if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek)\b/i.test(normalized) && normalized.length >= 12) return true;
+  if (/^[A-ZÀ-Ý0-9].{10,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
   return false;
 }
 
@@ -204,16 +214,25 @@ function pickHeadlineText(texts: string[], primaryText?: string): string | undef
     .filter((text) => text !== primaryText)
     .filter((text) => isLikelyHeadline(text))
     .sort((a, b) => {
-      const score = (text: string) => (/\b(werken bij|welkom bij|ontdek|vacature|solliciteer)\b/i.test(text) ? 100 : 0) + Math.max(0, 120 - text.length);
+      const score = (text: string) =>
+        (/\b(werken bij|welkom bij|ontdek|vacature)\b/i.test(text) ? 120 : 0)
+        + (/:/.test(text) ? 60 : 0)
+        + Math.min(80, text.length); // prefer longer, more descriptive titles
       return score(b) - score(a);
     })[0];
 }
 
-function pickDescriptionText(texts: string[], primaryText?: string, headline?: string): string | undefined {
+function pickCtaCaption(texts: string[], primaryText?: string, headline?: string): string | undefined {
   return unique(texts.map((text) => normalizeText(decodeHtml(text))))
     .filter((text) => text !== primaryText && text !== headline)
-    .filter((text) => text.length >= 24 && text.length <= 220)
-    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text))
+    .find((text) => isShortCtaCaption(text));
+}
+
+function pickDescriptionText(texts: string[], primaryText?: string, headline?: string, cta?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText && text !== headline && text !== cta)
+    .filter((text) => text.length >= 18 && text.length <= 220)
+    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text))
     .sort((a, b) => b.length - a.length)[0];
 }
 
@@ -237,7 +256,8 @@ function inferAdvertiserName(texts: string[]): string | undefined {
 function isBoilerplateText(text: string): boolean {
   return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Platformen|Categories|Categorieën|EU transparency|Transparantie voor de EU|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
-    || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text);
+    || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text)
+    || /^(?:gebruikt?\s+dit\s+advertentiemateriaal|use this asset|placeholder|test\s*tekst|test\s*ad|asset\s+feed)/i.test(text);
 }
 
 function isBoilerplateAdvertiserName(name: string | undefined | null): boolean {
