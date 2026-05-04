@@ -404,7 +404,7 @@ function AdLibraryCard({
   onToggleFavorite: () => void;
   onPreview: () => void;
 }) {
-  const previewSrc = item.media_preview_url || item.image_url;
+  const previewSrc = getAdPreviewSrc(item);
   const platforms = item.publisher_platforms || [];
 
   return (
