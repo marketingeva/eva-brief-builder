@@ -240,14 +240,20 @@ function pickCtaCaption(texts: string[], primaryText?: string, headline?: string
     .find((text) => isShortCtaCaption(text));
 }
 
-function pickDescriptionText(texts: string[], primaryText?: string, headline?: string, cta?: string): string | undefined {
+function pickDescriptionText(texts: string[], primaryText?: string, headline?: string, cta?: string, destinationLabel?: string): string | undefined {
   return unique(texts.map((text) => normalizeText(decodeHtml(text))))
-    .filter((text) => text !== primaryText && text !== headline && text !== cta)
+    .filter((text) => text !== primaryText && text !== headline && text !== cta && text !== destinationLabel)
     .filter((text) => text.length >= 18 && text.length <= 220)
-    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text))
+    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text) && !isDestinationLabel(text))
     // Description must NOT be a fragment of the primary text (often happens when body bullets get split)
     .filter((text) => !primaryText || !primaryText.toLowerCase().includes(text.toLowerCase()))
     .sort((a, b) => b.length - a.length)[0];
+}
+
+function pickDestinationLabel(texts: string[], primaryText?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText)
+    .find((text) => isDestinationLabel(text));
 }
 
 function inferAdvertiserName(texts: string[]): string | undefined {
