@@ -394,7 +394,7 @@ export default function AdsInspirationPage() {
         <DialogContent className="max-w-4xl p-0 overflow-hidden bg-background/95 backdrop-blur-xl">
           {previewItem && (
             <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0">
-              <div className="bg-muted/30 p-4 flex items-center justify-center min-h-[420px] max-h-[82vh] overflow-auto">
+      <div className="bg-muted/30 p-4 flex items-start justify-center max-h-[82vh] overflow-auto">
                 <AdMediaFrame
                   urls={getMediaUrls(previewItem)}
                   label={previewItem.advertiser_name || 'Advertentie preview'}
@@ -637,30 +637,29 @@ function AdMediaFrame({
     setIndex((nextIndex + total) % total);
   };
 
-  // Geen vaste aspect-ratio: de afbeelding bepaalt zelf de hoogte op basis van zijn
-  // natuurlijke verhouding, zodat 1:1, 4:5 en 9:16 creatives geen witruimte boven of
-  // onder krijgen. Voor video en story-fallback gebruiken we een sensible default.
+  // Geen vaste aspect-ratio voor afbeeldingen: de creative bepaalt zelf de hoogte,
+  // zodat 1:1, 4:5 en 9:16 zonder extra witruimte in de kaart staan.
   const needsFixedAspect = !activeUrl || activeIsVideo;
   const fallbackAspect = isStory ? 'aspect-[9/16]' : 'aspect-[4/5]';
 
   return (
     <div className={cn(
-      'w-full overflow-hidden relative bg-muted/30',
+      'w-full overflow-hidden relative',
       mode === 'detail'
-        ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg flex items-center justify-center'
-        : (needsFixedAspect ? fallbackAspect : '')
+        ? 'rounded-lg flex items-start justify-center'
+        : (needsFixedAspect ? `${fallbackAspect} bg-muted/30` : '')
     )}>
       {activeUrl ? (
         activeIsVideo ? (
           <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full bg-muted object-contain" />
         ) : (
-          <button onClick={onOpen} className="block w-full">
+            <button onClick={onOpen} className={cn('block w-full', mode === 'detail' && 'cursor-zoom-out')}>
             <img
               src={activeUrl}
               alt={label}
               className={cn(
-                'w-full transition-transform duration-300 group-hover:scale-[1.01]',
-                mode === 'detail' ? 'max-h-[76vh] object-contain' : 'h-auto block'
+                  'block transition-transform duration-300',
+                  mode === 'detail' ? 'max-h-[76vh] w-auto max-w-full' : 'w-full h-auto group-hover:scale-[1.01]'
               )}
               loading="lazy"
             />
