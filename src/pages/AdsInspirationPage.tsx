@@ -348,9 +348,24 @@ export default function AdsInspirationPage() {
     loadFavorites();
   }, [loadFavorites, items.length]);
 
+  useEffect(() => {
+    loadClients();
+    loadSavedHooks();
+    loadSavedFavoriteItems();
+  }, [loadClients, loadSavedHooks, loadSavedFavoriteItems]);
+
+  useEffect(() => {
+    if (hookClient !== GENERAL_CLIENT_VALUE) {
+      loadLocationsForClient(hookClient);
+    }
+    setHookLocation(ALL_LOCATIONS_VALUE);
+  }, [hookClient, loadLocationsForClient]);
+
+  const favoriteKeyFor = (itemId: string) => `${itemId}::${resolvedClientId || 'global'}`;
 
   const toggleFavorite = async (item: InspirationItem) => {
-    const existing = favorites[item.id];
+    const key = favoriteKeyFor(item.id);
+    const existing = favorites[key];
     if (existing) {
       const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
       if (error) {
@@ -359,15 +374,16 @@ export default function AdsInspirationPage() {
       }
       setFavorites((prev) => {
         const next = { ...prev };
-        delete next[item.id];
+        delete next[key];
         return next;
       });
+      loadSavedFavoriteItems();
       return;
     }
 
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: null })
+      .insert({ item_id: item.id, client_id: resolvedClientId })
       .select('id')
       .single();
 
@@ -376,9 +392,61 @@ export default function AdsInspirationPage() {
       return;
     }
 
-    setFavorites((prev) => ({ ...prev, [item.id]: data.id }));
-    toast.success('Bewaard');
+    setFavorites((prev) => ({ ...prev, [key]: data.id }));
+    const clientName = resolvedClientId ? clients.find((c) => c.id === resolvedClientId)?.name : null;
+    toast.success(clientName ? `Bewaard voor ${clientName}` : 'Bewaard');
+    loadSavedFavoriteItems();
   };
+
+  const saveHook = async (hook: GeneratedHook) => {
+    const locationLabel = resolvedLocationId
+      ? currentLocations.find((l) => l.id === resolvedLocationId)?.name || null
+      : (resolvedClientId ? 'Alle locaties' : null);
+
+    const { error } = await supabase
+      .from('saved_inspiration_hooks')
+      .insert({
+        client_id: resolvedClientId,
+        location_id: resolvedLocationId,
+        location_label: locationLabel,
+        role_query: hooksRole,
+        hook_text: hook.hook_text,
+        hook_category: hook.hook_category || null,
+        rationale: hook.rationale || null,
+      });
+
+    if (error) {
+      toast.error('Opslaan mislukt');
+      return;
+    }
+
+    const clientName = resolvedClientId ? clients.find((c) => c.id === resolvedClientId)?.name : null;
+    const ctxParts = [clientName || 'Algemeen', locationLabel].filter(Boolean);
+    toast.success(`Hook bewaard (${ctxParts.join(' · ')})`);
+    loadSavedHooks();
+  };
+
+  const deleteSavedHook = async (id: string) => {
+    const { error } = await supabase.from('saved_inspiration_hooks').delete().eq('id', id);
+    if (error) {
+      toast.error('Verwijderen mislukt');
+      return;
+    }
+    toast.success('Verwijderd');
+    loadSavedHooks();
+  };
+
+  const deleteSavedFavorite = async (favoriteId: string) => {
+    const { error } = await supabase.from('inspiration_favorites').delete().eq('id', favoriteId);
+    if (error) {
+      toast.error('Verwijderen mislukt');
+      return;
+    }
+    toast.success('Verwijderd');
+    loadFavorites();
+    loadSavedFavoriteItems();
+  };
+
 
   return (
     <div className="p-8 max-w-[1440px] mx-auto space-y-6 animate-fade-in">
