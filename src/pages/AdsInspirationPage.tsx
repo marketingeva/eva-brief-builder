@@ -262,7 +262,6 @@ export default function AdsInspirationPage() {
 
   const toggleFavorite = async (item: InspirationItem) => {
     const existing = favorites[item.id];
-    const clientFilter = activeClient === 'global' ? null : activeClient;
     if (existing) {
       const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
       if (error) {
@@ -279,7 +278,7 @@ export default function AdsInspirationPage() {
 
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: clientFilter })
+      .insert({ item_id: item.id, client_id: null })
       .select('id')
       .single();
 
@@ -289,7 +288,7 @@ export default function AdsInspirationPage() {
     }
 
     setFavorites((prev) => ({ ...prev, [item.id]: data.id }));
-    toast.success(activeClient === 'global' ? 'Bewaard' : `Bewaard voor ${clients.find((c) => c.id === activeClient)?.name}`);
+    toast.success('Bewaard');
   };
 
   return (
