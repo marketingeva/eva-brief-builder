@@ -598,11 +598,11 @@ function AdMediaFrame({
   return (
     <div className={cn(
       'w-full bg-muted/40 overflow-hidden relative',
-      mode === 'detail' ? 'max-h-[76vh] rounded-lg' : isPortrait ? 'aspect-[9/16]' : 'aspect-square'
+      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : isPortrait ? 'aspect-[9/16]' : 'aspect-square'
     )}>
       {activeUrl ? (
         activeIsVideo ? (
-          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full object-cover bg-muted" />
+          <video src={activeUrl} controls playsInline preload="metadata" className={cn('w-full h-full bg-muted', mode === 'detail' ? 'object-contain' : 'object-cover')} />
         ) : (
           <button onClick={onOpen} className="block w-full h-full">
             <img
