@@ -30,9 +30,11 @@ interface InspirationItem {
   ad_library_url: string | null;
   image_url: string | null;
   media_preview_url?: string | null;
+  media_urls?: string[] | null;
   video_url?: string | null;
   snapshot_url?: string | null;
   primary_text: string | null;
+  description?: string | null;
   external_id: string | null;
   started_running: string | null;
   headline?: string | null;
@@ -43,6 +45,8 @@ interface InspirationItem {
   hook_category?: string | null;
   is_hook_candidate?: boolean | null;
 }
+
+const PAGE_SIZE = 12;
 
 interface SearchRow {
   id: string;
