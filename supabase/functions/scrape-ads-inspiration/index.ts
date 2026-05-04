@@ -616,6 +616,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const forceRefresh = !!body.forceRefresh;
     const wantedTab = body.tab === "hooks" ? "hooks" : "ad-library";
+    const rawQuery = typeof body.query === "string" ? body.query.trim() : "";
+    const activeQuery = rawQuery || FIXED_QUERY;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -623,14 +625,14 @@ serve(async (req) => {
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
 
     const sb = createClient(supabaseUrl, serviceKey);
-    const sourceUrl = buildAdsLibraryUrl();
+    const sourceUrl = buildAdsLibraryUrl(activeQuery);
 
     if (!forceRefresh) {
       const since = new Date(Date.now() - CACHE_TTL_MS).toISOString();
       const { data: cached } = await sb
         .from("inspiration_searches")
         .select("id, query, ai_summary, result_count, created_at, source_url, ad_type, source_type, sort_mode")
-        .eq("query", FIXED_QUERY)
+        .eq("query", activeQuery)
         .eq("country", FIXED_COUNTRY)
         .eq("media_type", FIXED_MEDIA_TYPE)
         .eq("ad_type", FIXED_AD_TYPE)
@@ -661,7 +663,7 @@ serve(async (req) => {
     let parsed: ParsedItem[] = [];
     if (metaToken) {
       try {
-        parsed = await fetchMetaArchiveItems(metaToken);
+        parsed = await fetchMetaArchiveItems(metaToken, activeQuery);
         console.log(`Fetched ${parsed.length} ads from Meta archive`);
       } catch (err) {
         console.warn("Meta archive fetch failed, falling back to Firecrawl:", (err as Error).message);
