@@ -551,7 +551,7 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const pickedPrimaryText = pickPrimaryText(visibleLines);
     const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
     const primaryText = splitText.primaryText || pickedPrimaryText;
-    const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText);
+    const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText, advertiserName);
     const cta = splitText.cta || pickCtaCaption(visibleLines, primaryText, headline);
     const description = pickDescriptionText(visibleLines, primaryText, headline, cta);
     const hookText = extractHookText(primaryText || "");
