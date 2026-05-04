@@ -300,23 +300,25 @@ async function fetchMetaArchiveItems(accessToken: string): Promise<ParsedItem[]>
     const title = Array.isArray(ad.ad_creative_link_titles) ? ad.ad_creative_link_titles.find(Boolean) : undefined;
     const description = Array.isArray(ad.ad_creative_link_descriptions) ? ad.ad_creative_link_descriptions.find(Boolean) : undefined;
     const caption = Array.isArray(ad.ad_creative_link_captions) ? ad.ad_creative_link_captions.find(Boolean) : undefined;
-    const primaryText = normalizeText([body, title, description, caption].filter(Boolean).join("\n\n"));
     const snapshotUrl = ad.ad_snapshot_url || (ad.id ? `https://www.facebook.com/ads/library/?id=${ad.id}` : undefined);
+
+    const advertiserName = isBoilerplateAdvertiserName(ad.page_name) ? undefined : normalizeText(ad.page_name);
 
     return {
       external_id: ad.id,
-      advertiser_name: ad.page_name,
+      advertiser_name: advertiserName,
       advertiser_page_url: ad.page_id ? `https://www.facebook.com/${ad.page_id}` : undefined,
       ad_library_url: snapshotUrl,
       snapshot_url: snapshotUrl,
-      primary_text: primaryText || undefined,
+      primary_text: normalizeText(body) || undefined,
       headline: normalizeText(title) || undefined,
+      description: normalizeText(description) || undefined,
       cta: normalizeText(caption) || undefined,
       started_running: ad.ad_delivery_start_time,
       publisher_platforms: Array.isArray(ad.publisher_platforms) ? ad.publisher_platforms : [],
       raw_payload: ad,
     };
-  }).filter((item) => item.external_id && (item.primary_text || item.advertiser_name));
+  }).filter((item) => item.external_id && (item.primary_text || item.headline || item.advertiser_name));
 
   const enrichedItems = await Promise.all(baseItems.map(async (item, index) => {
     const snapshotData = item.snapshot_url && index < 20 ? await enrichSnapshot(item.snapshot_url) : {};
