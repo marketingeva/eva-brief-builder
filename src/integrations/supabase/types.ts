@@ -1177,6 +1177,7 @@ export type Database = {
           advertiser_page_url: string | null
           created_at: string
           cta: string | null
+          description: string | null
           external_id: string | null
           headline: string | null
           hook_category: string | null
@@ -1186,6 +1187,7 @@ export type Database = {
           is_hook_candidate: boolean
           media_preview_url: string | null
           media_type: string | null
+          media_urls: string[] | null
           primary_text: string | null
           publisher_platforms: string[]
           raw_payload: Json
@@ -1202,6 +1204,7 @@ export type Database = {
           advertiser_page_url?: string | null
           created_at?: string
           cta?: string | null
+          description?: string | null
           external_id?: string | null
           headline?: string | null
           hook_category?: string | null
@@ -1211,6 +1214,7 @@ export type Database = {
           is_hook_candidate?: boolean
           media_preview_url?: string | null
           media_type?: string | null
+          media_urls?: string[] | null
           primary_text?: string | null
           publisher_platforms?: string[]
           raw_payload?: Json
@@ -1227,6 +1231,7 @@ export type Database = {
           advertiser_page_url?: string | null
           created_at?: string
           cta?: string | null
+          description?: string | null
           external_id?: string | null
           headline?: string | null
           hook_category?: string | null
@@ -1236,6 +1241,7 @@ export type Database = {
           is_hook_candidate?: boolean
           media_preview_url?: string | null
           media_type?: string | null
+          media_urls?: string[] | null
           primary_text?: string | null
           publisher_platforms?: string[]
           raw_payload?: Json

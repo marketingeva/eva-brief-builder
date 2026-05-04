@@ -24,14 +24,17 @@ interface ParsedItem {
   ad_library_url?: string;
   image_url?: string;
   media_preview_url?: string;
+  media_urls?: string[];
   video_url?: string;
   snapshot_url?: string;
   primary_text?: string;
+  description?: string;
   headline?: string;
   cta?: string;
   external_id?: string;
   started_running?: string;
   publisher_platforms?: string[];
+  media_type?: string;
   hook_text?: string;
   hook_category?: string;
   is_hook_candidate?: boolean;
