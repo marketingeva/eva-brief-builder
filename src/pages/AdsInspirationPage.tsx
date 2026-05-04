@@ -421,33 +421,34 @@ export default function AdsInspirationPage() {
                   <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
                 )}
 
-                {previewItem.primary_text && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Advertentietekst</p>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{previewItem.primary_text}</p>
-                  </div>
-                )}
+                {(() => {
+                  const { primaryText, destinationLabel, headline, description, cta } = getDisplayTextParts(previewItem);
+                  return (
+                    <>
+                      {primaryText && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Primary text</p>
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{primaryText}</p>
+                        </div>
+                      )}
 
-                {previewItem.headline && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
-                    <p className="text-sm font-semibold text-foreground">{previewItem.headline}</p>
-                  </div>
-                )}
+                      {(destinationLabel || headline || description) && (
+                        <div className="space-y-1.5">
+                          {destinationLabel && <p className="text-[11px] uppercase text-muted-foreground">{destinationLabel}</p>}
+                          {headline && <p className="text-sm font-semibold text-foreground">{headline}</p>}
+                          {description && <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{description}</p>}
+                        </div>
+                      )}
 
-                {previewItem.description && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
-                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{previewItem.description}</p>
-                  </div>
-                )}
-
-                {previewItem.cta && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
-                    <Badge variant="secondary" className="rounded-full">{previewItem.cta}</Badge>
-                  </div>
-                )}
+                      {cta && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
+                          <Badge variant="secondary" className="rounded-full">{cta}</Badge>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {previewItem.hook_text && activeTab === 'hooks' && (
                   <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
