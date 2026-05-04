@@ -169,16 +169,19 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
 
   const badCount = items.filter((item) => {
     const text = typeof item.primary_text === "string" ? item.primary_text : "";
+    const advertiser = typeof item.advertiser_name === "string" ? item.advertiser_name : "";
     const media = typeof item.media_preview_url === "string"
       ? item.media_preview_url
       : typeof item.image_url === "string"
         ? item.image_url
         : "";
 
-    return (!!media && mediaCandidateScore(media) <= 0) || (!!text && isBoilerplateText(text));
+    return (!!media && mediaCandidateScore(media) <= 0)
+      || (!!text && isBoilerplateText(text))
+      || isBoilerplateAdvertiserName(advertiser);
   }).length;
 
-  return badCount > 0;
+  return badCount > Math.max(2, items.length * 0.3);
 }
 
 function buildAdsLibraryUrl(): string {
