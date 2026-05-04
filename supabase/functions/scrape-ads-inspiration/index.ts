@@ -152,13 +152,42 @@ function extractVisibleTextLines(chunk: string): string[] {
     .replace(/<br\s*\/?\s*>/gi, "\n")
     .replace(/\s(?:aria-label|alt|title)=["']([^"']{2,240})["']/gi, "\n$1\n");
 
-  return unique(stripTags(text)
+  return unique(decodeHtml(text.replace(/<[^>]+>/g, "\n"))
     .split(/\n+/)
-    .map((line) => normalizeText(line))
+    .map((line) => normalizeText(line.replace(/[\u200B-\u200D\uFEFF]/g, " ")))
     .filter((line) => line.length >= 2 && line.length <= 1800)
     .filter((line) => !/^https?:\/\//i.test(line))
     .filter((line) => !/^\d+$/.test(line))
     .filter((line) => !isBoilerplateText(line)));
+}
+
+function splitCompositeAdText(text: string, advertiserName?: string): { primaryText?: string; headline?: string; cta?: string } {
+  let value = normalizeText(text.replace(/[\u200B-\u200D\uFEFF]/g, " "));
+  if (!value) return {};
+
+  const headlineFromLink = value.match(/(?:FB\.ME|L\.FACEBOOK\.COM|HTTPS?:\/\/\S+)\s+(.{8,120}?)\s+(?:Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up)(?:\s|$)/i)?.[1];
+  const cta = value.match(/\b(Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up|Aanmelden)\b/i)?.[1];
+
+  value = value
+    .replace(/^(?:Bibliotheek-ID|Library ID|Ad Library ID)[:\s]*\d+\s*/i, "")
+    .replace(/^(?:Uitgevoerd vanaf|Gestart op|Started running on)\s+[^A-ZÀ-Ý]+/i, "")
+    .replace(/^(?:Platformen|Platforms?|Categorieën|Categories|Transparantie voor de EU|EU transparency|Vervolgkeuzemenu openen|Open dropdown|Advertentiegegevens bekijken|See ad details)\b\s*/i, "");
+
+  if (advertiserName) {
+    value = value.replace(new RegExp(`^${advertiserName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "");
+  }
+
+  value = value
+    .replace(/^(?:Sponsored|Gesponsord)\s*/i, "")
+    .replace(/\s+(?:FB\.ME|L\.FACEBOOK\.COM|HTTPS?:\/\/\S+)\s+.{8,160?}\s+(?:Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up|Aanmelden)(?=\s|$)[\s\S]*$/i, "")
+    .replace(/\s+(?:Actief|Active)\s*$/i, "")
+    .trim();
+
+  return {
+    primaryText: value && !isBoilerplateText(value) ? value : undefined,
+    headline: headlineFromLink ? normalizeText(headlineFromLink) : undefined,
+    cta: cta ? normalizeText(cta) : undefined,
+  };
 }
 
 function isLikelyHeadline(text: string): boolean {
