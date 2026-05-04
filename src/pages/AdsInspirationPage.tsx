@@ -637,29 +637,28 @@ function AdMediaFrame({
     setIndex((nextIndex + total) % total);
   };
 
-  // Geen vaste aspect-ratio voor afbeeldingen: de creative bepaalt zelf de hoogte,
-  // zodat 1:1, 4:5 en 9:16 zonder extra witruimte in de kaart staan.
-  const needsFixedAspect = !activeUrl || activeIsVideo;
-  const fallbackAspect = isStory ? 'aspect-[9/16]' : 'aspect-[4/5]';
+  // Vaste container-hoogte zoals Meta Ad Library: alle creatives (1:1, 4:5, 9:16)
+  // worden via object-contain in dezelfde frame-hoogte gepast.
+  const frameAspect = mode === 'card' ? 'aspect-[4/5]' : '';
 
   return (
     <div className={cn(
-      'w-full overflow-hidden relative',
+      'w-full overflow-hidden relative bg-muted/30',
       mode === 'detail'
-        ? 'rounded-lg flex items-start justify-center'
-        : (needsFixedAspect ? `${fallbackAspect} bg-muted/30` : '')
+        ? 'rounded-lg flex items-center justify-center max-h-[76vh]'
+        : `${frameAspect} flex items-center justify-center`
     )}>
       {activeUrl ? (
         activeIsVideo ? (
-          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full bg-muted object-contain" />
+          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full object-contain" />
         ) : (
-            <button onClick={onOpen} className={cn('block w-full', mode === 'detail' && 'cursor-zoom-out')}>
+          <button onClick={onOpen} className={cn('block w-full h-full', mode === 'detail' && 'cursor-zoom-out')}>
             <img
               src={activeUrl}
               alt={label}
               className={cn(
-                  'block transition-transform duration-300',
-                  mode === 'detail' ? 'max-h-[76vh] w-auto max-w-full' : 'w-full h-auto group-hover:scale-[1.01]'
+                'block w-full h-full object-contain transition-transform duration-300',
+                mode === 'detail' ? 'max-h-[76vh]' : 'group-hover:scale-[1.01]'
               )}
               loading="lazy"
             />
