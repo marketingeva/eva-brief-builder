@@ -154,6 +154,23 @@ function pickPrimaryText(texts: string[]): string | undefined {
     .sort((a, b) => b.score - a.score)[0]?.text;
 }
 
+function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
+  if (items.length === 0) return false;
+
+  const badCount = items.filter((item) => {
+    const text = typeof item.primary_text === "string" ? item.primary_text : "";
+    const media = typeof item.media_preview_url === "string"
+      ? item.media_preview_url
+      : typeof item.image_url === "string"
+        ? item.image_url
+        : "";
+
+    return (!!media && mediaCandidateScore(media) <= 0) || (!!text && isBoilerplateText(text));
+  }).length;
+
+  return badCount / items.length > 0.2;
+}
+
 function buildAdsLibraryUrl(): string {
   const params = new URLSearchParams();
   params.set("active_status", "active");
