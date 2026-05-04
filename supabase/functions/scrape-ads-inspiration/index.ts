@@ -203,6 +203,9 @@ function isLikelyHeadline(text: string): boolean {
   const normalized = normalizeText(text);
   if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
   if (isShortCtaCaption(normalized)) return false;
+  // Hard reject: Library/Bibliotheek IDs, dates, "Sponsored" banners
+  if (/^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(normalized)) return false;
+  if (/^(?:Sponsored|Gesponsord)\b/i.test(normalized)) return false;
   // Real headlines are link titles: brand/role-based, not a single imperative verb
   if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek)\b/i.test(normalized) && normalized.length >= 12) return true;
   if (/^[A-ZÀ-Ý0-9].{10,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
