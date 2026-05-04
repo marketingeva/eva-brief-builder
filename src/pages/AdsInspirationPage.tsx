@@ -582,8 +582,13 @@ function AdMediaFrame({
   const activeIsVideo = isVideoUrl(activeUrl);
   const isStory = fallbackItem?.media_type === 'story';
   const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && isStory);
-  // Default Meta feed creative is 4:5 portrait; use 9:16 voor story/portrait media.
-  const aspectClass = isPortrait || isStory ? 'aspect-[9/16]' : 'aspect-[4/5]';
+  // Default Meta feed creative is 4:5 portrait; use 9:16 voor portrait/story media met écht beeld.
+  // Bij story-fallback zonder media gebruiken we een compactere 4:5 placeholder zodat
+  // de kaart niet onnodig hoog wordt en geen lege ruimte heeft.
+  const hasMedia = !!activeUrl;
+  const aspectClass = hasMedia
+    ? (isPortrait ? 'aspect-[9/16]' : 'aspect-[4/5]')
+    : 'aspect-[4/5]';
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -615,20 +620,15 @@ function AdMediaFrame({
       ) : (
         <button
           onClick={onOpen}
-          className="w-full h-full flex flex-col justify-between p-5 text-left bg-gradient-to-br from-muted/50 via-muted/20 to-background"
+          className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-gradient-to-br from-muted/40 via-muted/20 to-background"
         >
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
-            <p className="text-[10px] text-muted-foreground">Sponsored · Story-formaat</p>
+          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <PlayCircle className="h-6 w-6 text-primary/70" />
           </div>
-          <p className="text-xs text-foreground/85 line-clamp-[10] leading-relaxed">
-            {fallbackItem?.primary_text || 'Story preview'}
-          </p>
-          {fallbackItem?.cta ? (
-            <span className="self-start text-[10px] uppercase tracking-wide text-primary font-semibold rounded-full bg-primary/10 px-2.5 py-1">
-              {fallbackItem.cta}
-            </span>
-          ) : <span />}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-foreground">{isStory ? 'Story-formaat' : 'Geen preview beschikbaar'}</p>
+            <p className="text-[11px] text-muted-foreground">Open in Meta Ad Library voor de volledige creatieve weergave</p>
+          </div>
         </button>
       )}
 
