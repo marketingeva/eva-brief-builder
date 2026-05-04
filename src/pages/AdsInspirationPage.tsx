@@ -387,16 +387,6 @@ export default function AdsInspirationPage() {
                   <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
                 )}
 
-                {previewItem.hook_text && (
-                  <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Hook</p>
-                    <p className="text-sm font-medium text-foreground">{previewItem.hook_text}</p>
-                    {previewItem.hook_category && (
-                      <p className="text-xs text-muted-foreground">Categorie: {previewItem.hook_category}</p>
-                    )}
-                  </div>
-                )}
-
                 {previewItem.primary_text && (
                   <div className="space-y-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Advertentietekst</p>
@@ -422,6 +412,16 @@ export default function AdsInspirationPage() {
                   <div className="space-y-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
                     <Badge variant="secondary" className="rounded-full">{previewItem.cta}</Badge>
+                  </div>
+                )}
+
+                {previewItem.hook_text && activeTab === 'hooks' && (
+                  <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Hook</p>
+                    <p className="text-sm font-medium text-foreground">{previewItem.hook_text}</p>
+                    {previewItem.hook_category && (
+                      <p className="text-xs text-muted-foreground">Categorie: {previewItem.hook_category}</p>
+                    )}
                   </div>
                 )}
 
