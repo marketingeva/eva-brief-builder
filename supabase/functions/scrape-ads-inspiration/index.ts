@@ -380,14 +380,38 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const externalId = idMatch[1];
 
     const startedRunning = chunk.match(/(?:Started running on|Gestart op|Uitgevoerd vanaf)\s+([^<\n]+?)(?:<|\n|$)/i)?.[1]?.trim();
-    const advertiserMatch = chunk.match(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/[^"'?#]+)["'][^>]*>([^<]{2,120})<\/a>/i);
-    const advertiserUrl = advertiserMatch?.[1];
-    const advertiserName = advertiserMatch ? stripTags(advertiserMatch[2]) : undefined;
+
+    // Try multiple advertiser candidates - prefer non-boilerplate page links
+    const advertiserCandidates: Array<{ name: string; url?: string }> = [];
+    const fbLinkMatches = Array.from(chunk.matchAll(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/(?!ads\/library)[^"'?#]+)["'][^>]*>([^<]{2,120})<\/a>/gi));
+    for (const m of fbLinkMatches) {
+      const name = stripTags(m[2]);
+      if (!isBoilerplateAdvertiserName(name)) {
+        advertiserCandidates.push({ name, url: m[1] });
+      }
+    }
+    // Fallback: <strong>/<h?> near "Sponsored"/"Gesponsord"
+    const strongMatch = chunk.match(/<(?:strong|h[1-6]|span|div)[^>]*>([^<]{2,80})<\/(?:strong|h[1-6]|span|div)>\s*<[^>]*>\s*(?:Sponsored|Gesponsord)/i);
+    if (strongMatch) {
+      const name = stripTags(strongMatch[1]);
+      if (!isBoilerplateAdvertiserName(name)) advertiserCandidates.push({ name });
+    }
+    const advertiser = advertiserCandidates[0];
+    const advertiserName = advertiser?.name;
+    const advertiserUrl = advertiser?.url;
 
     const imgCandidates = extractImageCandidates(chunk);
-    const imageUrl = pickAdMediaUrl(imgCandidates);
+    const allMedia = unique(imgCandidates.map(decodeScrapedUrl))
+      .map((url) => ({ url, score: mediaCandidateScore(url) }))
+      .filter((c) => c.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((c) => c.url);
+    const imageUrl = allMedia[0];
     const logoUrl = pickLogoUrl(imgCandidates);
     const videoUrl = chunk.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
+    const decodedVideo = decodeHtml(videoUrl || "") || undefined;
+    const mediaUrls = decodedVideo ? unique([decodedVideo, ...allMedia]) : allMedia;
+    const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : "image");
 
     const textNodes = Array.from(chunk.matchAll(/<(?:div|span|p)[^>]*>([^<]{20,1600})<\/(?:div|span|p)>/gi))
       .map((m) => normalizeText(decodeHtml(m[1])))
@@ -406,7 +430,9 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       snapshot_url: `https://www.facebook.com/ads/library/?id=${externalId}`,
       image_url: imageUrl,
       media_preview_url: imageUrl,
-      video_url: decodeHtml(videoUrl || "") || undefined,
+      media_urls: mediaUrls,
+      media_type: mediaType,
+      video_url: decodedVideo,
       primary_text: primaryText,
       started_running: startedRunning,
       hook_text: hookText || undefined,
