@@ -673,6 +673,31 @@ serve(async (req) => {
 
       const rawHtml: string = fcData.data?.rawHtml || fcData.rawHtml || "";
       parsed = parseAdsFromHtml(rawHtml);
+
+      // For ads where the listing scrape didn't yield any media (e.g. story/video formats),
+      // try fetching the snapshot card to extract og:image / og:video.
+      const enrichTargets = parsed
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.snapshot_url && (!item.image_url || (item.media_urls?.length || 0) === 0))
+        .slice(0, 12);
+      const enriched = await Promise.all(
+        enrichTargets.map(({ item, index }) =>
+          enrichSnapshot(item.snapshot_url!).then((data) => ({ index, data }))
+        ),
+      );
+      for (const { index, data } of enriched) {
+        const current = parsed[index];
+        parsed[index] = {
+          ...current,
+          image_url: current.image_url || data.image_url,
+          media_preview_url: current.media_preview_url || data.media_preview_url || data.image_url,
+          media_urls: (current.media_urls && current.media_urls.length > 0)
+            ? current.media_urls
+            : (data.media_urls || []),
+          media_type: current.media_type || data.media_type,
+          video_url: current.video_url || data.video_url,
+        };
+      }
     }
 
     const { data: searchRow, error: searchErr } = await sb
