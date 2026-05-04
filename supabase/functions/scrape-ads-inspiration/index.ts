@@ -735,7 +735,7 @@ serve(async (req) => {
     const { data: searchRow, error: searchErr } = await sb
       .from("inspiration_searches")
       .insert({
-        query: FIXED_QUERY,
+        query: activeQuery,
         country: FIXED_COUNTRY,
         media_type: FIXED_MEDIA_TYPE,
         ad_type: FIXED_AD_TYPE,
@@ -748,7 +748,7 @@ serve(async (req) => {
           country: FIXED_COUNTRY,
           is_targeted_country: false,
           media_type: FIXED_MEDIA_TYPE,
-          q: FIXED_QUERY,
+          q: activeQuery,
           search_type: "keyword_unordered",
           sort_mode: "total_impressions",
           sort_direction: "desc",
