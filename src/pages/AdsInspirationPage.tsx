@@ -78,6 +78,12 @@ function isVideoUrl(url: string | null | undefined): boolean {
   return !!url && /\.mp4(?:[?&]|$)|video|playable_url/i.test(url);
 }
 
+function isPortraitMedia(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const dimensions = getPreviewDimensions(url);
+  return !!dimensions && dimensions.height > dimensions.width * 1.2;
+}
+
 function getDisplayTextParts(item: InspirationItem) {
   // The bottom-bar of a Meta ad has: <link title (headline)> + small <link description> + CTA button.
   // Map our fields directly so the card mirrors what users see in the Ad Library.
@@ -344,17 +350,12 @@ export default function AdsInspirationPage() {
           {previewItem && (
             <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-0">
               <div className="bg-muted/30 p-4 flex items-center justify-center min-h-[420px] max-h-[82vh] overflow-auto">
-                {previewItem.video_url ? (
-                  <video src={previewItem.video_url} controls className="w-full rounded-lg bg-background" />
-                ) : getAdPreviewSrc(previewItem) ? (
-                  <img
-                    src={getAdPreviewSrc(previewItem) || ''}
-                    alt={previewItem.advertiser_name || 'Advertentie preview'}
-                    className="w-full h-auto object-contain rounded-lg"
-                  />
-                ) : (
-                  <div className="text-sm text-muted-foreground">Geen media-preview beschikbaar</div>
-                )}
+                <AdMediaFrame
+                  urls={getMediaUrls(previewItem)}
+                  label={previewItem.advertiser_name || 'Advertentie preview'}
+                  fallbackItem={previewItem}
+                  mode="detail"
+                />
               </div>
 
               <div className="p-6 space-y-4 max-h-[82vh] overflow-auto">
@@ -386,16 +387,6 @@ export default function AdsInspirationPage() {
                   <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
                 )}
 
-                {previewItem.hook_text && (
-                  <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Hook</p>
-                    <p className="text-sm font-medium text-foreground">{previewItem.hook_text}</p>
-                    {previewItem.hook_category && (
-                      <p className="text-xs text-muted-foreground">Categorie: {previewItem.hook_category}</p>
-                    )}
-                  </div>
-                )}
-
                 {previewItem.primary_text && (
                   <div className="space-y-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Advertentietekst</p>
@@ -421,6 +412,16 @@ export default function AdsInspirationPage() {
                   <div className="space-y-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
                     <Badge variant="secondary" className="rounded-full">{previewItem.cta}</Badge>
+                  </div>
+                )}
+
+                {previewItem.hook_text && activeTab === 'hooks' && (
+                  <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Hook</p>
+                    <p className="text-sm font-medium text-foreground">{previewItem.hook_text}</p>
+                    {previewItem.hook_category && (
+                      <p className="text-xs text-muted-foreground">Categorie: {previewItem.hook_category}</p>
+                    )}
                   </div>
                 )}
 
@@ -536,15 +537,15 @@ function AdLibraryCard({
         )}
       </div>
 
-      <div className="px-4 pb-3 min-h-[88px]">
+      <button type="button" onClick={onPreview} className="px-4 pb-3 min-h-[88px] text-left w-full hover:bg-muted/20 transition-colors">
         {primaryText ? (
           <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
         ) : (
           <p className="text-xs text-muted-foreground italic">Geen advertentietekst beschikbaar</p>
         )}
-      </div>
+      </button>
 
-      <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} />
+      <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} fallbackItem={item} />
 
       <div className="px-4 py-3 mt-auto border-t border-border/60 min-h-[68px] flex flex-col justify-center gap-1">
         {hasFooter ? (
@@ -569,11 +570,24 @@ function AdLibraryCard({
   );
 }
 
-function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; onOpen: () => void }) {
+function AdMediaFrame({
+  urls,
+  label,
+  onOpen,
+  fallbackItem,
+  mode = 'card',
+}: {
+  urls: string[];
+  label: string;
+  onOpen?: () => void;
+  fallbackItem?: InspirationItem;
+  mode?: 'card' | 'detail';
+}) {
   const [index, setIndex] = useState(0);
   const activeUrl = urls[index] || null;
   const hasMultiple = urls.length > 1;
   const activeIsVideo = isVideoUrl(activeUrl);
+  const isPortrait = isPortraitMedia(activeUrl) || (!activeUrl && fallbackItem?.media_type === 'story');
 
   const goTo = (nextIndex: number) => {
     const total = urls.length;
@@ -582,22 +596,38 @@ function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; 
   };
 
   return (
-    <div className="w-full bg-muted/40 aspect-square overflow-hidden relative">
+    <div className={cn(
+      'w-full bg-muted/40 overflow-hidden relative',
+      mode === 'detail' ? 'h-full min-h-[360px] max-h-[76vh] rounded-lg' : isPortrait ? 'aspect-[9/16]' : 'aspect-square'
+    )}>
       {activeUrl ? (
         activeIsVideo ? (
-          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full object-cover bg-muted" />
+          <video src={activeUrl} controls playsInline preload="metadata" className={cn('w-full h-full bg-muted', mode === 'detail' ? 'object-contain' : 'object-cover')} />
         ) : (
           <button onClick={onOpen} className="block w-full h-full">
             <img
               src={activeUrl}
               alt={label}
-              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+              className={cn(
+                'w-full h-full transition-transform duration-300',
+                mode === 'detail' ? 'object-contain' : 'object-cover group-hover:scale-[1.02]'
+              )}
               loading="lazy"
             />
           </button>
         )
       ) : (
-        <button onClick={onOpen} className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</button>
+        <button onClick={onOpen} className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-muted/30">
+          <div className="w-full max-w-[180px] aspect-[9/16] rounded-2xl border border-border/70 bg-card shadow-sm flex flex-col justify-between p-4">
+            <div className="space-y-1 text-left">
+              <p className="text-[11px] font-semibold text-foreground truncate">{label}</p>
+              <p className="text-[10px] text-muted-foreground">Sponsored</p>
+            </div>
+            <p className="text-xs text-foreground/85 line-clamp-6 text-left">{fallbackItem?.primary_text || 'Story preview'}</p>
+            {fallbackItem?.cta && <span className="text-[10px] uppercase tracking-wide text-primary font-semibold text-left">{fallbackItem.cta}</span>}
+          </div>
+          <span className="text-xs text-muted-foreground">Story-formaat</span>
+        </button>
       )}
 
       {activeIsVideo && (
