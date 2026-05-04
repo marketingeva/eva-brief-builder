@@ -469,11 +469,11 @@ function AdLibraryCard({
   onToggleFavorite: () => void;
   onPreview: () => void;
 }) {
-  const previewSrc = getAdPreviewSrc(item);
+  const mediaUrls = getMediaUrls(item);
   const platforms = item.publisher_platforms || [];
-  const carouselThumbs = (item.media_urls || []).filter((u) => u && u !== previewSrc).slice(0, 3);
-  const isCarousel = item.media_type === 'carousel' || carouselThumbs.length > 0;
-  const isVideo = item.media_type === 'video' || !!item.video_url;
+  const isCarousel = item.media_type === 'carousel' || mediaUrls.length > 1;
+  const isVideo = item.media_type === 'video' || !!item.video_url || mediaUrls.some(isVideoUrl);
+  const { primaryText, headline } = getDisplayTextParts(item);
   const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
     ? item.advertiser_name
     : 'Onbekend';
@@ -531,44 +531,18 @@ function AdLibraryCard({
         )}
       </div>
 
-      {item.primary_text && (
+      {primaryText && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-5">{item.primary_text}</p>
+          <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
         </div>
       )}
 
-      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden relative">
-        {previewSrc ? (
-          <img
-            src={previewSrc}
-            alt={advertiserDisplay}
-            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</div>
-        )}
-        {isVideo && (
-          <div className="absolute inset-0 bg-background/10 flex items-center justify-center">
-            <div className="h-12 w-12 rounded-full bg-background/80 border border-border/70 flex items-center justify-center">
-              <PlayCircle className="h-6 w-6 text-foreground" />
-            </div>
-          </div>
-        )}
-      </button>
+      <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} />
 
-      {isCarousel && carouselThumbs.length > 0 && (
-        <div className="px-4 pt-3 flex gap-1.5 overflow-x-auto">
-          {carouselThumbs.map((url) => (
-            <img key={url} src={url} alt="" className="h-12 w-12 rounded-md object-cover bg-muted flex-shrink-0" loading="lazy" />
-          ))}
-        </div>
-      )}
-
-      {(item.headline || item.description || item.cta) && (
+      {(headline || item.description || item.cta) && (
         <div className="px-4 py-3 mt-auto border-t border-border/60 space-y-1">
-          {item.headline && (
-            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{item.headline}</p>
+          {headline && (
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
           )}
           {item.description && (
             <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
