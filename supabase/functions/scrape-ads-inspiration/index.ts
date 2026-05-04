@@ -206,6 +206,7 @@ function isLikelyHeadline(text: string): boolean {
   // Hard reject: Library/Bibliotheek IDs, dates, "Sponsored" banners
   if (/^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(normalized)) return false;
   if (/^(?:Sponsored|Gesponsord)\b/i.test(normalized)) return false;
+  if (/^(?:Vervolgkeuzemenu openen|Dropdown menu openen|Open dropdown menu)$/i.test(normalized)) return false;
   // Real headlines are link titles: brand/role-based, not a single imperative verb
   if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek)\b/i.test(normalized) && normalized.length >= 12) return true;
   if (/^[A-ZÀ-Ý0-9].{10,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
@@ -261,7 +262,7 @@ function inferAdvertiserName(texts: string[]): string | undefined {
 }
 
 function isBoilerplateText(text: string): boolean {
-  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Platformen|Categories|Categorieën|EU transparency|Transparantie voor de EU|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
+  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Platformen|Categories|Categorieën|EU transparency|Transparantie voor de EU|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Vervolgkeuzemenu openen|Dropdown menu openen|Open dropdown menu|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
     || /^(Started running on|Gestart op|Uitgevoerd vanaf)/i.test(text)
     || /^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(text)
@@ -552,7 +553,7 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const logoUrl = pickLogoUrl(imgCandidates);
     const decodedVideo = extractVideoCandidates(chunk)[0];
     const mediaUrls = decodedVideo ? unique([decodedVideo, ...allMedia]) : allMedia;
-    const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : "image");
+    const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : (imageUrl ? "image" : "story"));
 
     const pickedPrimaryText = pickPrimaryText(visibleLines);
     const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
@@ -760,7 +761,7 @@ serve(async (req) => {
         headline: item.headline || null,
         cta: item.cta || null,
         media_urls: item.media_urls && item.media_urls.length > 0 ? item.media_urls : (item.media_preview_url ? [item.media_preview_url] : []),
-        media_type: item.media_type || (item.video_url ? "video" : "image"),
+        media_type: item.media_type || (item.video_url ? "video" : (item.image_url || item.media_preview_url ? "image" : "story")),
         external_id: item.external_id || null,
         started_running: item.started_running || null,
         publisher_platforms: unique(item.publisher_platforms || []),
