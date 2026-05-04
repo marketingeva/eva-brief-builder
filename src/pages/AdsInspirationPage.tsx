@@ -175,14 +175,34 @@ export default function AdsInspirationPage() {
   const [hooksRole, setHooksRole] = useState<string>('');
 
   const loadFavorites = useCallback(async () => {
-    const clientFilter = activeClient === 'global' ? null : activeClient;
-    let q = supabase.from('inspiration_favorites').select('id, item_id, client_id');
-    q = clientFilter ? q.eq('client_id', clientFilter) : q.is('client_id', null);
-    const { data } = await q;
+    const { data } = await supabase
+      .from('inspiration_favorites')
+      .select('id, item_id, client_id')
+      .is('client_id', null);
     const map: Record<string, string> = {};
     (data || []).forEach((f: any) => { map[f.item_id] = f.id; });
     setFavorites(map);
-  }, [activeClient]);
+  }, []);
+
+  const generateHooks = useCallback(async (role: string) => {
+    const trimmed = role.trim();
+    if (!trimmed) return;
+    setHooksLoading(true);
+    setHooksRole(trimmed);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-hooks-inspiration', {
+        body: { role: trimmed },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setGeneratedHooks(data.hooks || []);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || 'Hooks genereren mislukt');
+    } finally {
+      setHooksLoading(false);
+    }
+  }, []);
 
   const loadHub = useCallback(async (forceRefresh = false, queryOverride?: string) => {
     const queryToUse = (queryOverride ?? activeQuery).trim() || FIXED_QUERY;
