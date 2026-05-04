@@ -422,16 +422,7 @@ export default function AdsInspirationPage() {
                   </div>
                 )}
 
-                {previewItem.publisher_platforms && previewItem.publisher_platforms.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Platformen</p>
-                    <div className="flex flex-wrap gap-2">
-                      {previewItem.publisher_platforms.map((platform) => (
-                        <Badge key={platform} variant="secondary" className="rounded-full">{platform}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Platformen sectie verwijderd – meestal leeg */}
 
                 <div className="flex gap-2 pt-2 flex-wrap">
                   {previewItem.ad_library_url && (
