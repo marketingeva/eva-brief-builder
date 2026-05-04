@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { BookOpen, Radio, LayoutDashboard } from 'lucide-react';
+import { BookOpen, Radio, LayoutDashboard, Sparkles } from 'lucide-react';
 import OverviewTab from '@/pages/client-workspace/OverviewTab';
 import LearningTab from '@/pages/client-workspace/LearningTab';
 import LiveAdsTab from '@/pages/client-workspace/LiveAdsTab';
+import InspirationHubTab from '@/pages/client-workspace/InspirationHubTab';
 
 interface Client {
   id: string;
@@ -22,6 +23,7 @@ const tabs = [
   { key: 'overview', label: 'Overzicht', icon: LayoutDashboard },
   { key: 'learning', label: 'Learning', icon: BookOpen },
   { key: 'live-ads', label: 'Live Ads', icon: Radio },
+  { key: 'inspiration', label: 'Inspiration Hub', icon: Sparkles },
 ] as const;
 
 type TabKey = typeof tabs[number]['key'];
