@@ -135,8 +135,107 @@ function extractImageCandidates(chunk: string): string[] {
   return candidates;
 }
 
+function extractVideoCandidates(chunk: string): string[] {
+  const candidates: string[] = [];
+  Array.from(chunk.matchAll(/<video\b[^>]*(?:src|data-src)=["']([^"']+)["'][^>]*>/gi)).forEach((m) => candidates.push(m[1]));
+  Array.from(chunk.matchAll(/(?:playable_url|browser_native_hd_url|browser_native_sd_url|video_url|og:video(?::secure_url)?)\S{0,80}?["'](https?:\\?\/\\?\/[^"'<>\s]+)["']/gi)).forEach((m) => candidates.push(m[1]));
+  Array.from(chunk.matchAll(/https?:\\?\/\\?\/[^"'<>\s]+?\.mp4[^"'<>\s]*/gi)).forEach((m) => candidates.push(m[0]));
+
+  return unique(candidates.map(decodeScrapedUrl).map(decodeHtml)).filter((url) => /^https?:\/\//i.test(url));
+}
+
+function extractVisibleTextLines(chunk: string): string[] {
+  const text = chunk
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(?:div|p|span|h[1-6]|li|a|button)>/gi, "\n")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/\s(?:aria-label|alt|title)=["']([^"']{2,240})["']/gi, "\n$1\n");
+
+  return unique(decodeHtml(text.replace(/<[^>]+>/g, "\n"))
+    .split(/\n+/)
+    .map((line) => normalizeText(line.replace(/[\u200B-\u200D\uFEFF]/g, " ")))
+    .filter((line) => line.length >= 2 && line.length <= 1800)
+    .filter((line) => !/^https?:\/\//i.test(line))
+    .filter((line) => !/^\d+$/.test(line))
+    .filter((line) => !isBoilerplateText(line)));
+}
+
+function splitCompositeAdText(text: string, advertiserName?: string): { primaryText?: string; headline?: string; cta?: string } {
+  let value = normalizeText(text.replace(/[\u200B-\u200D\uFEFF]/g, " "));
+  if (!value) return {};
+
+  const headlineFromLink = value.match(/(?:FB\.ME|L\.FACEBOOK\.COM|HTTPS?:\/\/\S+)\s+(.{8,120}?)\s+(?:Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up)(?:\s|$)/i)?.[1];
+  const cta = value.match(/\b(Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up|Aanmelden)\b/i)?.[1];
+
+  value = value
+    .replace(/^(?:Bibliotheek-ID|Library ID|Ad Library ID)[:\s]*\d+\s*/i, "")
+    .replace(/^(?:Uitgevoerd vanaf|Gestart op|Started running on)\s+.*?(?=(?:Sponsored|Gesponsord|[A-ZÀ-Ý][A-Za-zÀ-ÿ0-9&'. -]{2,80}\s+(?:Sponsored|Gesponsord)))/i, "")
+    .replace(/^.*?(?:Advertentiegegevens bekijken|See ad details)\s*/i, "");
+
+  if (advertiserName) {
+    value = value.replace(new RegExp(`^.*?${advertiserName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:Sponsored|Gesponsord)?\\s*`, "i"), "");
+  }
+
+  value = value
+    .replace(/^(?:Sponsored|Gesponsord)\s*/i, "")
+    .replace(/^.*?(?:Sponsored|Gesponsord)\s*/i, "")
+    .replace(/\s+(?:FB\.ME|L\.FACEBOOK\.COM|HTTPS?:\/\/\S+)\s+.{8,160}?\s+(?:Learn More|Meer informatie|Apply Now|Solliciteren|Sign Up|Aanmelden)(?=\s|$)[\s\S]*$/i, "")
+    .replace(/\s+(?:Actief|Active)\s*$/i, "")
+    .trim();
+
+  return {
+    primaryText: value && !isBoilerplateText(value) ? value : undefined,
+    headline: headlineFromLink ? normalizeText(headlineFromLink) : undefined,
+    cta: cta ? normalizeText(cta) : undefined,
+  };
+}
+
+function isLikelyHeadline(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
+  if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(normalized)) return true;
+  if (/^[A-ZÀ-Ý0-9].{6,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
+  return false;
+}
+
+function pickHeadlineText(texts: string[], primaryText?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText)
+    .filter((text) => isLikelyHeadline(text))
+    .sort((a, b) => {
+      const score = (text: string) => (/\b(werken bij|welkom bij|ontdek|vacature|solliciteer)\b/i.test(text) ? 100 : 0) + Math.max(0, 120 - text.length);
+      return score(b) - score(a);
+    })[0];
+}
+
+function pickDescriptionText(texts: string[], primaryText?: string, headline?: string): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .filter((text) => text !== primaryText && text !== headline)
+    .filter((text) => text.length >= 24 && text.length <= 220)
+    .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text))
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+function inferAdvertiserName(texts: string[]): string | undefined {
+  const joined = unique(texts.map((text) => normalizeText(text))).join(" | ");
+  const patterns = [
+    /(?:werken bij|welkom bij|bij)\s+([A-ZÀ-Ý][A-Za-zÀ-ÿ0-9&'. -]{2,45})(?:[!?.|]|\s{2,}|$)/i,
+    /([A-ZÀ-Ý][A-Za-zÀ-ÿ0-9&'. -]{2,45})\s+(?:zoekt|vacature|thuiszorgvacatures)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = joined.match(pattern)?.[1];
+    if (!match) continue;
+    const name = normalizeText(match.replace(/\b(?:Gouda|Elst|Nijmegen Oost|Nederland)\b/gi, "").replace(/[|:,-]+$/g, ""));
+    if (!isBoilerplateAdvertiserName(name)) return name;
+  }
+
+  return undefined;
+}
+
 function isBoilerplateText(text: string): boolean {
-  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
+  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Platformen|Categories|Categorieën|EU transparency|Transparantie voor de EU|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
     || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text);
 }
@@ -150,8 +249,11 @@ function isBoilerplateAdvertiserName(name: string | undefined | null): boolean {
 
 function adTextScore(text: string): number {
   if (text.length < 24 || isBoilerplateText(text)) return -1;
+  if (isLikelyHeadline(text) && text.length < 90) return -1;
   let score = Math.min(text.length, 900);
   if (/(verzorgende\s*ig|helpende|verpleegkundige|zorg|thuiszorg|ouderenzorg|bewoner|cliënt|vacature|solliciteer|werken bij|kom werken|ben jij|word jij|jouw|jij)/i.test(text)) score += 450;
+  if (/\b(ben jij|word jij|jouw|jij|wil jij|zoek je|kom werken|maak jij|zorg jij)\b/i.test(text)) score += 220;
+  if (/\b(ontdek|welkom bij|werken bij)\b/i.test(text) && text.length < 120) score -= 320;
   if (/[!?]/.test(text)) score += 60;
   if (/https?:\/\//i.test(text)) score -= 150;
   return score;
@@ -178,6 +280,7 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
 
     return (!!media && mediaCandidateScore(media) <= 0)
       || (!!text && isBoilerplateText(text))
+      || /(?:Bibliotheek-ID|Library ID|Advertentiegegevens bekijken|See ad details|Vervolgkeuzemenu openen)/i.test(text)
       || isBoilerplateAdvertiserName(advertiser);
   }).length;
 
@@ -381,9 +484,11 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
 
     const startedRunning = chunk.match(/(?:Started running on|Gestart op|Uitgevoerd vanaf)\s+([^<\n]+?)(?:<|\n|$)/i)?.[1]?.trim();
 
-    // Try multiple advertiser candidates - prefer non-boilerplate page links
+    const visibleLines = extractVisibleTextLines(chunk);
+
+    // Try multiple advertiser candidates - prefer non-boilerplate page links/text near Sponsored
     const advertiserCandidates: Array<{ name: string; url?: string }> = [];
-    const fbLinkMatches = Array.from(chunk.matchAll(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/(?!ads\/library)[^"'?#]+)["'][^>]*>([^<]{2,120})<\/a>/gi));
+    const fbLinkMatches = Array.from(chunk.matchAll(/<a[^>]+href=["'](https?:\/\/(?:www\.)?facebook\.com\/(?!ads\/library|help\/|privacy\/|policies\/)[^"'?#]+)["'][^>]*>([\s\S]{2,400}?)<\/a>/gi));
     for (const m of fbLinkMatches) {
       const name = stripTags(m[2]);
       if (!isBoilerplateAdvertiserName(name)) {
@@ -396,6 +501,8 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       const name = stripTags(strongMatch[1]);
       if (!isBoilerplateAdvertiserName(name)) advertiserCandidates.push({ name });
     }
+    const inferredAdvertiser = inferAdvertiserName(visibleLines);
+    if (inferredAdvertiser) advertiserCandidates.push({ name: inferredAdvertiser });
     const advertiser = advertiserCandidates[0];
     const advertiserName = advertiser?.name;
     const advertiserUrl = advertiser?.url;
@@ -408,17 +515,15 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       .map((c) => c.url);
     const imageUrl = allMedia[0];
     const logoUrl = pickLogoUrl(imgCandidates);
-    const videoUrl = chunk.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
-    const decodedVideo = decodeHtml(videoUrl || "") || undefined;
+    const decodedVideo = extractVideoCandidates(chunk)[0];
     const mediaUrls = decodedVideo ? unique([decodedVideo, ...allMedia]) : allMedia;
     const mediaType = decodedVideo ? "video" : (allMedia.length > 1 ? "carousel" : "image");
 
-    const textNodes = Array.from(chunk.matchAll(/<(?:div|span|p)[^>]*>([^<]{20,1600})<\/(?:div|span|p)>/gi))
-      .map((m) => normalizeText(decodeHtml(m[1])))
-      .filter((text) => text.length > 24)
-      .filter((text) => !isBoilerplateText(text));
-
-    const primaryText = pickPrimaryText(textNodes);
+    const pickedPrimaryText = pickPrimaryText(visibleLines);
+    const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
+    const primaryText = splitText.primaryText || pickedPrimaryText;
+    const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText);
+    const description = pickDescriptionText(visibleLines, primaryText, headline);
     const hookText = extractHookText(primaryText || "");
 
     items.push({
@@ -434,6 +539,9 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       media_type: mediaType,
       video_url: decodedVideo,
       primary_text: primaryText,
+      headline,
+      description,
+      cta: splitText.cta,
       started_running: startedRunning,
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
-  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo,
+  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +72,30 @@ function getAdPreviewSrc(item: InspirationItem): string | null {
   const dimensions = getPreviewDimensions(src);
   if (dimensions && Math.max(dimensions.width, dimensions.height) <= 120) return null;
   return src;
+}
+
+function isVideoUrl(url: string | null | undefined): boolean {
+  return !!url && /\.mp4(?:[?&]|$)|video|playable_url/i.test(url);
+}
+
+function isHeadlineLike(text: string | null | undefined): boolean {
+  const value = (text || '').trim();
+  return value.length > 0 && value.length < 115 && /\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(value);
+}
+
+function getDisplayTextParts(item: InspirationItem) {
+  const primaryLooksLikeHeadline = !!item.primary_text && !item.headline && isHeadlineLike(item.primary_text);
+  return {
+    primaryText: primaryLooksLikeHeadline ? null : item.primary_text,
+    headline: item.headline || (primaryLooksLikeHeadline ? item.primary_text : null),
+  };
+}
+
+function getMediaUrls(item: InspirationItem): string[] {
+  const fallback = getAdPreviewSrc(item);
+  const urls = [item.video_url, ...(item.media_urls || []), fallback, item.image_url]
+    .filter(Boolean) as string[];
+  return [...new Set(urls)].filter((url) => isVideoUrl(url) || !getPreviewDimensions(url) || Math.max(getPreviewDimensions(url)!.width, getPreviewDimensions(url)!.height) > 120);
 }
 
 export default function AdsInspirationPage() {
@@ -445,11 +469,11 @@ function AdLibraryCard({
   onToggleFavorite: () => void;
   onPreview: () => void;
 }) {
-  const previewSrc = getAdPreviewSrc(item);
+  const mediaUrls = getMediaUrls(item);
   const platforms = item.publisher_platforms || [];
-  const carouselThumbs = (item.media_urls || []).filter((u) => u && u !== previewSrc).slice(0, 3);
-  const isCarousel = item.media_type === 'carousel' || carouselThumbs.length > 0;
-  const isVideo = item.media_type === 'video' || !!item.video_url;
+  const isCarousel = item.media_type === 'carousel' || mediaUrls.length > 1;
+  const isVideo = item.media_type === 'video' || !!item.video_url || mediaUrls.some(isVideoUrl);
+  const { primaryText, headline } = getDisplayTextParts(item);
   const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
     ? item.advertiser_name
     : 'Onbekend';
@@ -507,44 +531,18 @@ function AdLibraryCard({
         )}
       </div>
 
-      {item.primary_text && (
+      {primaryText && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-5">{item.primary_text}</p>
+          <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
         </div>
       )}
 
-      <button onClick={onPreview} className="block w-full bg-muted/40 aspect-square overflow-hidden relative">
-        {previewSrc ? (
-          <img
-            src={previewSrc}
-            alt={advertiserDisplay}
-            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</div>
-        )}
-        {isVideo && (
-          <div className="absolute inset-0 bg-background/10 flex items-center justify-center">
-            <div className="h-12 w-12 rounded-full bg-background/80 border border-border/70 flex items-center justify-center">
-              <PlayCircle className="h-6 w-6 text-foreground" />
-            </div>
-          </div>
-        )}
-      </button>
+      <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} />
 
-      {isCarousel && carouselThumbs.length > 0 && (
-        <div className="px-4 pt-3 flex gap-1.5 overflow-x-auto">
-          {carouselThumbs.map((url) => (
-            <img key={url} src={url} alt="" className="h-12 w-12 rounded-md object-cover bg-muted flex-shrink-0" loading="lazy" />
-          ))}
-        </div>
-      )}
-
-      {(item.headline || item.description || item.cta) && (
+      {(headline || item.description || item.cta) && (
         <div className="px-4 py-3 mt-auto border-t border-border/60 space-y-1">
-          {item.headline && (
-            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{item.headline}</p>
+          {headline && (
+            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
           )}
           {item.description && (
             <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
@@ -553,6 +551,81 @@ function AdLibraryCard({
             <p className="text-[11px] text-primary font-medium">{item.cta}</p>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function AdMediaFrame({ urls, label, onOpen }: { urls: string[]; label: string; onOpen: () => void }) {
+  const [index, setIndex] = useState(0);
+  const activeUrl = urls[index] || null;
+  const hasMultiple = urls.length > 1;
+  const activeIsVideo = isVideoUrl(activeUrl);
+
+  const goTo = (nextIndex: number) => {
+    const total = urls.length;
+    if (!total) return;
+    setIndex((nextIndex + total) % total);
+  };
+
+  return (
+    <div className="w-full bg-muted/40 aspect-square overflow-hidden relative">
+      {activeUrl ? (
+        activeIsVideo ? (
+          <video src={activeUrl} controls playsInline preload="metadata" className="w-full h-full object-cover bg-muted" />
+        ) : (
+          <button onClick={onOpen} className="block w-full h-full">
+            <img
+              src={activeUrl}
+              alt={label}
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+              loading="lazy"
+            />
+          </button>
+        )
+      ) : (
+        <button onClick={onOpen} className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">Geen preview</button>
+      )}
+
+      {activeIsVideo && (
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-background/85 border border-border/70 px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-foreground">
+          <PlayCircle className="h-3 w-3" /> Video
+        </div>
+      )}
+
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            onClick={() => goTo(index - 1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-background/85 border border-border/70 flex items-center justify-center text-foreground shadow-sm hover:bg-background"
+            aria-label="Vorige carousel slide"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => goTo(index + 1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-background/85 border border-border/70 flex items-center justify-center text-foreground shadow-sm hover:bg-background"
+            aria-label="Volgende carousel slide"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-1.5">
+            {urls.map((url, dotIndex) => (
+              <button
+                key={`${url}-${dotIndex}`}
+                type="button"
+                onClick={() => setIndex(dotIndex)}
+                className={cn(
+                  'h-1.5 rounded-full transition-all bg-background/75 border border-border/70',
+                  dotIndex === index ? 'w-5' : 'w-1.5 opacity-70'
+                )}
+                aria-label={`Carousel slide ${dotIndex + 1}`}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
