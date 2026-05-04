@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
   CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
+  Bookmark, BookmarkCheck, Trash2, MapPin, Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
@@ -16,8 +19,10 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const FIXED_QUERY = 'Verzorgende IG';
+const GENERAL_CLIENT_VALUE = '__general__';
+const ALL_LOCATIONS_VALUE = '__all__';
 
-type HubTab = 'ad-library' | 'hooks';
+type HubTab = 'ad-library' | 'hooks' | 'saved';
 
 interface InspirationItem {
   id: string;
