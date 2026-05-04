@@ -63,6 +63,97 @@ function unique<T>(arr: T[]): T[] {
   return [...new Set(arr.filter(Boolean as unknown as (value: T) => boolean))];
 }
 
+function decodeScrapedUrl(value: string): string {
+  return decodeHtml(value)
+    .replace(/\\\//g, "/")
+    .replace(/\\u0025/g, "%")
+    .replace(/\\u0026/g, "&")
+    .replace(/\\u003d/g, "=")
+    .replace(/\\u003f/g, "?")
+    .replace(/\\u002f/g, "/");
+}
+
+function getUrlDimensions(url: string): { width: number; height: number } | null {
+  const match = url.match(/(?:_|-)(?:s|p)(\d{2,4})x(\d{2,4})(?:_|\.|&|$)/i) || url.match(/[?&]stp=[^&]*(?:s|p)(\d{2,4})x(\d{2,4})/i);
+  if (!match) return null;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+function mediaCandidateScore(url: string): number {
+  const lower = url.toLowerCase();
+  if (!/^https?:\/\//i.test(url)) return -1;
+  if (!/\.(?:jpe?g|png|webp)(?:[?&]|$)/i.test(lower) && !/fbcdn|scontent/i.test(lower)) return -1;
+  if (/emoji|favicon|rsrc\.php|static\.xx\.fbcdn|safe_image/i.test(lower)) return -1;
+
+  const dimensions = getUrlDimensions(url);
+  if (dimensions) {
+    const longest = Math.max(dimensions.width, dimensions.height);
+    const shortest = Math.min(dimensions.width, dimensions.height);
+    if (longest <= 120 || shortest <= 80) return -1;
+    return longest + shortest + (/t39\.35426|t45\.|scontent/i.test(lower) ? 250 : 0);
+  }
+
+  return (/t39\.35426|t45\.|scontent/i.test(lower) ? 240 : 80) - (/profile|avatar|logo/i.test(lower) ? 160 : 0);
+}
+
+function pickAdMediaUrl(candidates: string[]): string | undefined {
+  return unique(candidates.map(decodeScrapedUrl))
+    .map((url) => ({ url, score: mediaCandidateScore(url) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)[0]?.url;
+}
+
+function pickLogoUrl(candidates: string[]): string | undefined {
+  return unique(candidates.map(decodeScrapedUrl)).find((url) => {
+    const dimensions = getUrlDimensions(url);
+    return !!dimensions && Math.max(dimensions.width, dimensions.height) <= 120 && /fbcdn|scontent/i.test(url);
+  });
+}
+
+function extractImageCandidates(chunk: string): string[] {
+  const candidates: string[] = [];
+  const imageTags = Array.from(chunk.matchAll(/<img\b[^>]*>/gi)).map((m) => m[0]);
+  for (const tag of imageTags) {
+    const src = tag.match(/\s(?:src|data-src)=['"]([^'"]+)['"]/i)?.[1];
+    if (src) candidates.push(src);
+
+    const srcset = tag.match(/\ssrcset=['"]([^'"]+)['"]/i)?.[1];
+    if (srcset) {
+      srcset.split(",").forEach((entry) => {
+        const url = entry.trim().split(/\s+/)[0];
+        if (url) candidates.push(url);
+      });
+    }
+  }
+
+  Array.from(chunk.matchAll(/background-image:\s*url\((['"]?)(.*?)\1\)/gi)).forEach((m) => candidates.push(m[2]));
+  Array.from(chunk.matchAll(/https?:\\?\/\\?\/[^'"<>\s]+?\.(?:jpe?g|png|webp)[^'"<>\s]*/gi)).forEach((m) => candidates.push(m[0]));
+
+  return candidates;
+}
+
+function isBoilerplateText(text: string): boolean {
+  return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Categories|EU transparency|See ad details|See summary details|Niet beschikbaar|Onbekend|Meer informatie)$/i.test(text)
+    || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
+    || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text);
+}
+
+function adTextScore(text: string): number {
+  if (text.length < 24 || isBoilerplateText(text)) return -1;
+  let score = Math.min(text.length, 900);
+  if (/(verzorgende\s*ig|helpende|verpleegkundige|zorg|thuiszorg|ouderenzorg|bewoner|cliënt|vacature|solliciteer|werken bij|kom werken|ben jij|word jij|jouw|jij)/i.test(text)) score += 450;
+  if (/[!?]/.test(text)) score += 60;
+  if (/https?:\/\//i.test(text)) score -= 150;
+  return score;
+}
+
+function pickPrimaryText(texts: string[]): string | undefined {
+  return unique(texts.map((text) => normalizeText(decodeHtml(text))))
+    .map((text) => ({ text, score: adTextScore(text) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)[0]?.text;
+}
+
 function buildAdsLibraryUrl(): string {
   const params = new URLSearchParams();
   params.set("active_status", "active");
