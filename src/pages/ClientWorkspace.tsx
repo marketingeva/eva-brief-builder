@@ -137,6 +137,7 @@ export default function ClientWorkspace() {
         {activeTab === 'overview' && <OverviewTab client={client} learningScore={learningScore} />}
         {activeTab === 'learning' && <LearningTab clientId={client.id} onScoreChange={setLearningScore} />}
         {activeTab === 'live-ads' && <LiveAdsTab clientName={client.name} clientId={client.id} />}
+        {activeTab === 'inspiration' && <InspirationHubTab clientId={client.id} />}
       </div>
     </div>
   );
