@@ -219,8 +219,11 @@ function isBoilerplateAdvertiserName(name: string | undefined | null): boolean {
 
 function adTextScore(text: string): number {
   if (text.length < 24 || isBoilerplateText(text)) return -1;
+  if (isLikelyHeadline(text) && text.length < 90) return -1;
   let score = Math.min(text.length, 900);
   if (/(verzorgende\s*ig|helpende|verpleegkundige|zorg|thuiszorg|ouderenzorg|bewoner|cliënt|vacature|solliciteer|werken bij|kom werken|ben jij|word jij|jouw|jij)/i.test(text)) score += 450;
+  if (/\b(ben jij|word jij|jouw|jij|wil jij|zoek je|kom werken|maak jij|zorg jij)\b/i.test(text)) score += 220;
+  if (/\b(ontdek|welkom bij|werken bij)\b/i.test(text) && text.length < 120) score -= 320;
   if (/[!?]/.test(text)) score += 60;
   if (/https?:\/\//i.test(text)) score -= 150;
   return score;
