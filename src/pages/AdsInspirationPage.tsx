@@ -477,10 +477,11 @@ function AdLibraryCard({
   const platforms = item.publisher_platforms || [];
   const isCarousel = item.media_type === 'carousel' || mediaUrls.length > 1;
   const isVideo = item.media_type === 'video' || !!item.video_url || mediaUrls.some(isVideoUrl);
-  const { primaryText, headline } = getDisplayTextParts(item);
+  const { primaryText, headline, description, cta } = getDisplayTextParts(item);
   const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
     ? item.advertiser_name
     : 'Onbekend';
+  const hasFooter = !!(headline || description || cta);
 
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
@@ -535,27 +536,35 @@ function AdLibraryCard({
         )}
       </div>
 
-      {primaryText && (
-        <div className="px-4 pb-3">
+      <div className="px-4 pb-3 min-h-[88px]">
+        {primaryText ? (
           <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Geen advertentietekst beschikbaar</p>
+        )}
+      </div>
 
       <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} />
 
-      {(headline || item.description || item.cta) && (
-        <div className="px-4 py-3 mt-auto border-t border-border/60 space-y-1">
-          {headline && (
-            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
-          )}
-          {item.description && (
-            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
-          )}
-          {item.cta && (
-            <p className="text-[11px] text-primary font-medium">{item.cta}</p>
-          )}
-        </div>
-      )}
+      <div className="px-4 py-3 mt-auto border-t border-border/60 min-h-[68px] flex flex-col justify-center gap-1">
+        {hasFooter ? (
+          <>
+            {headline && (
+              <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              {description ? (
+                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 flex-1">{description}</p>
+              ) : <span className="flex-1" />}
+              {cta && (
+                <span className="text-[10px] uppercase tracking-wide text-primary font-semibold whitespace-nowrap">{cta}</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-muted-foreground italic">Geen headline beschikbaar</p>
+        )}
+      </div>
     </div>
   );
 }
