@@ -203,15 +203,20 @@ function isLikelyHeadline(text: string): boolean {
   const normalized = normalizeText(text);
   if (!normalized || normalized.length > 120 || isBoilerplateText(normalized)) return false;
   if (isShortCtaCaption(normalized)) return false;
+  // Hard reject: Library/Bibliotheek IDs, dates, "Sponsored" banners
+  if (/^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(normalized)) return false;
+  if (/^(?:Sponsored|Gesponsord)\b/i.test(normalized)) return false;
   // Real headlines are link titles: brand/role-based, not a single imperative verb
   if (/\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek)\b/i.test(normalized) && normalized.length >= 12) return true;
   if (/^[A-ZÀ-Ý0-9].{10,90}[.!?]?$/.test(normalized) && !/[?]/.test(normalized)) return true;
   return false;
 }
 
-function pickHeadlineText(texts: string[], primaryText?: string): string | undefined {
+function pickHeadlineText(texts: string[], primaryText?: string, advertiserName?: string): string | undefined {
+  const advNorm = advertiserName ? normalizeText(advertiserName).toLowerCase() : "";
   return unique(texts.map((text) => normalizeText(decodeHtml(text))))
     .filter((text) => text !== primaryText)
+    .filter((text) => !advNorm || text.toLowerCase() !== advNorm)
     .filter((text) => isLikelyHeadline(text))
     .sort((a, b) => {
       const score = (text: string) =>
@@ -233,6 +238,8 @@ function pickDescriptionText(texts: string[], primaryText?: string, headline?: s
     .filter((text) => text !== primaryText && text !== headline && text !== cta)
     .filter((text) => text.length >= 18 && text.length <= 220)
     .filter((text) => !isBoilerplateText(text) && !isLikelyHeadline(text) && !isShortCtaCaption(text))
+    // Description must NOT be a fragment of the primary text (often happens when body bullets get split)
+    .filter((text) => !primaryText || !primaryText.toLowerCase().includes(text.toLowerCase()))
     .sort((a, b) => b.length - a.length)[0];
 }
 
@@ -256,7 +263,8 @@ function inferAdvertiserName(texts: string[]): string | undefined {
 function isBoilerplateText(text: string): boolean {
   return /^(Sponsored|Gesponsord|Active|Actief|Library ID|Bibliotheek|Platforms?|Platformen|Categories|Categorieën|EU transparency|Transparantie voor de EU|See ad details|See summary details|Advertentiegegevens bekijken|Niet beschikbaar|Onbekend|Meer informatie|Bekijk samenvattingsgegevens|Open Link|Like|Comment|Share|Vind ik leuk|Reageren|Delen)$/i.test(text)
     || /(?:Deze advertentie heeft meerdere versies|Er is een fout opgetreden bij het afspelen van deze video|This ad has multiple versions|There was an error playing this video)/i.test(text)
-    || /^(Started running on|Gestart op|Uitgevoerd vanaf|Library ID:)/i.test(text)
+    || /^(Started running on|Gestart op|Uitgevoerd vanaf)/i.test(text)
+    || /^(?:Library ID|Bibliotheek-?ID|Ad Library ID)[:\s]/i.test(text)
     || /^(?:gebruikt?\s+dit\s+advertentiemateriaal|use this asset|placeholder|test\s*tekst|test\s*ad|asset\s+feed)/i.test(text);
 }
 
@@ -305,7 +313,10 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
       || /(?:Bibliotheek-ID|Library ID|Advertentiegegevens bekijken|See ad details|Vervolgkeuzemenu openen)/i.test(text)
       || isBoilerplateAdvertiserName(advertiser)
       || (!!headline && isShortCtaCaption(headline))
-      || (!!description && isBoilerplateText(description));
+      || (!!headline && /^(?:Bibliotheek-?ID|Library ID|Ad Library ID)[:\s]/i.test(headline))
+      || (!!headline && !!advertiser && headline.trim().toLowerCase() === advertiser.trim().toLowerCase())
+      || (!!description && isBoilerplateText(description))
+      || (!!description && !!text && text.toLowerCase().includes(description.toLowerCase()));
   }).length;
 
   return badCount > Math.max(2, items.length * 0.3);
@@ -546,7 +557,7 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const pickedPrimaryText = pickPrimaryText(visibleLines);
     const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
     const primaryText = splitText.primaryText || pickedPrimaryText;
-    const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText);
+    const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText, advertiserName);
     const cta = splitText.cta || pickCtaCaption(visibleLines, primaryText, headline);
     const description = pickDescriptionText(visibleLines, primaryText, headline, cta);
     const hookText = extractHookText(primaryText || "");
