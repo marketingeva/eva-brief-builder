@@ -984,11 +984,17 @@ function HooksGenerator({
   hooks,
   role,
   onGenerate,
+  onSave,
+  isSaved,
+  saveContextLabel,
 }: {
   loading: boolean;
   hooks: GeneratedHook[];
   role: string;
   onGenerate: (role: string) => void;
+  onSave: (hook: GeneratedHook) => void;
+  isSaved: (text: string) => boolean;
+  saveContextLabel: string;
 }) {
   const [input, setInput] = useState('');
 
@@ -1032,33 +1038,168 @@ function HooksGenerator({
         </div>
       ) : hooks.length > 0 ? (
         <>
-          <p className="text-xs text-muted-foreground">
-            {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
-          </p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs text-muted-foreground">
+              {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <Bookmark className="h-3 w-3" /> Bewaarcontext: <span className="text-foreground font-medium">{saveContextLabel}</span>
+            </p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {hooks.map((h) => (
-              <div
-                key={h.id}
-                className="rounded-2xl border border-border/60 bg-background p-5 hover:border-border hover:shadow-md transition-all flex flex-col gap-3"
-              >
-                <Badge variant="secondary" className="rounded-full self-start text-[11px]">
-                  {h.hook_category || 'Algemeen'}
-                </Badge>
-                <p className="text-base font-medium text-foreground leading-snug flex-1">
-                  {h.hook_text}
-                </p>
-                {h.rationale && (
-                  <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/60">
-                    {h.rationale}
+            {hooks.map((h) => {
+              const saved = isSaved(h.hook_text);
+              return (
+                <div
+                  key={h.id}
+                  className="rounded-2xl border border-border/60 bg-background p-5 hover:border-border hover:shadow-md transition-all flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge variant="secondary" className="rounded-full text-[11px]">
+                      {h.hook_category || 'Algemeen'}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant={saved ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => onSave(h)}
+                      disabled={saved}
+                      className="rounded-full h-7 text-[11px] px-2.5"
+                    >
+                      {saved ? (
+                        <><BookmarkCheck className="h-3 w-3 mr-1" /> Bewaard</>
+                      ) : (
+                        <><Bookmark className="h-3 w-3 mr-1" /> Bewaar</>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-base font-medium text-foreground leading-snug flex-1">
+                    {h.hook_text}
                   </p>
-                )}
-              </div>
-            ))}
+                  {h.rationale && (
+                    <p className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/60">
+                      {h.rationale}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       ) : (
         <EmptyState label="Vul een functie in en genereer hooks om te starten" />
       )}
+    </div>
+  );
+}
+
+function SavedOverview({
+  savedHooks,
+  savedFavoriteItems,
+  onDeleteHook,
+  onDeleteFavorite,
+  onPreview,
+}: {
+  savedHooks: SavedHookRow[];
+  savedFavoriteItems: Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>;
+  onDeleteHook: (id: string) => void;
+  onDeleteFavorite: (id: string) => void;
+  onPreview: (item: InspirationItem) => void;
+}) {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary" /> Opgeslagen hooks
+            <span className="text-xs font-normal text-muted-foreground">({savedHooks.length})</span>
+          </h2>
+        </div>
+        {savedHooks.length === 0 ? (
+          <EmptyState label="Nog geen hooks bewaard" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {savedHooks.map((h) => (
+              <div
+                key={h.id}
+                className="rounded-2xl border border-border/60 bg-background p-5 flex flex-col gap-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="secondary" className="rounded-full text-[11px]">
+                      {h.hook_category || 'Algemeen'}
+                    </Badge>
+                    <Badge variant="outline" className="rounded-full text-[10px]">
+                      <Building2 className="h-2.5 w-2.5 mr-1" /> {h.client?.name || 'Algemeen'}
+                    </Badge>
+                    {(h.location_label || h.client_id) && (
+                      <Badge variant="outline" className="rounded-full text-[10px]">
+                        <MapPin className="h-2.5 w-2.5 mr-1" /> {h.location_label || 'Alle locaties'}
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDeleteHook(h.id)}
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-base font-medium text-foreground leading-snug">{h.hook_text}</p>
+                {h.rationale && (
+                  <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/60 pt-2">{h.rationale}</p>
+                )}
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Functie: {h.role_query}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Heart className="h-3.5 w-3.5 text-primary" /> Opgeslagen advertenties
+          <span className="text-xs font-normal text-muted-foreground">({savedFavoriteItems.length})</span>
+        </h2>
+        {savedFavoriteItems.length === 0 ? (
+          <EmptyState label="Nog geen advertenties bewaard" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {savedFavoriteItems.map(({ favorite_id, client, item }) => (
+              <div key={favorite_id} className="rounded-2xl border border-border/60 bg-background p-4 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <Badge variant="outline" className="rounded-full text-[10px]">
+                    <Building2 className="h-2.5 w-2.5 mr-1" /> {client?.name || 'Algemeen'}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDeleteFavorite(favorite_id)}
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <button onClick={() => onPreview(item)} className="text-left space-y-2">
+                  <p className="text-sm font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
+                  {item.primary_text && (
+                    <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{item.primary_text}</p>
+                  )}
+                  {item.headline && (
+                    <p className="text-xs font-medium text-foreground line-clamp-2">{item.headline}</p>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
