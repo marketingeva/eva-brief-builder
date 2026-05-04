@@ -349,7 +349,7 @@ export default function AdsInspirationPage() {
         ) : activeTab === 'ad-library' ? (
           items.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
                 {items.slice(0, visibleCount).map((item) => (
                   <AdLibraryCard
                     key={item.id}
@@ -589,7 +589,7 @@ function AdLibraryCard({
       <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} fallbackItem={item} />
 
       {hasFooter && (
-        <div className="px-4 py-3 mt-auto border-t border-border/60 flex flex-col gap-1.5">
+        <div className="px-4 py-3 border-t border-border/60 flex flex-col gap-1.5">
           {destinationLabel && (
             <p className="text-[10px] font-medium uppercase text-muted-foreground leading-none truncate">{destinationLabel}</p>
           )}
