@@ -571,9 +571,10 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
     const pickedPrimaryText = pickPrimaryText(visibleLines);
     const splitText = pickedPrimaryText ? splitCompositeAdText(pickedPrimaryText, advertiserName) : {};
     const primaryText = splitText.primaryText || pickedPrimaryText;
+    const destinationLabel = pickDestinationLabel(visibleLines, primaryText);
     const headline = splitText.headline || pickHeadlineText(visibleLines, primaryText, advertiserName);
     const cta = splitText.cta || pickCtaCaption(visibleLines, primaryText, headline);
-    const description = pickDescriptionText(visibleLines, primaryText, headline, cta);
+    const description = pickDescriptionText(visibleLines, primaryText, headline, cta, destinationLabel);
     const hookText = extractHookText(primaryText || "");
 
     items.push({
@@ -596,7 +597,7 @@ function parseAdsFromHtml(html: string): ParsedItem[] {
       hook_text: hookText || undefined,
       hook_category: hookText ? getHookCategory(hookText) : undefined,
       is_hook_candidate: !!hookText,
-      raw_payload: { source: "listing_scrape" },
+      raw_payload: { source: "listing_scrape", destination_label: destinationLabel || null },
     });
   }
 
