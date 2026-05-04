@@ -24,6 +24,10 @@ const ALL_LOCATIONS_VALUE = '__all__';
 
 type HubTab = 'ad-library' | 'hooks' | 'saved';
 
+function normalizeHookText(text: string): string {
+  return (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 interface InspirationItem {
   id: string;
   search_id: string;
