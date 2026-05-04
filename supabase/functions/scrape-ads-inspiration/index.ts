@@ -336,14 +336,14 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
   return badCount > Math.max(2, items.length * 0.3);
 }
 
-function buildAdsLibraryUrl(): string {
+function buildAdsLibraryUrl(query: string = FIXED_QUERY): string {
   const params = new URLSearchParams();
   params.set("active_status", "active");
   params.set("ad_type", "employment_ads");
   params.set("country", FIXED_COUNTRY);
   params.set("is_targeted_country", "false");
   params.set("media_type", FIXED_MEDIA_TYPE);
-  params.set("q", FIXED_QUERY);
+  params.set("q", query);
   params.set("search_type", "keyword_unordered");
   params.set("sort_data[direction]", "desc");
   params.set("sort_data[mode]", "total_impressions");
