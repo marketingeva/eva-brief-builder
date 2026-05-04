@@ -242,12 +242,12 @@ async function enrichSnapshot(snapshotUrl: string): Promise<Partial<ParsedItem>>
     const headline = html.match(/property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const description = html.match(/property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1];
     const videoTag = html.match(/<video[^>]+src=["']([^"']+)["']/i)?.[1];
-    const imgCandidates = Array.from(html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)).map((m) => decodeHtml(m[1]));
-    const bestImage = imgCandidates.find((url) => /scontent|fbcdn|jpg|png|webp/i.test(url));
+    const imgCandidates = extractImageCandidates(html);
+    const bestImage = pickAdMediaUrl([ogImage || "", posterImage || "", ...imgCandidates].filter(Boolean));
 
     return {
-      image_url: decodeHtml(ogImage || posterImage || bestImage || "") || undefined,
-      media_preview_url: decodeHtml(ogImage || posterImage || bestImage || "") || undefined,
+      image_url: bestImage,
+      media_preview_url: bestImage,
       video_url: decodeHtml(ogVideo || videoTag || "") || undefined,
       headline: normalizeText(decodeHtml(headline || "")) || undefined,
       primary_text: normalizeText(decodeHtml(description || "")) || undefined,
