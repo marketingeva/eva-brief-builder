@@ -313,7 +313,10 @@ function hasBadCachedScrape(items: Array<Record<string, unknown>>): boolean {
       || /(?:Bibliotheek-ID|Library ID|Advertentiegegevens bekijken|See ad details|Vervolgkeuzemenu openen)/i.test(text)
       || isBoilerplateAdvertiserName(advertiser)
       || (!!headline && isShortCtaCaption(headline))
-      || (!!description && isBoilerplateText(description));
+      || (!!headline && /^(?:Bibliotheek-?ID|Library ID|Ad Library ID)[:\s]/i.test(headline))
+      || (!!headline && !!advertiser && headline.trim().toLowerCase() === advertiser.trim().toLowerCase())
+      || (!!description && isBoilerplateText(description))
+      || (!!description && !!text && text.toLowerCase().includes(description.toLowerCase()));
   }).length;
 
   return badCount > Math.max(2, items.length * 0.3);
