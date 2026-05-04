@@ -78,16 +78,14 @@ function isVideoUrl(url: string | null | undefined): boolean {
   return !!url && /\.mp4(?:[?&]|$)|video|playable_url/i.test(url);
 }
 
-function isHeadlineLike(text: string | null | undefined): boolean {
-  const value = (text || '').trim();
-  return value.length > 0 && value.length < 115 && /\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(value);
-}
-
 function getDisplayTextParts(item: InspirationItem) {
-  const primaryLooksLikeHeadline = !!item.primary_text && !item.headline && isHeadlineLike(item.primary_text);
+  // The bottom-bar of a Meta ad has: <link title (headline)> + small <link description> + CTA button.
+  // Map our fields directly so the card mirrors what users see in the Ad Library.
   return {
-    primaryText: primaryLooksLikeHeadline ? null : item.primary_text,
-    headline: item.headline || (primaryLooksLikeHeadline ? item.primary_text : null),
+    primaryText: item.primary_text,
+    headline: item.headline,
+    description: item.description,
+    cta: item.cta,
   };
 }
 
