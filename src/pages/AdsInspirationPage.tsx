@@ -78,24 +78,28 @@ function isVideoUrl(url: string | null | undefined): boolean {
   return !!url && /\.mp4(?:[?&]|$)|video|playable_url/i.test(url);
 }
 
-function isHeadlineLike(text: string | null | undefined): boolean {
-  const value = (text || '').trim();
-  return value.length > 0 && value.length < 115 && /\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(value);
-}
-
 function getDisplayTextParts(item: InspirationItem) {
-  const primaryLooksLikeHeadline = !!item.primary_text && !item.headline && isHeadlineLike(item.primary_text);
+  // The bottom-bar of a Meta ad has: <link title (headline)> + small <link description> + CTA button.
+  // Map our fields directly so the card mirrors what users see in the Ad Library.
   return {
-    primaryText: primaryLooksLikeHeadline ? null : item.primary_text,
-    headline: item.headline || (primaryLooksLikeHeadline ? item.primary_text : null),
+    primaryText: item.primary_text,
+    headline: item.headline,
+    description: item.description,
+    cta: item.cta,
   };
 }
 
 function getMediaUrls(item: InspirationItem): string[] {
   const fallback = getAdPreviewSrc(item);
-  const urls = [item.video_url, ...(item.media_urls || []), fallback, item.image_url]
+  const urls = [item.video_url, ...(item.media_urls || []), fallback, item.image_url, item.media_preview_url]
     .filter(Boolean) as string[];
-  return [...new Set(urls)].filter((url) => isVideoUrl(url) || !getPreviewDimensions(url) || Math.max(getPreviewDimensions(url)!.width, getPreviewDimensions(url)!.height) > 120);
+  const deduped = [...new Set(urls)];
+  const filtered = deduped.filter((url) =>
+    isVideoUrl(url) || !getPreviewDimensions(url) || Math.max(getPreviewDimensions(url)!.width, getPreviewDimensions(url)!.height) > 120,
+  );
+  // Always make sure we have at least one entry if any raw url exists, even if it looks like a logo
+  if (filtered.length === 0 && deduped.length > 0) return [deduped[0]];
+  return filtered;
 }
 
 export default function AdsInspirationPage() {
@@ -473,10 +477,11 @@ function AdLibraryCard({
   const platforms = item.publisher_platforms || [];
   const isCarousel = item.media_type === 'carousel' || mediaUrls.length > 1;
   const isVideo = item.media_type === 'video' || !!item.video_url || mediaUrls.some(isVideoUrl);
-  const { primaryText, headline } = getDisplayTextParts(item);
+  const { primaryText, headline, description, cta } = getDisplayTextParts(item);
   const advertiserDisplay = item.advertiser_name && item.advertiser_name.trim().length > 1
     ? item.advertiser_name
     : 'Onbekend';
+  const hasFooter = !!(headline || description || cta);
 
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
@@ -531,27 +536,35 @@ function AdLibraryCard({
         )}
       </div>
 
-      {primaryText && (
-        <div className="px-4 pb-3">
+      <div className="px-4 pb-3 min-h-[88px]">
+        {primaryText ? (
           <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap line-clamp-6">{primaryText}</p>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Geen advertentietekst beschikbaar</p>
+        )}
+      </div>
 
       <AdMediaFrame urls={mediaUrls} label={advertiserDisplay} onOpen={onPreview} />
 
-      {(headline || item.description || item.cta) && (
-        <div className="px-4 py-3 mt-auto border-t border-border/60 space-y-1">
-          {headline && (
-            <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
-          )}
-          {item.description && (
-            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
-          )}
-          {item.cta && (
-            <p className="text-[11px] text-primary font-medium">{item.cta}</p>
-          )}
-        </div>
-      )}
+      <div className="px-4 py-3 mt-auto border-t border-border/60 min-h-[68px] flex flex-col justify-center gap-1">
+        {hasFooter ? (
+          <>
+            {headline && (
+              <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{headline}</p>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              {description ? (
+                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 flex-1">{description}</p>
+              ) : <span className="flex-1" />}
+              {cta && (
+                <span className="text-[10px] uppercase tracking-wide text-primary font-semibold whitespace-nowrap">{cta}</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-muted-foreground italic">Geen headline beschikbaar</p>
+        )}
+      </div>
     </div>
   );
 }
