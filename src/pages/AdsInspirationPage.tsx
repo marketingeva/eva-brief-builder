@@ -105,6 +105,7 @@ export default function AdsInspirationPage() {
       if (data?.error) throw new Error(data.error);
       setSearch(data.search || null);
       setItems(data.items || []);
+      setVisibleCount(PAGE_SIZE);
       if (forceRefresh) toast.success('Ad Library vernieuwd');
     } catch (e: any) {
       console.error(e);
