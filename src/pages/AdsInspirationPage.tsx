@@ -375,6 +375,27 @@ export default function AdsInspirationPage() {
                   </div>
                 )}
 
+                {previewItem.headline && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
+                    <p className="text-sm font-semibold text-foreground">{previewItem.headline}</p>
+                  </div>
+                )}
+
+                {previewItem.description && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
+                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{previewItem.description}</p>
+                  </div>
+                )}
+
+                {previewItem.cta && (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CTA</p>
+                    <Badge variant="secondary" className="rounded-full">{previewItem.cta}</Badge>
+                  </div>
+                )}
+
                 {previewItem.publisher_platforms && previewItem.publisher_platforms.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Platformen</p>
