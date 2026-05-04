@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
-  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo,
+  CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +72,30 @@ function getAdPreviewSrc(item: InspirationItem): string | null {
   const dimensions = getPreviewDimensions(src);
   if (dimensions && Math.max(dimensions.width, dimensions.height) <= 120) return null;
   return src;
+}
+
+function isVideoUrl(url: string | null | undefined): boolean {
+  return !!url && /\.mp4(?:[?&]|$)|video|playable_url/i.test(url);
+}
+
+function isHeadlineLike(text: string | null | undefined): boolean {
+  const value = (text || '').trim();
+  return value.length > 0 && value.length < 115 && /\b(verzorgende\s*ig|helpende|verpleegkundige|vacature|werken bij|welkom bij|ontdek|solliciteer|uren in overleg)\b/i.test(value);
+}
+
+function getDisplayTextParts(item: InspirationItem) {
+  const primaryLooksLikeHeadline = !!item.primary_text && !item.headline && isHeadlineLike(item.primary_text);
+  return {
+    primaryText: primaryLooksLikeHeadline ? null : item.primary_text,
+    headline: item.headline || (primaryLooksLikeHeadline ? item.primary_text : null),
+  };
+}
+
+function getMediaUrls(item: InspirationItem): string[] {
+  const fallback = getAdPreviewSrc(item);
+  const urls = [item.video_url, ...(item.media_urls || []), fallback, item.image_url]
+    .filter(Boolean) as string[];
+  return [...new Set(urls)].filter((url) => isVideoUrl(url) || !getPreviewDimensions(url) || Math.max(getPreviewDimensions(url)!.width, getPreviewDimensions(url)!.height) > 120);
 }
 
 export default function AdsInspirationPage() {
