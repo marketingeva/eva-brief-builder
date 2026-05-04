@@ -57,6 +57,19 @@ interface ClientOption {
   name: string;
 }
 
+function getPreviewDimensions(url: string): { width: number; height: number } | null {
+  const match = url.match(/(?:_|-)(?:s|p)(\d{2,4})x(\d{2,4})(?:_|\.|&|$)/i) || url.match(/[?&]stp=[^&]*(?:s|p)(\d{2,4})x(\d{2,4})/i);
+  return match ? { width: Number(match[1]), height: Number(match[2]) } : null;
+}
+
+function getAdPreviewSrc(item: InspirationItem): string | null {
+  const src = item.media_preview_url || item.image_url;
+  if (!src) return null;
+  const dimensions = getPreviewDimensions(src);
+  if (dimensions && Math.max(dimensions.width, dimensions.height) <= 120) return null;
+  return src;
+}
+
 export default function AdsInspirationPage() {
   const [activeTab, setActiveTab] = useState<HubTab>('ad-library');
   const [loading, setLoading] = useState(false);
@@ -285,9 +298,9 @@ export default function AdsInspirationPage() {
               <div className="bg-muted/30 p-4 flex items-center justify-center min-h-[420px] max-h-[82vh] overflow-auto">
                 {previewItem.video_url ? (
                   <video src={previewItem.video_url} controls className="w-full rounded-lg bg-background" />
-                ) : previewItem.media_preview_url || previewItem.image_url ? (
+                ) : getAdPreviewSrc(previewItem) ? (
                   <img
-                    src={previewItem.media_preview_url || previewItem.image_url || ''}
+                    src={getAdPreviewSrc(previewItem) || ''}
                     alt={previewItem.advertiser_name || 'Advertentie preview'}
                     className="w-full h-auto object-contain rounded-lg"
                   />
