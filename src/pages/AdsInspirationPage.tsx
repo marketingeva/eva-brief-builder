@@ -227,17 +227,13 @@ export default function AdsInspirationPage() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: cs }, { data: latest }] = await Promise.all([
-        supabase.from('clients').select('id,name').order('name'),
-        supabase
-          .from('inspiration_searches')
-          .select('id, query, result_count, created_at, source_url')
-          .eq('query', activeQuery)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-      setClients(cs || []);
+      const { data: latest } = await supabase
+        .from('inspiration_searches')
+        .select('id, query, result_count, created_at, source_url')
+        .eq('query', activeQuery)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (latest) setSearch(latest as SearchRow);
     })();
   }, [activeQuery]);
