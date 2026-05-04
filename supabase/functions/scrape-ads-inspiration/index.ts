@@ -350,10 +350,10 @@ function buildAdsLibraryUrl(query: string = FIXED_QUERY): string {
   return `${ADS_LIBRARY_BASE}?${params.toString()}`;
 }
 
-function buildMetaArchiveUrl(accessToken: string): string {
+function buildMetaArchiveUrl(accessToken: string, query: string = FIXED_QUERY): string {
   const params = new URLSearchParams({
     access_token: accessToken,
-    search_terms: FIXED_QUERY,
+    search_terms: query,
     ad_reached_countries: JSON.stringify([FIXED_COUNTRY]),
     ad_type: FIXED_AD_TYPE,
     media_type: "ALL",
