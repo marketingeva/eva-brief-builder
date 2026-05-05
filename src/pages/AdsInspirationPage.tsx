@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
   CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
-  Bookmark, BookmarkCheck, Trash2, MapPin, Building2,
+  Bookmark, BookmarkCheck, Trash2, MapPin, Building2, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,9 @@ import {
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
