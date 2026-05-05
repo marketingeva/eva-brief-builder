@@ -458,7 +458,9 @@ export default function AdsInspirationPage() {
             <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {activeTab === 'ad-library' && <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>}
+            {activeTab === 'ad-library' && (activeQuery
+              ? <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>
+              : <>Voer een zoekterm in om Meta Ad Library te doorzoeken</>)}
             {activeTab === 'hooks' && <>Confronterende hooks gegenereerd op basis van een functie</>}
             {activeTab === 'saved' && <>Al je opgeslagen advertenties en hooks op één plek</>}
           </p>
