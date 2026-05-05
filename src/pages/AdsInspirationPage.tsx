@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Sparkles, RefreshCw, Heart, ExternalLink, Loader2,
   CheckCircle2, Facebook, Instagram, PlayCircle, BadgeInfo, ChevronLeft, ChevronRight, Search,
-  Bookmark, BookmarkCheck, Trash2, MapPin, Building2,
+  Bookmark, BookmarkCheck, Trash2, MapPin, Building2, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,9 @@ import {
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -363,40 +366,48 @@ export default function AdsInspirationPage() {
     setHookLocation(ALL_LOCATIONS_VALUE);
   }, [hookClient, loadLocationsForClient]);
 
-  const favoriteKeyFor = (itemId: string) => `${itemId}::${resolvedClientId || 'global'}`;
+  const favoriteKeyFor = (itemId: string, clientId: string | null) => `${itemId}::${clientId || 'global'}`;
 
-  const toggleFavorite = async (item: InspirationItem) => {
-    const key = favoriteKeyFor(item.id);
-    const existing = favorites[key];
-    if (existing) {
-      const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
-      if (error) {
-        toast.error('Verwijderen mislukt');
-        return;
-      }
-      setFavorites((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      loadSavedFavoriteItems();
+  const isItemFavorited = (itemId: string) => {
+    return Object.keys(favorites).some((k) => k.startsWith(`${itemId}::`));
+  };
+
+  const removeAllFavoritesForItem = async (itemId: string) => {
+    const ids = Object.entries(favorites)
+      .filter(([k]) => k.startsWith(`${itemId}::`))
+      .map(([, v]) => v);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('inspiration_favorites').delete().in('id', ids);
+    if (error) {
+      toast.error('Verwijderen mislukt');
       return;
     }
+    setFavorites((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => { if (k.startsWith(`${itemId}::`)) delete next[k]; });
+      return next;
+    });
+    loadSavedFavoriteItems();
+  };
 
+  const saveFavoriteWithContext = async (item: InspirationItem, clientId: string | null) => {
+    const key = favoriteKeyFor(item.id, clientId);
+    if (favorites[key]) {
+      toast.info('Al bewaard voor deze context');
+      return;
+    }
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: resolvedClientId })
+      .insert({ item_id: item.id, client_id: clientId })
       .select('id')
       .single();
-
     if (error) {
       toast.error('Opslaan mislukt');
       return;
     }
-
     setFavorites((prev) => ({ ...prev, [key]: data.id }));
-    const clientName = resolvedClientId ? clients.find((c) => c.id === resolvedClientId)?.name : null;
-    toast.success(clientName ? `Bewaard voor ${clientName}` : 'Bewaard');
+    const clientName = clientId ? clients.find((c) => c.id === clientId)?.name : null;
+    toast.success(clientName ? `Bewaard voor ${clientName}` : 'Bewaard als algemeen');
     loadSavedFavoriteItems();
   };
 
@@ -522,39 +533,6 @@ export default function AdsInspirationPage() {
         )}
       </div>
 
-      {(activeTab === 'hooks' || activeTab === 'ad-library') && (
-        <div className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
-            <Bookmark className="h-3.5 w-3.5" /> Opslaan voor
-          </div>
-          <Select value={hookClient} onValueChange={setHookClient}>
-            <SelectTrigger className="w-[220px] h-9 rounded-full text-xs">
-              <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {hookClient !== GENERAL_CLIENT_VALUE && (
-            <Select value={hookLocation} onValueChange={setHookLocation}>
-              <SelectTrigger className="w-[240px] h-9 rounded-full text-xs">
-                <MapPin className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_LOCATIONS_VALUE}>Alle locaties</SelectItem>
-                {currentLocations.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.name}{l.city ? ` · ${l.city}` : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      )}
 
       <section className="rounded-3xl border border-border/60 bg-card p-5 space-y-4">
         {activeTab === 'ad-library' ? (
@@ -588,8 +566,12 @@ export default function AdsInspirationPage() {
                     <AdLibraryCard
                       key={item.id}
                       item={item}
-                      isFavorite={!!favorites[favoriteKeyFor(item.id)]}
-                      onToggleFavorite={() => toggleFavorite(item)}
+                      isFavorite={isItemFavorited(item.id)}
+                      clients={clients}
+                      locationsByClient={locationsByClient}
+                      onLoadLocations={loadLocationsForClient}
+                      onSaveWithContext={(clientId) => saveFavoriteWithContext(item, clientId)}
+                      onUnfavorite={() => removeAllFavoritesForItem(item.id)}
                       onPreview={() => setPreviewItem(item)}
                     />
                   ))}
@@ -618,15 +600,12 @@ export default function AdsInspirationPage() {
             onGenerate={generateHooks}
             onSave={saveHook}
             isSaved={(text) => savedHookKeys.has(`${resolvedClientId || 'global'}::${normalizeHookText(text)}`)}
-            saveContextLabel={
-              hookClient === GENERAL_CLIENT_VALUE
-                ? 'Algemeen'
-                : `${clients.find((c) => c.id === hookClient)?.name || 'Klant'}${
-                    hookLocation === ALL_LOCATIONS_VALUE
-                      ? ' · Alle locaties'
-                      : ` · ${currentLocations.find((l) => l.id === hookLocation)?.name || ''}`
-                  }`
-            }
+            clients={clients}
+            currentLocations={currentLocations}
+            hookClient={hookClient}
+            hookLocation={hookLocation}
+            onClientChange={setHookClient}
+            onLocationChange={setHookLocation}
           />
         ) : (
           <SavedOverview
@@ -740,15 +719,15 @@ export default function AdsInspirationPage() {
                       </Button>
                     </a>
                   )}
-                  <Button
-                    onClick={() => toggleFavorite(previewItem)}
-                    variant={favorites[previewItem.id] ? 'default' : 'outline'}
-                    size="sm"
-                    className="rounded-full text-xs"
-                  >
-                    <Heart className={cn('h-3 w-3 mr-1', favorites[previewItem.id] && 'fill-current')} />
-                    {favorites[previewItem.id] ? 'Bewaard' : 'Bewaar'}
-                  </Button>
+                  <SaveContextPopover
+                    isFavorite={isItemFavorited(previewItem.id)}
+                    clients={clients}
+                    locationsByClient={locationsByClient}
+                    onLoadLocations={loadLocationsForClient}
+                    onSave={(clientId) => saveFavoriteWithContext(previewItem, clientId)}
+                    onUnfavorite={() => removeAllFavoritesForItem(previewItem.id)}
+                    triggerSize="sm"
+                  />
                 </div>
               </div>
             </div>
@@ -762,12 +741,20 @@ export default function AdsInspirationPage() {
 function AdLibraryCard({
   item,
   isFavorite,
-  onToggleFavorite,
+  clients,
+  locationsByClient,
+  onLoadLocations,
+  onSaveWithContext,
+  onUnfavorite,
   onPreview,
 }: {
   item: InspirationItem;
   isFavorite: boolean;
-  onToggleFavorite: () => void;
+  clients: ClientOption[];
+  locationsByClient: Record<string, LocationOption[]>;
+  onLoadLocations: (clientId: string) => Promise<void> | void;
+  onSaveWithContext: (clientId: string | null) => Promise<void> | void;
+  onUnfavorite: () => Promise<void> | void;
   onPreview: () => void;
 }) {
   const mediaUrls = getMediaUrls(item);
@@ -783,15 +770,17 @@ function AdLibraryCard({
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
       <div className="px-4 pt-4 pb-3 space-y-1.5 relative">
-        <button
-          onClick={onToggleFavorite}
-          className={cn(
-            'absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center transition z-10',
-            isFavorite ? 'bg-primary text-primary-foreground' : 'bg-muted/70 text-foreground hover:bg-muted'
-          )}
-        >
-          <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-        </button>
+        <div className="absolute top-3 right-3 z-10">
+          <SaveContextPopover
+            isFavorite={isFavorite}
+            clients={clients}
+            locationsByClient={locationsByClient}
+            onLoadLocations={onLoadLocations}
+            onSave={onSaveWithContext}
+            onUnfavorite={onUnfavorite}
+            triggerSize="icon"
+          />
+        </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -992,7 +981,12 @@ function HooksGenerator({
   onGenerate,
   onSave,
   isSaved,
-  saveContextLabel,
+  clients,
+  currentLocations,
+  hookClient,
+  hookLocation,
+  onClientChange,
+  onLocationChange,
 }: {
   loading: boolean;
   hooks: GeneratedHook[];
@@ -1000,7 +994,12 @@ function HooksGenerator({
   onGenerate: (role: string) => void;
   onSave: (hook: GeneratedHook) => void;
   isSaved: (text: string) => boolean;
-  saveContextLabel: string;
+  clients: ClientOption[];
+  currentLocations: LocationOption[];
+  hookClient: string;
+  hookLocation: string;
+  onClientChange: (value: string) => void;
+  onLocationChange: (value: string) => void;
 }) {
   const [input, setInput] = useState('');
 
@@ -1011,30 +1010,85 @@ function HooksGenerator({
     onGenerate(v);
   };
 
+  const saveContextLabel = hookClient === GENERAL_CLIENT_VALUE
+    ? 'Algemeen'
+    : `${clients.find((c) => c.id === hookClient)?.name || 'Klant'}${
+        hookLocation === ALL_LOCATIONS_VALUE
+          ? ' · Alle locaties'
+          : ` · ${currentLocations.find((l) => l.id === hookLocation)?.name || ''}`
+      }`;
+
   return (
     <div className="space-y-5">
       <div>
         <p className="text-xs uppercase tracking-wide text-muted-foreground">Genereer hooks</p>
         <p className="text-sm text-muted-foreground mt-1">
-          Vul een functie in (bv. <span className="text-foreground font-medium">Verzorgende IG</span>, <span className="text-foreground font-medium">BBL Verpleegkunde</span>, <span className="text-foreground font-medium">Helpende Plus</span>) en genereer 12 confronterende hooks.
+          Kies eerst een klant, locatie en vul een functie in. Bij het opslaan worden hooks direct aan de juiste klant gekoppeld.
         </p>
       </div>
 
-      <form onSubmit={submit} className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-[480px]">
-          <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary pointer-events-none" />
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Functie, bv. Verzorgende IG"
-            className="h-10 pl-9 pr-3 rounded-full text-sm bg-background"
-          />
+      <div className="rounded-2xl border border-border/60 bg-background p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <Building2 className="h-3 w-3" /> Klant
+            </label>
+            <Select value={hookClient} onValueChange={onClientChange}>
+              <SelectTrigger className="h-10 rounded-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <MapPin className="h-3 w-3" /> Locatie
+            </label>
+            <Select
+              value={hookLocation}
+              onValueChange={onLocationChange}
+              disabled={hookClient === GENERAL_CLIENT_VALUE}
+            >
+              <SelectTrigger className="h-10 rounded-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_LOCATIONS_VALUE}>Alle locaties</SelectItem>
+                {currentLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}{l.city ? ` · ${l.city}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3" /> Functie
+            </label>
+            <form onSubmit={submit} className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="bv. Verzorgende IG"
+                className="h-10 rounded-full text-xs bg-background"
+              />
+            </form>
+          </div>
         </div>
-        <Button type="submit" disabled={loading || !input.trim()} className="rounded-full h-10 text-xs">
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
-          Genereer hooks
-        </Button>
-      </form>
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <Bookmark className="h-3 w-3" /> Bewaarcontext: <span className="text-foreground font-medium">{saveContextLabel}</span>
+          </p>
+          <Button type="button" onClick={submit} disabled={loading || !input.trim()} className="rounded-full h-9 text-xs">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+            Genereer hooks
+          </Button>
+        </div>
+      </div>
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1047,9 +1101,6 @@ function HooksGenerator({
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <p className="text-xs text-muted-foreground">
               {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
-            </p>
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <Bookmark className="h-3 w-3" /> Bewaarcontext: <span className="text-foreground font-medium">{saveContextLabel}</span>
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1216,5 +1267,107 @@ function EmptyState({ label }: { label: string }) {
       <p className="text-sm font-medium text-foreground">{label}</p>
       <p className="text-xs text-muted-foreground mt-1">Ververs de bron om opnieuw uit Meta Ad Library te laden.</p>
     </div>
+  );
+}
+
+function SaveContextPopover({
+  isFavorite,
+  clients,
+  locationsByClient,
+  onLoadLocations,
+  onSave,
+  onUnfavorite,
+  triggerSize = 'icon',
+}: {
+  isFavorite: boolean;
+  clients: ClientOption[];
+  locationsByClient: Record<string, LocationOption[]>;
+  onLoadLocations: (clientId: string) => Promise<void> | void;
+  onSave: (clientId: string | null) => Promise<void> | void;
+  onUnfavorite: () => Promise<void> | void;
+  triggerSize?: 'icon' | 'sm';
+}) {
+  const [open, setOpen] = useState(false);
+  const [client, setClient] = useState<string>(GENERAL_CLIENT_VALUE);
+  const locations = client === GENERAL_CLIENT_VALUE ? [] : (locationsByClient[client] || []);
+
+  const handleClientChange = (value: string) => {
+    setClient(value);
+    if (value !== GENERAL_CLIENT_VALUE) onLoadLocations(value);
+  };
+
+  const handleSave = async () => {
+    const clientId = client === GENERAL_CLIENT_VALUE ? null : client;
+    await onSave(clientId);
+    setOpen(false);
+  };
+
+  const trigger = triggerSize === 'icon' ? (
+    <button
+      type="button"
+      className={cn(
+        'h-7 w-7 rounded-full flex items-center justify-center transition',
+        isFavorite ? 'bg-primary text-primary-foreground' : 'bg-muted/70 text-foreground hover:bg-muted'
+      )}
+      aria-label={isFavorite ? 'Bewaard' : 'Bewaar'}
+    >
+      <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+    </button>
+  ) : (
+    <Button
+      type="button"
+      variant={isFavorite ? 'default' : 'outline'}
+      size="sm"
+      className="rounded-full text-xs"
+    >
+      <Heart className={cn('h-3 w-3 mr-1', isFavorite && 'fill-current')} />
+      {isFavorite ? 'Bewaard' : 'Bewaar'}
+    </Button>
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3 space-y-3">
+        <div>
+          <p className="text-xs font-semibold text-foreground">Bewaar advertentie</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Kies voor welke klant en locatie je deze opslaat.</p>
+        </div>
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+              <Building2 className="h-3 w-3" /> Klant
+            </label>
+            <Select value={client} onValueChange={handleClientChange}>
+              <SelectTrigger className="h-9 rounded-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {isFavorite ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-full text-[11px] text-destructive hover:text-destructive"
+              onClick={async () => { await onUnfavorite(); setOpen(false); }}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Verwijder alle
+            </Button>
+          ) : <span />}
+          <Button type="button" size="sm" className="rounded-full text-xs" onClick={handleSave}>
+            <Check className="h-3 w-3 mr-1" /> Bewaar
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
