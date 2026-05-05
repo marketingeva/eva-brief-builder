@@ -56,7 +56,7 @@ export default function InspirationHubTab({ clientId }: { clientId: string }) {
     } else {
       const { data: items } = await supabase
         .from('inspiration_items')
-        .select('id, advertiser_name, primary_text, headline, ad_library_url, image_url')
+        .select('id, advertiser_name, advertiser_logo_url, primary_text, headline, description, cta, ad_library_url, image_url, video_url')
         .in('id', itemIds);
       const itemMap = new Map<string, any>();
       (items || []).forEach((it: any) => itemMap.set(it.id, it));
