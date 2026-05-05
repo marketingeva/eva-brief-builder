@@ -1241,33 +1241,61 @@ function SavedOverview({
           <EmptyState label="Nog geen advertenties bewaard" />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {savedFavoriteItems.map(({ favorite_id, client, item }) => (
-              <div key={favorite_id} className="rounded-2xl border border-border/60 bg-background p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <Badge variant="outline" className="rounded-full text-[10px]">
-                    <Building2 className="h-2.5 w-2.5 mr-1" /> {client?.name || 'Algemeen'}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDeleteFavorite(favorite_id)}
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+            {savedFavoriteItems.map(({ favorite_id, client, item }) => {
+              const { primaryText, destinationLabel, headline, description } = getDisplayTextParts(item);
+              const thumb = getMediaUrls(item)[0];
+              return (
+                <div key={favorite_id} className="rounded-2xl border border-border/60 bg-background p-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge variant="outline" className="rounded-full text-[10px]">
+                      <Building2 className="h-2.5 w-2.5 mr-1" /> {client?.name || 'Algemeen'}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDeleteFavorite(favorite_id)}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <button onClick={() => onPreview(item)} className="text-left flex flex-col gap-2">
+                    {/* 1. Page */}
+                    <div className="flex items-center gap-2">
+                      {item.advertiser_logo_url ? (
+                        <img src={item.advertiser_logo_url} alt="" className="h-7 w-7 rounded-full object-cover bg-muted" />
+                      ) : (
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
+                          {(item.advertiser_name || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <p className="text-sm font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
+                    </div>
+                    {/* 2. Primary text */}
+                    {primaryText && (
+                      <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{primaryText}</p>
+                    )}
+                    {/* 3. Content */}
+                    {thumb && !isVideoUrl(thumb) && (
+                      <img src={thumb} alt="" className="w-full aspect-[4/5] object-cover rounded-lg bg-muted" />
+                    )}
+                    {/* 4. Destination */}
+                    {destinationLabel && (
+                      <p className="text-[10px] font-medium uppercase text-muted-foreground leading-none truncate">{destinationLabel}</p>
+                    )}
+                    {/* 5. Headline */}
+                    {headline && (
+                      <p className="text-xs font-semibold text-foreground line-clamp-2">{headline}</p>
+                    )}
+                    {/* 6. Description */}
+                    {description && (
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{description}</p>
+                    )}
+                  </button>
                 </div>
-                <button onClick={() => onPreview(item)} className="text-left space-y-2">
-                  <p className="text-sm font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
-                  {item.primary_text && (
-                    <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{item.primary_text}</p>
-                  )}
-                  {item.headline && (
-                    <p className="text-xs font-medium text-foreground line-clamp-2">{item.headline}</p>
-                  )}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
