@@ -19,10 +19,14 @@ interface SavedHook {
 interface SavedAdItem {
   favorite_id: string;
   advertiser_name: string | null;
+  advertiser_logo_url: string | null;
   primary_text: string | null;
   headline: string | null;
+  description: string | null;
+  cta: string | null;
   ad_library_url: string | null;
   image_url: string | null;
+  video_url: string | null;
 }
 
 export default function InspirationHubTab({ clientId }: { clientId: string }) {
