@@ -600,15 +600,12 @@ export default function AdsInspirationPage() {
             onGenerate={generateHooks}
             onSave={saveHook}
             isSaved={(text) => savedHookKeys.has(`${resolvedClientId || 'global'}::${normalizeHookText(text)}`)}
-            saveContextLabel={
-              hookClient === GENERAL_CLIENT_VALUE
-                ? 'Algemeen'
-                : `${clients.find((c) => c.id === hookClient)?.name || 'Klant'}${
-                    hookLocation === ALL_LOCATIONS_VALUE
-                      ? ' · Alle locaties'
-                      : ` · ${currentLocations.find((l) => l.id === hookLocation)?.name || ''}`
-                  }`
-            }
+            clients={clients}
+            currentLocations={currentLocations}
+            hookClient={hookClient}
+            hookLocation={hookLocation}
+            onClientChange={setHookClient}
+            onLocationChange={setHookLocation}
           />
         ) : (
           <SavedOverview
