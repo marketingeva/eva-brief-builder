@@ -744,12 +744,20 @@ export default function AdsInspirationPage() {
 function AdLibraryCard({
   item,
   isFavorite,
-  onToggleFavorite,
+  clients,
+  locationsByClient,
+  onLoadLocations,
+  onSaveWithContext,
+  onUnfavorite,
   onPreview,
 }: {
   item: InspirationItem;
   isFavorite: boolean;
-  onToggleFavorite: () => void;
+  clients: ClientOption[];
+  locationsByClient: Record<string, LocationOption[]>;
+  onLoadLocations: (clientId: string) => Promise<void> | void;
+  onSaveWithContext: (clientId: string | null) => Promise<void> | void;
+  onUnfavorite: () => Promise<void> | void;
   onPreview: () => void;
 }) {
   const mediaUrls = getMediaUrls(item);
@@ -765,15 +773,17 @@ function AdLibraryCard({
   return (
     <div className="group rounded-2xl overflow-hidden bg-card border border-border/60 hover:border-border transition-all hover:shadow-md flex flex-col">
       <div className="px-4 pt-4 pb-3 space-y-1.5 relative">
-        <button
-          onClick={onToggleFavorite}
-          className={cn(
-            'absolute top-3 right-3 h-7 w-7 rounded-full flex items-center justify-center transition z-10',
-            isFavorite ? 'bg-primary text-primary-foreground' : 'bg-muted/70 text-foreground hover:bg-muted'
-          )}
-        >
-          <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-        </button>
+        <div className="absolute top-3 right-3 z-10">
+          <SaveContextPopover
+            isFavorite={isFavorite}
+            clients={clients}
+            locationsByClient={locationsByClient}
+            onLoadLocations={onLoadLocations}
+            onSave={onSaveWithContext}
+            onUnfavorite={onUnfavorite}
+            triggerSize="icon"
+          />
+        </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
