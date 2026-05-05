@@ -19,10 +19,14 @@ interface SavedHook {
 interface SavedAdItem {
   favorite_id: string;
   advertiser_name: string | null;
+  advertiser_logo_url: string | null;
   primary_text: string | null;
   headline: string | null;
+  description: string | null;
+  cta: string | null;
   ad_library_url: string | null;
   image_url: string | null;
+  video_url: string | null;
 }
 
 export default function InspirationHubTab({ clientId }: { clientId: string }) {
@@ -52,7 +56,7 @@ export default function InspirationHubTab({ clientId }: { clientId: string }) {
     } else {
       const { data: items } = await supabase
         .from('inspiration_items')
-        .select('id, advertiser_name, primary_text, headline, ad_library_url, image_url')
+        .select('id, advertiser_name, advertiser_logo_url, primary_text, headline, description, cta, ad_library_url, image_url, video_url')
         .in('id', itemIds);
       const itemMap = new Map<string, any>();
       (items || []).forEach((it: any) => itemMap.set(it.id, it));
@@ -155,17 +159,46 @@ export default function InspirationHubTab({ clientId }: { clientId: string }) {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {ads.map((a) => (
               <div key={a.favorite_id} className="rounded-2xl border border-border/60 bg-card p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-foreground truncate">{a.advertiser_name || 'Onbekend'}</p>
+                {/* Header: delete action */}
+                <div className="flex items-start justify-end">
                   <Button variant="ghost" size="icon" onClick={() => deleteFav(a.favorite_id)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+                {/* 1. Page (advertiser) */}
+                <div className="flex items-center gap-2">
+                  {a.advertiser_logo_url ? (
+                    <img src={a.advertiser_logo_url} alt="" className="h-7 w-7 rounded-full object-cover bg-muted" />
+                  ) : (
+                    <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
+                      {(a.advertiser_name || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <p className="text-sm font-semibold text-foreground truncate">{a.advertiser_name || 'Onbekend'}</p>
+                </div>
+                {/* 2. Primary text */}
                 {a.primary_text && (
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{a.primary_text}</p>
                 )}
+                {/* 3. Content (image preview) */}
+                {a.image_url && (
+                  <img src={a.image_url} alt="" className="w-full aspect-[4/5] object-cover rounded-lg bg-muted" />
+                )}
+                {/* 4. Destination — niet expliciet beschikbaar voor saved items */}
+                {/* 5. Headline */}
                 {a.headline && (
-                  <p className="text-xs font-medium text-foreground line-clamp-2">{a.headline}</p>
+                  <p className="text-xs font-semibold text-foreground line-clamp-2">{a.headline}</p>
+                )}
+                {/* 6. Description */}
+                {a.description && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{a.description}</p>
+                )}
+                {a.cta && (
+                  <div className="flex justify-end">
+                    <span className="text-[10px] uppercase tracking-wide text-primary font-semibold rounded-full bg-primary/10 px-2.5 py-1">
+                      {a.cta}
+                    </span>
+                  </div>
                 )}
                 {a.ad_library_url && (
                   <a href={a.ad_library_url} target="_blank" rel="noreferrer" className="text-[11px] text-primary hover:underline mt-auto">

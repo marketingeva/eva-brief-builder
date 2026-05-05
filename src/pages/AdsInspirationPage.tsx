@@ -632,35 +632,29 @@ export default function AdsInspirationPage() {
               </div>
 
               <div className="p-6 space-y-4 max-h-[82vh] overflow-auto">
-                <div className="flex items-center gap-3">
-                  {previewItem.advertiser_logo_url ? (
-                    <img src={previewItem.advertiser_logo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                      {(previewItem.advertiser_name || '?').charAt(0).toUpperCase()}
+                {/* 1. PAGE (advertiser) */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Page</p>
+                  <div className="flex items-center gap-3">
+                    {previewItem.advertiser_logo_url ? (
+                      <img src={previewItem.advertiser_logo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                        {(previewItem.advertiser_name || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{previewItem.advertiser_name || 'Onbekend'}</p>
+                      <p className="text-xs text-muted-foreground">Sponsored</p>
                     </div>
-                  )}
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{previewItem.advertiser_name || 'Onbekend'}</p>
-                    <p className="text-xs text-muted-foreground">Sponsored</p>
                   </div>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="rounded-full">Active</Badge>
-                  {previewItem.media_type === 'video' && (
-                    <Badge variant="secondary" className="rounded-full">Video</Badge>
-                  )}
-                </div>
-
-                {previewItem.started_running && (
-                  <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
-                )}
 
                 {(() => {
                   const { primaryText, destinationLabel, headline, description, cta } = getDisplayTextParts(previewItem);
                   return (
                     <>
+                      {/* 2. PRIMARY TEXT */}
                       {primaryText && (
                         <div className="space-y-1.5">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Primary text</p>
@@ -668,13 +662,21 @@ export default function AdsInspirationPage() {
                         </div>
                       )}
 
+                      {/* 3. CONTENT (media — staat al links in de dialog, hier een verwijzing) */}
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Content</p>
+                        <p className="text-xs text-muted-foreground italic">Zie media links</p>
+                      </div>
+
+                      {/* 4. DESTINATION */}
                       {destinationLabel && (
                         <div className="space-y-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Bestemming</p>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Destination</p>
                           <p className="text-sm text-foreground/85">{destinationLabel}</p>
                         </div>
                       )}
 
+                      {/* 5. HEADLINE */}
                       {headline && (
                         <div className="space-y-1.5">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
@@ -682,9 +684,10 @@ export default function AdsInspirationPage() {
                         </div>
                       )}
 
+                      {/* 6. DESCRIPTION */}
                       {description && (
                         <div className="space-y-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Description</p>
                           <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{description}</p>
                         </div>
                       )}
@@ -698,6 +701,17 @@ export default function AdsInspirationPage() {
                     </>
                   );
                 })()}
+
+                {/* Meta info onderaan */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-border/60">
+                  <Badge variant="secondary" className="rounded-full">Active</Badge>
+                  {previewItem.media_type === 'video' && (
+                    <Badge variant="secondary" className="rounded-full">Video</Badge>
+                  )}
+                  {previewItem.started_running && (
+                    <span className="text-xs text-muted-foreground self-center">Gestart op {previewItem.started_running}</span>
+                  )}
+                </div>
 
                 {previewItem.hook_text && activeTab === 'hooks' && (
                   <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
@@ -1227,33 +1241,61 @@ function SavedOverview({
           <EmptyState label="Nog geen advertenties bewaard" />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {savedFavoriteItems.map(({ favorite_id, client, item }) => (
-              <div key={favorite_id} className="rounded-2xl border border-border/60 bg-background p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <Badge variant="outline" className="rounded-full text-[10px]">
-                    <Building2 className="h-2.5 w-2.5 mr-1" /> {client?.name || 'Algemeen'}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDeleteFavorite(favorite_id)}
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+            {savedFavoriteItems.map(({ favorite_id, client, item }) => {
+              const { primaryText, destinationLabel, headline, description } = getDisplayTextParts(item);
+              const thumb = getMediaUrls(item)[0];
+              return (
+                <div key={favorite_id} className="rounded-2xl border border-border/60 bg-background p-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge variant="outline" className="rounded-full text-[10px]">
+                      <Building2 className="h-2.5 w-2.5 mr-1" /> {client?.name || 'Algemeen'}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onDeleteFavorite(favorite_id)}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <button onClick={() => onPreview(item)} className="text-left flex flex-col gap-2">
+                    {/* 1. Page */}
+                    <div className="flex items-center gap-2">
+                      {item.advertiser_logo_url ? (
+                        <img src={item.advertiser_logo_url} alt="" className="h-7 w-7 rounded-full object-cover bg-muted" />
+                      ) : (
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
+                          {(item.advertiser_name || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <p className="text-sm font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
+                    </div>
+                    {/* 2. Primary text */}
+                    {primaryText && (
+                      <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{primaryText}</p>
+                    )}
+                    {/* 3. Content */}
+                    {thumb && !isVideoUrl(thumb) && (
+                      <img src={thumb} alt="" className="w-full aspect-[4/5] object-cover rounded-lg bg-muted" />
+                    )}
+                    {/* 4. Destination */}
+                    {destinationLabel && (
+                      <p className="text-[10px] font-medium uppercase text-muted-foreground leading-none truncate">{destinationLabel}</p>
+                    )}
+                    {/* 5. Headline */}
+                    {headline && (
+                      <p className="text-xs font-semibold text-foreground line-clamp-2">{headline}</p>
+                    )}
+                    {/* 6. Description */}
+                    {description && (
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{description}</p>
+                    )}
+                  </button>
                 </div>
-                <button onClick={() => onPreview(item)} className="text-left space-y-2">
-                  <p className="text-sm font-semibold text-foreground truncate">{item.advertiser_name || 'Onbekend'}</p>
-                  {item.primary_text && (
-                    <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{item.primary_text}</p>
-                  )}
-                  {item.headline && (
-                    <p className="text-xs font-medium text-foreground line-clamp-2">{item.headline}</p>
-                  )}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
