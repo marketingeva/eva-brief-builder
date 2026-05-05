@@ -288,7 +288,11 @@ export default function AdsInspirationPage() {
     setHooksRole(trimmed);
     try {
       const { data, error } = await supabase.functions.invoke('generate-hooks-inspiration', {
-        body: { role: trimmed },
+        body: {
+          role: trimmed,
+          client_id: resolvedClientId,
+          location_id: resolvedLocationId,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -299,7 +303,7 @@ export default function AdsInspirationPage() {
     } finally {
       setHooksLoading(false);
     }
-  }, []);
+  }, [resolvedClientId, resolvedLocationId]);
 
   const loadHub = useCallback(async (forceRefresh = false, queryOverride?: string) => {
     const queryToUse = (queryOverride ?? activeQuery).trim() || FIXED_QUERY;
