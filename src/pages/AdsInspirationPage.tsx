@@ -1269,3 +1269,105 @@ function EmptyState({ label }: { label: string }) {
     </div>
   );
 }
+
+function SaveContextPopover({
+  isFavorite,
+  clients,
+  locationsByClient,
+  onLoadLocations,
+  onSave,
+  onUnfavorite,
+  triggerSize = 'icon',
+}: {
+  isFavorite: boolean;
+  clients: ClientOption[];
+  locationsByClient: Record<string, LocationOption[]>;
+  onLoadLocations: (clientId: string) => Promise<void> | void;
+  onSave: (clientId: string | null) => Promise<void> | void;
+  onUnfavorite: () => Promise<void> | void;
+  triggerSize?: 'icon' | 'sm';
+}) {
+  const [open, setOpen] = useState(false);
+  const [client, setClient] = useState<string>(GENERAL_CLIENT_VALUE);
+  const locations = client === GENERAL_CLIENT_VALUE ? [] : (locationsByClient[client] || []);
+
+  const handleClientChange = (value: string) => {
+    setClient(value);
+    if (value !== GENERAL_CLIENT_VALUE) onLoadLocations(value);
+  };
+
+  const handleSave = async () => {
+    const clientId = client === GENERAL_CLIENT_VALUE ? null : client;
+    await onSave(clientId);
+    setOpen(false);
+  };
+
+  const trigger = triggerSize === 'icon' ? (
+    <button
+      type="button"
+      className={cn(
+        'h-7 w-7 rounded-full flex items-center justify-center transition',
+        isFavorite ? 'bg-primary text-primary-foreground' : 'bg-muted/70 text-foreground hover:bg-muted'
+      )}
+      aria-label={isFavorite ? 'Bewaard' : 'Bewaar'}
+    >
+      <Heart className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+    </button>
+  ) : (
+    <Button
+      type="button"
+      variant={isFavorite ? 'default' : 'outline'}
+      size="sm"
+      className="rounded-full text-xs"
+    >
+      <Heart className={cn('h-3 w-3 mr-1', isFavorite && 'fill-current')} />
+      {isFavorite ? 'Bewaard' : 'Bewaar'}
+    </Button>
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3 space-y-3">
+        <div>
+          <p className="text-xs font-semibold text-foreground">Bewaar advertentie</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Kies voor welke klant en locatie je deze opslaat.</p>
+        </div>
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+              <Building2 className="h-3 w-3" /> Klant
+            </label>
+            <Select value={client} onValueChange={handleClientChange}>
+              <SelectTrigger className="h-9 rounded-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {isFavorite ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-full text-[11px] text-destructive hover:text-destructive"
+              onClick={async () => { await onUnfavorite(); setOpen(false); }}
+            >
+              <Trash2 className="h-3 w-3 mr-1" /> Verwijder alle
+            </Button>
+          ) : <span />}
+          <Button type="button" size="sm" className="rounded-full text-xs" onClick={handleSave}>
+            <Check className="h-3 w-3 mr-1" /> Bewaar
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
