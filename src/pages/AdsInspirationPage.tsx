@@ -566,8 +566,12 @@ export default function AdsInspirationPage() {
                     <AdLibraryCard
                       key={item.id}
                       item={item}
-                      isFavorite={!!favorites[favoriteKeyFor(item.id)]}
-                      onToggleFavorite={() => toggleFavorite(item)}
+                      isFavorite={isItemFavorited(item.id)}
+                      clients={clients}
+                      locationsByClient={locationsByClient}
+                      onLoadLocations={loadLocationsForClient}
+                      onSaveWithContext={(clientId) => saveFavoriteWithContext(item, clientId)}
+                      onUnfavorite={() => removeAllFavoritesForItem(item.id)}
                       onPreview={() => setPreviewItem(item)}
                     />
                   ))}
