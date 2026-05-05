@@ -722,15 +722,15 @@ export default function AdsInspirationPage() {
                       </Button>
                     </a>
                   )}
-                  <Button
-                    onClick={() => toggleFavorite(previewItem)}
-                    variant={favorites[previewItem.id] ? 'default' : 'outline'}
-                    size="sm"
-                    className="rounded-full text-xs"
-                  >
-                    <Heart className={cn('h-3 w-3 mr-1', favorites[previewItem.id] && 'fill-current')} />
-                    {favorites[previewItem.id] ? 'Bewaard' : 'Bewaar'}
-                  </Button>
+                  <SaveContextPopover
+                    isFavorite={isItemFavorited(previewItem.id)}
+                    clients={clients}
+                    locationsByClient={locationsByClient}
+                    onLoadLocations={loadLocationsForClient}
+                    onSave={(clientId) => saveFavoriteWithContext(previewItem, clientId)}
+                    onUnfavorite={() => removeAllFavoritesForItem(previewItem.id)}
+                    triggerSize="sm"
+                  />
                 </div>
               </div>
             </div>
