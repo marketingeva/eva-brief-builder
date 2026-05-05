@@ -366,40 +366,48 @@ export default function AdsInspirationPage() {
     setHookLocation(ALL_LOCATIONS_VALUE);
   }, [hookClient, loadLocationsForClient]);
 
-  const favoriteKeyFor = (itemId: string) => `${itemId}::${resolvedClientId || 'global'}`;
+  const favoriteKeyFor = (itemId: string, clientId: string | null) => `${itemId}::${clientId || 'global'}`;
 
-  const toggleFavorite = async (item: InspirationItem) => {
-    const key = favoriteKeyFor(item.id);
-    const existing = favorites[key];
-    if (existing) {
-      const { error } = await supabase.from('inspiration_favorites').delete().eq('id', existing);
-      if (error) {
-        toast.error('Verwijderen mislukt');
-        return;
-      }
-      setFavorites((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      loadSavedFavoriteItems();
+  const isItemFavorited = (itemId: string) => {
+    return Object.keys(favorites).some((k) => k.startsWith(`${itemId}::`));
+  };
+
+  const removeAllFavoritesForItem = async (itemId: string) => {
+    const ids = Object.entries(favorites)
+      .filter(([k]) => k.startsWith(`${itemId}::`))
+      .map(([, v]) => v);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('inspiration_favorites').delete().in('id', ids);
+    if (error) {
+      toast.error('Verwijderen mislukt');
       return;
     }
+    setFavorites((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => { if (k.startsWith(`${itemId}::`)) delete next[k]; });
+      return next;
+    });
+    loadSavedFavoriteItems();
+  };
 
+  const saveFavoriteWithContext = async (item: InspirationItem, clientId: string | null) => {
+    const key = favoriteKeyFor(item.id, clientId);
+    if (favorites[key]) {
+      toast.info('Al bewaard voor deze context');
+      return;
+    }
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: resolvedClientId })
+      .insert({ item_id: item.id, client_id: clientId })
       .select('id')
       .single();
-
     if (error) {
       toast.error('Opslaan mislukt');
       return;
     }
-
     setFavorites((prev) => ({ ...prev, [key]: data.id }));
-    const clientName = resolvedClientId ? clients.find((c) => c.id === resolvedClientId)?.name : null;
-    toast.success(clientName ? `Bewaard voor ${clientName}` : 'Bewaard');
+    const clientName = clientId ? clients.find((c) => c.id === clientId)?.name : null;
+    toast.success(clientName ? `Bewaard voor ${clientName}` : 'Bewaard als algemeen');
     loadSavedFavoriteItems();
   };
 
