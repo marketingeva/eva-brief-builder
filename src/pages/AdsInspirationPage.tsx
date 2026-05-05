@@ -981,7 +981,12 @@ function HooksGenerator({
   onGenerate,
   onSave,
   isSaved,
-  saveContextLabel,
+  clients,
+  currentLocations,
+  hookClient,
+  hookLocation,
+  onClientChange,
+  onLocationChange,
 }: {
   loading: boolean;
   hooks: GeneratedHook[];
@@ -989,7 +994,12 @@ function HooksGenerator({
   onGenerate: (role: string) => void;
   onSave: (hook: GeneratedHook) => void;
   isSaved: (text: string) => boolean;
-  saveContextLabel: string;
+  clients: ClientOption[];
+  currentLocations: LocationOption[];
+  hookClient: string;
+  hookLocation: string;
+  onClientChange: (value: string) => void;
+  onLocationChange: (value: string) => void;
 }) {
   const [input, setInput] = useState('');
 
@@ -1000,30 +1010,85 @@ function HooksGenerator({
     onGenerate(v);
   };
 
+  const saveContextLabel = hookClient === GENERAL_CLIENT_VALUE
+    ? 'Algemeen'
+    : `${clients.find((c) => c.id === hookClient)?.name || 'Klant'}${
+        hookLocation === ALL_LOCATIONS_VALUE
+          ? ' · Alle locaties'
+          : ` · ${currentLocations.find((l) => l.id === hookLocation)?.name || ''}`
+      }`;
+
   return (
     <div className="space-y-5">
       <div>
         <p className="text-xs uppercase tracking-wide text-muted-foreground">Genereer hooks</p>
         <p className="text-sm text-muted-foreground mt-1">
-          Vul een functie in (bv. <span className="text-foreground font-medium">Verzorgende IG</span>, <span className="text-foreground font-medium">BBL Verpleegkunde</span>, <span className="text-foreground font-medium">Helpende Plus</span>) en genereer 12 confronterende hooks.
+          Kies eerst een klant, locatie en vul een functie in. Bij het opslaan worden hooks direct aan de juiste klant gekoppeld.
         </p>
       </div>
 
-      <form onSubmit={submit} className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-[480px]">
-          <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary pointer-events-none" />
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Functie, bv. Verzorgende IG"
-            className="h-10 pl-9 pr-3 rounded-full text-sm bg-background"
-          />
+      <div className="rounded-2xl border border-border/60 bg-background p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <Building2 className="h-3 w-3" /> Klant
+            </label>
+            <Select value={hookClient} onValueChange={onClientChange}>
+              <SelectTrigger className="h-10 rounded-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <MapPin className="h-3 w-3" /> Locatie
+            </label>
+            <Select
+              value={hookLocation}
+              onValueChange={onLocationChange}
+              disabled={hookClient === GENERAL_CLIENT_VALUE}
+            >
+              <SelectTrigger className="h-10 rounded-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_LOCATIONS_VALUE}>Alle locaties</SelectItem>
+                {currentLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}{l.city ? ` · ${l.city}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3" /> Functie
+            </label>
+            <form onSubmit={submit} className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="bv. Verzorgende IG"
+                className="h-10 rounded-full text-xs bg-background"
+              />
+            </form>
+          </div>
         </div>
-        <Button type="submit" disabled={loading || !input.trim()} className="rounded-full h-10 text-xs">
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
-          Genereer hooks
-        </Button>
-      </form>
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <Bookmark className="h-3 w-3" /> Bewaarcontext: <span className="text-foreground font-medium">{saveContextLabel}</span>
+          </p>
+          <Button type="button" onClick={submit} disabled={loading || !input.trim()} className="rounded-full h-9 text-xs">
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+            Genereer hooks
+          </Button>
+        </div>
+      </div>
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1036,9 +1101,6 @@ function HooksGenerator({
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <p className="text-xs text-muted-foreground">
               {hooks.length} hooks voor <span className="text-foreground font-medium">{role}</span>
-            </p>
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <Bookmark className="h-3 w-3" /> Bewaarcontext: <span className="text-foreground font-medium">{saveContextLabel}</span>
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
