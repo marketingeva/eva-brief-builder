@@ -66,9 +66,10 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (brand) {
           if (brand.tone_of_voice) parts.push(`Tone of voice: ${brand.tone_of_voice}`);
-          if (brand.brand_values) parts.push(`Kernwaarden: ${brand.brand_values}`);
-          if (brand.target_audience) parts.push(`Doelgroep: ${brand.target_audience}`);
-          if (brand.usp) parts.push(`USP: ${brand.usp}`);
+          if (Array.isArray(brand.words_to_use) && brand.words_to_use.length) parts.push(`Woorden om te gebruiken: ${brand.words_to_use.join(", ")}`);
+          if (Array.isArray(brand.words_to_avoid) && brand.words_to_avoid.length) parts.push(`Woorden om te vermijden: ${brand.words_to_avoid.join(", ")}`);
+          if (brand.employer_branding) parts.push(`Employer branding: ${brand.employer_branding}`);
+          if (brand.why_work_here) parts.push(`Waarom hier werken: ${brand.why_work_here}`);
         }
 
         clientContext = parts.join("\n");
