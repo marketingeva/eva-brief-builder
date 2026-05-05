@@ -573,7 +573,9 @@ export default function AdsInspirationPage() {
               )}
             </div>
 
-            {loading ? (
+            {!activeQuery ? (
+              <EmptyState label="Voer een zoekterm in (bv. Verzorgende IG) en druk op Enter om te zoeken" />
+            ) : loading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton key={i} className="rounded-2xl h-[520px]" />
