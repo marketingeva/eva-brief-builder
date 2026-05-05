@@ -533,39 +533,6 @@ export default function AdsInspirationPage() {
         )}
       </div>
 
-      {(activeTab === 'hooks' || activeTab === 'ad-library') && (
-        <div className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
-            <Bookmark className="h-3.5 w-3.5" /> Opslaan voor
-          </div>
-          <Select value={hookClient} onValueChange={setHookClient}>
-            <SelectTrigger className="w-[220px] h-9 rounded-full text-xs">
-              <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={GENERAL_CLIENT_VALUE}>Algemeen (geen klant)</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {hookClient !== GENERAL_CLIENT_VALUE && (
-            <Select value={hookLocation} onValueChange={setHookLocation}>
-              <SelectTrigger className="w-[240px] h-9 rounded-full text-xs">
-                <MapPin className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_LOCATIONS_VALUE}>Alle locaties</SelectItem>
-                {currentLocations.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.name}{l.city ? ` · ${l.city}` : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      )}
 
       <section className="rounded-3xl border border-border/60 bg-card p-5 space-y-4">
         {activeTab === 'ad-library' ? (
