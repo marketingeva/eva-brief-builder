@@ -195,8 +195,8 @@ export default function AdsInspirationPage() {
   const [favorites, setFavorites] = useState<Record<string, string>>({});
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
-  const [activeQuery, setActiveQuery] = useState<string>(FIXED_QUERY);
-  const [queryInput, setQueryInput] = useState<string>(FIXED_QUERY);
+  const [activeQuery, setActiveQuery] = useState<string>('');
+  const [queryInput, setQueryInput] = useState<string>('');
   const [generatedHooks, setGeneratedHooks] = useState<GeneratedHook[]>([]);
   const [hooksLoading, setHooksLoading] = useState(false);
   const [hooksRole, setHooksRole] = useState<string>('');
