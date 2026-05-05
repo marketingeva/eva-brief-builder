@@ -320,6 +320,7 @@ export default function AdsInspirationPage() {
   }, [activeTab, activeQuery]);
 
   useEffect(() => {
+    if (!activeQuery) return;
     (async () => {
       const { data: latest } = await supabase
         .from('inspiration_searches')
@@ -333,9 +334,10 @@ export default function AdsInspirationPage() {
   }, [activeQuery]);
 
   useEffect(() => {
+    if (!activeQuery) return;
     setVisibleCount(PAGE_SIZE);
     loadHub(false);
-  }, [loadHub]);
+  }, [loadHub, activeQuery]);
 
   const submitQuery = (e?: React.FormEvent) => {
     e?.preventDefault();
