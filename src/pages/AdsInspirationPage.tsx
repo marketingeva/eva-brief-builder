@@ -195,8 +195,8 @@ export default function AdsInspirationPage() {
   const [favorites, setFavorites] = useState<Record<string, string>>({});
   const [previewItem, setPreviewItem] = useState<InspirationItem | null>(null);
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
-  const [activeQuery, setActiveQuery] = useState<string>(FIXED_QUERY);
-  const [queryInput, setQueryInput] = useState<string>(FIXED_QUERY);
+  const [activeQuery, setActiveQuery] = useState<string>('');
+  const [queryInput, setQueryInput] = useState<string>('');
   const [generatedHooks, setGeneratedHooks] = useState<GeneratedHook[]>([]);
   const [hooksLoading, setHooksLoading] = useState(false);
   const [hooksRole, setHooksRole] = useState<string>('');
@@ -320,6 +320,7 @@ export default function AdsInspirationPage() {
   }, [activeTab, activeQuery]);
 
   useEffect(() => {
+    if (!activeQuery) return;
     (async () => {
       const { data: latest } = await supabase
         .from('inspiration_searches')
@@ -333,9 +334,10 @@ export default function AdsInspirationPage() {
   }, [activeQuery]);
 
   useEffect(() => {
+    if (!activeQuery) return;
     setVisibleCount(PAGE_SIZE);
     loadHub(false);
-  }, [loadHub]);
+  }, [loadHub, activeQuery]);
 
   const submitQuery = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -456,7 +458,9 @@ export default function AdsInspirationPage() {
             <Sparkles className="h-4 w-4 text-primary" /> Inspiration Hub
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {activeTab === 'ad-library' && <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>}
+            {activeTab === 'ad-library' && (activeQuery
+              ? <>Meta Ad Library inspiratie voor <span className="text-foreground font-medium">{activeQuery}</span></>
+              : <>Voer een zoekterm in om Meta Ad Library te doorzoeken</>)}
             {activeTab === 'hooks' && <>Confronterende hooks gegenereerd op basis van een functie</>}
             {activeTab === 'saved' && <>Al je opgeslagen advertenties en hooks op één plek</>}
           </p>
@@ -474,7 +478,7 @@ export default function AdsInspirationPage() {
                   className="h-9 pl-8 pr-3 w-[260px] rounded-full text-xs bg-background"
                 />
               </form>
-              <Button onClick={() => loadHub(true)} disabled={loading} className="rounded-full h-9 text-xs">
+              <Button onClick={() => loadHub(true)} disabled={loading || !activeQuery} className="rounded-full h-9 text-xs">
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                 Vernieuwen uit Meta Ad Library
               </Button>
@@ -558,7 +562,7 @@ export default function AdsInspirationPage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
-                <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
+                <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library{activeQuery ? ` · ${activeQuery}` : ''} · Nederland · Employment</p>
               </div>
               {search?.source_url && (
                 <a href={search.source_url} target="_blank" rel="noreferrer">
@@ -569,7 +573,9 @@ export default function AdsInspirationPage() {
               )}
             </div>
 
-            {loading ? (
+            {!activeQuery ? (
+              <EmptyState label="Voer een zoekterm in (bv. Verzorgende IG) en druk op Enter om te zoeken" />
+            ) : loading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton key={i} className="rounded-2xl h-[520px]" />
