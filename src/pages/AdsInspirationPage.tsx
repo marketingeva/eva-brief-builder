@@ -562,7 +562,7 @@ export default function AdsInspirationPage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Bron</p>
-                <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library · {activeQuery} · Nederland · Employment</p>
+                <p className="text-sm font-medium text-foreground mt-1">Meta Ad Library{activeQuery ? ` · ${activeQuery}` : ''} · Nederland · Employment</p>
               </div>
               {search?.source_url && (
                 <a href={search.source_url} target="_blank" rel="noreferrer">
