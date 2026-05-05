@@ -478,7 +478,7 @@ export default function AdsInspirationPage() {
                   className="h-9 pl-8 pr-3 w-[260px] rounded-full text-xs bg-background"
                 />
               </form>
-              <Button onClick={() => loadHub(true)} disabled={loading} className="rounded-full h-9 text-xs">
+              <Button onClick={() => loadHub(true)} disabled={loading || !activeQuery} className="rounded-full h-9 text-xs">
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
                 Vernieuwen uit Meta Ad Library
               </Button>
