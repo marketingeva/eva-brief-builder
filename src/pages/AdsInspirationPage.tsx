@@ -632,35 +632,29 @@ export default function AdsInspirationPage() {
               </div>
 
               <div className="p-6 space-y-4 max-h-[82vh] overflow-auto">
-                <div className="flex items-center gap-3">
-                  {previewItem.advertiser_logo_url ? (
-                    <img src={previewItem.advertiser_logo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                      {(previewItem.advertiser_name || '?').charAt(0).toUpperCase()}
+                {/* 1. PAGE (advertiser) */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Page</p>
+                  <div className="flex items-center gap-3">
+                    {previewItem.advertiser_logo_url ? (
+                      <img src={previewItem.advertiser_logo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                        {(previewItem.advertiser_name || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{previewItem.advertiser_name || 'Onbekend'}</p>
+                      <p className="text-xs text-muted-foreground">Sponsored</p>
                     </div>
-                  )}
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{previewItem.advertiser_name || 'Onbekend'}</p>
-                    <p className="text-xs text-muted-foreground">Sponsored</p>
                   </div>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="rounded-full">Active</Badge>
-                  {previewItem.media_type === 'video' && (
-                    <Badge variant="secondary" className="rounded-full">Video</Badge>
-                  )}
-                </div>
-
-                {previewItem.started_running && (
-                  <p className="text-xs text-muted-foreground">Started running on {previewItem.started_running}</p>
-                )}
 
                 {(() => {
                   const { primaryText, destinationLabel, headline, description, cta } = getDisplayTextParts(previewItem);
                   return (
                     <>
+                      {/* 2. PRIMARY TEXT */}
                       {primaryText && (
                         <div className="space-y-1.5">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Primary text</p>
@@ -668,13 +662,21 @@ export default function AdsInspirationPage() {
                         </div>
                       )}
 
+                      {/* 3. CONTENT (media — staat al links in de dialog, hier een verwijzing) */}
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Content</p>
+                        <p className="text-xs text-muted-foreground italic">Zie media links</p>
+                      </div>
+
+                      {/* 4. DESTINATION */}
                       {destinationLabel && (
                         <div className="space-y-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Bestemming</p>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Destination</p>
                           <p className="text-sm text-foreground/85">{destinationLabel}</p>
                         </div>
                       )}
 
+                      {/* 5. HEADLINE */}
                       {headline && (
                         <div className="space-y-1.5">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Headline</p>
@@ -682,9 +684,10 @@ export default function AdsInspirationPage() {
                         </div>
                       )}
 
+                      {/* 6. DESCRIPTION */}
                       {description && (
                         <div className="space-y-1.5">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Beschrijving</p>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Description</p>
                           <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">{description}</p>
                         </div>
                       )}
@@ -698,6 +701,17 @@ export default function AdsInspirationPage() {
                     </>
                   );
                 })()}
+
+                {/* Meta info onderaan */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-border/60">
+                  <Badge variant="secondary" className="rounded-full">Active</Badge>
+                  {previewItem.media_type === 'video' && (
+                    <Badge variant="secondary" className="rounded-full">Video</Badge>
+                  )}
+                  {previewItem.started_running && (
+                    <span className="text-xs text-muted-foreground self-center">Gestart op {previewItem.started_running}</span>
+                  )}
+                </div>
 
                 {previewItem.hook_text && activeTab === 'hooks' && (
                   <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-1.5">
