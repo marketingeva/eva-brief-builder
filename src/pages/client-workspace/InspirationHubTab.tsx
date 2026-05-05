@@ -44,31 +44,28 @@ export default function InspirationHubTab({ clientId }: { clientId: string }) {
         .order('created_at', { ascending: false }),
       supabase
         .from('inspiration_favorites')
-        .select('id, item_id')
-        .eq('client_id', clientId),
+        .select('id, advertiser_name, advertiser_logo_url, primary_text, headline, description, cta, ad_library_url, image_url, video_url')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false }),
     ]);
 
     setHooks((hookRows || []) as SavedHook[]);
 
-    const itemIds = [...new Set((favs || []).map((f: any) => f.item_id))];
-    if (itemIds.length === 0) {
-      setAds([]);
-    } else {
-      const { data: items } = await supabase
-        .from('inspiration_items')
-        .select('id, advertiser_name, advertiser_logo_url, primary_text, headline, description, cta, ad_library_url, image_url, video_url')
-        .in('id', itemIds);
-      const itemMap = new Map<string, any>();
-      (items || []).forEach((it: any) => itemMap.set(it.id, it));
-      setAds(
-        (favs || [])
-          .map((f: any) => {
-            const it = itemMap.get(f.item_id);
-            return it ? { favorite_id: f.id, ...it } as SavedAdItem : null;
-          })
-          .filter(Boolean) as SavedAdItem[]
-      );
-    }
+    setAds(
+      (favs || []).map((f: any) => ({
+        favorite_id: f.id,
+        id: f.id,
+        advertiser_name: f.advertiser_name,
+        advertiser_logo_url: f.advertiser_logo_url,
+        primary_text: f.primary_text,
+        headline: f.headline,
+        description: f.description,
+        cta: f.cta,
+        ad_library_url: f.ad_library_url,
+        image_url: f.image_url,
+        video_url: f.video_url,
+      })) as SavedAdItem[]
+    );
 
     setLoading(false);
   }, [clientId]);

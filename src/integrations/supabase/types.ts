@@ -1136,30 +1136,88 @@ export type Database = {
       }
       inspiration_favorites: {
         Row: {
+          ad_library_url: string | null
+          advertiser_logo_url: string | null
+          advertiser_name: string | null
+          advertiser_page_url: string | null
           client_id: string | null
           created_at: string
           created_by: string | null
+          cta: string | null
+          description: string | null
+          external_id: string | null
+          headline: string | null
           id: string
-          item_id: string
+          image_url: string | null
+          item_id: string | null
+          media_preview_url: string | null
+          media_type: string | null
+          media_urls: string[] | null
           notes: string | null
+          primary_text: string | null
+          publisher_platforms: string[] | null
+          raw_payload: Json | null
+          started_running: string | null
+          video_url: string | null
         }
         Insert: {
+          ad_library_url?: string | null
+          advertiser_logo_url?: string | null
+          advertiser_name?: string | null
+          advertiser_page_url?: string | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          cta?: string | null
+          description?: string | null
+          external_id?: string | null
+          headline?: string | null
           id?: string
-          item_id: string
+          image_url?: string | null
+          item_id?: string | null
+          media_preview_url?: string | null
+          media_type?: string | null
+          media_urls?: string[] | null
           notes?: string | null
+          primary_text?: string | null
+          publisher_platforms?: string[] | null
+          raw_payload?: Json | null
+          started_running?: string | null
+          video_url?: string | null
         }
         Update: {
+          ad_library_url?: string | null
+          advertiser_logo_url?: string | null
+          advertiser_name?: string | null
+          advertiser_page_url?: string | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          cta?: string | null
+          description?: string | null
+          external_id?: string | null
+          headline?: string | null
           id?: string
-          item_id?: string
+          image_url?: string | null
+          item_id?: string | null
+          media_preview_url?: string | null
+          media_type?: string | null
+          media_urls?: string[] | null
           notes?: string | null
+          primary_text?: string | null
+          publisher_platforms?: string[] | null
+          raw_payload?: Json | null
+          started_running?: string | null
+          video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "inspiration_favorites_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inspiration_favorites_item_id_fkey"
             columns: ["item_id"]

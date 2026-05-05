@@ -255,28 +255,40 @@ export default function AdsInspirationPage() {
   }, []);
 
   const loadSavedFavoriteItems = useCallback(async () => {
-    const { data: favs } = await supabase
+    const { data: favs, error } = await supabase
       .from('inspiration_favorites')
-      .select('id, item_id, client_id, client:clients(name)')
+      .select('id, item_id, client_id, advertiser_name, advertiser_logo_url, advertiser_page_url, primary_text, headline, description, cta, image_url, video_url, media_preview_url, media_urls, media_type, publisher_platforms, ad_library_url, external_id, started_running, raw_payload, client:clients(name)')
       .order('created_at', { ascending: false });
-    const itemIds = [...new Set((favs || []).map((f: any) => f.item_id))];
-    if (itemIds.length === 0) {
+    if (error) {
+      console.error('loadSavedFavoriteItems error:', error);
       setSavedFavoriteItems([]);
       return;
     }
-    const { data: rawItems } = await supabase
-      .from('inspiration_items')
-      .select('*')
-      .in('id', itemIds);
-    const itemMap = new Map<string, InspirationItem>();
-    (rawItems || []).forEach((it: any) => itemMap.set(it.id, it as InspirationItem));
     setSavedFavoriteItems(
-      (favs || [])
-        .map((f: any) => {
-          const item = itemMap.get(f.item_id);
-          return item ? { favorite_id: f.id, client_id: f.client_id, client: f.client, item } : null;
-        })
-        .filter(Boolean) as Array<{ favorite_id: string; client_id: string | null; client?: { name: string } | null; item: InspirationItem }>
+      (favs || []).map((f: any) => {
+        const item: InspirationItem = {
+          id: f.item_id || f.id,
+          search_id: '',
+          advertiser_name: f.advertiser_name ?? null,
+          advertiser_logo_url: f.advertiser_logo_url ?? null,
+          advertiser_page_url: f.advertiser_page_url ?? null,
+          ad_library_url: f.ad_library_url ?? null,
+          image_url: f.image_url ?? null,
+          media_preview_url: f.media_preview_url ?? null,
+          media_urls: f.media_urls ?? [],
+          video_url: f.video_url ?? null,
+          primary_text: f.primary_text ?? null,
+          description: f.description ?? null,
+          external_id: f.external_id ?? null,
+          started_running: f.started_running ?? null,
+          headline: f.headline ?? null,
+          cta: f.cta ?? null,
+          media_type: f.media_type ?? null,
+          publisher_platforms: f.publisher_platforms ?? [],
+          raw_payload: f.raw_payload ?? {},
+        };
+        return { favorite_id: f.id, client_id: f.client_id, client: f.client, item };
+      })
     );
   }, []);
 
@@ -402,7 +414,27 @@ export default function AdsInspirationPage() {
     }
     const { data, error } = await supabase
       .from('inspiration_favorites')
-      .insert({ item_id: item.id, client_id: clientId })
+      .insert({
+        item_id: item.id,
+        client_id: clientId,
+        advertiser_name: item.advertiser_name,
+        advertiser_logo_url: item.advertiser_logo_url,
+        advertiser_page_url: item.advertiser_page_url,
+        primary_text: item.primary_text,
+        headline: item.headline ?? null,
+        description: item.description ?? null,
+        cta: item.cta ?? null,
+        image_url: item.image_url,
+        video_url: item.video_url ?? null,
+        media_preview_url: item.media_preview_url ?? null,
+        media_urls: item.media_urls ?? [],
+        media_type: item.media_type ?? null,
+        publisher_platforms: item.publisher_platforms ?? [],
+        ad_library_url: item.ad_library_url,
+        external_id: item.external_id,
+        started_running: item.started_running,
+        raw_payload: (item.raw_payload ?? {}) as any,
+      })
       .select('id')
       .single();
     if (error) {
