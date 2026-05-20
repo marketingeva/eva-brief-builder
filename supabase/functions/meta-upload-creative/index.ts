@@ -298,14 +298,20 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
-function pickInstagramId(payload: any) {
-  return (
-    payload?.instagram_business_account?.id ||
-    payload?.connected_instagram_account?.id ||
-    payload?.instagram_accounts?.data?.[0]?.id ||
-    payload?.data?.[0]?.id ||
-    null
-  );
+function isInstagramBusinessId(value: unknown) {
+  return /^1784\d{8,}$/.test(String(value || ''));
+}
+
+function pickInstagramBusinessId(payload: any) {
+  const candidates = [
+    payload?.instagram_business_account?.id,
+    payload?.connected_instagram_account?.id,
+    payload?.instagram_accounts?.data?.[0]?.instagram_business_account?.id,
+    payload?.instagram_accounts?.data?.[0]?.id,
+    payload?.data?.[0]?.instagram_business_account?.id,
+    payload?.data?.[0]?.id,
+  ];
+  return candidates.find(isInstagramBusinessId) || null;
 }
 
 interface PageLookup {
@@ -320,7 +326,7 @@ async function resolvePageInfo(token: string, pageId: string): Promise<PageLooku
     token,
   );
   if (direct?.access_token) result.accessToken = direct.access_token;
-  const directIg = pickInstagramId(direct);
+  const directIg = pickInstagramBusinessId(direct);
   if (directIg) result.instagramId = directIg;
   if (direct?.error) console.warn('Page direct lookup', JSON.stringify(direct.error));
   if (result.accessToken && result.instagramId) return result;
@@ -336,7 +342,7 @@ async function resolvePageInfo(token: string, pageId: string): Promise<PageLooku
     if (page) {
       if (!result.accessToken && page.access_token) result.accessToken = page.access_token;
       if (!result.instagramId) {
-        const ig = pickInstagramId(page);
+        const ig = pickInstagramBusinessId(page);
         if (ig) result.instagramId = ig;
       }
       break;
@@ -367,7 +373,7 @@ async function resolveInstagramActorId(token: string, adAccount: string, pageId:
   for (const t of tries) {
     try {
       const j = await getFromMeta(t.pathOrUrl, t.lookupToken);
-      const id = pickInstagramId(j);
+      const id = pickInstagramBusinessId(j);
       if (id) {
         console.log('IG actor resolved via', t.label, id);
         return id;
