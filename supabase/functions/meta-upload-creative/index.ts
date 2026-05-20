@@ -250,11 +250,10 @@ function buildCreativeParameters(opts: {
     params.asset_feed_spec = asset_feed_spec;
   }
 
-  // Meta vereist sinds 2024 dat "standard enhancements" niet meer als veld
-  // worden meegegeven. Schakel ze expliciet uit per feature.
+  // Meta accepteert het oude standaardverbeteringen-veld niet meer, zelfs
+  // niet als opt-out. Stuur daarom alleen de afzonderlijke feature toggles mee.
   params.degrees_of_freedom_spec = {
     creative_features_spec: {
-      standard_enhancements: { enroll_status: 'OPT_OUT' },
       image_touchups: { enroll_status: 'OPT_OUT' },
       image_brightness_and_contrast: { enroll_status: 'OPT_OUT' },
       enhance_cta: { enroll_status: 'OPT_OUT' },
