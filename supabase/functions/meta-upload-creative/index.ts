@@ -51,6 +51,20 @@ const RATIO_TO_PLACEMENTS: Record<AspectRatio, PlacementSpec> = {
 
 const RATIO_PRIORITY: AspectRatio[] = ['1:1', '4:5', '9:16', '16:9'];
 
+function placementsForRatio(ratio: AspectRatio, availableRatios: Set<AspectRatio>): PlacementSpec {
+  // Als 4:5 aanwezig is, moet die de feed-placements krijgen. Anders matcht
+  // de brede 1:1-regel dezelfde placements en toont Meta overal de 1:1 asset.
+  if (ratio === '1:1' && availableRatios.has('4:5')) {
+    return {
+      publisher_platforms: ['facebook', 'instagram', 'audience_network'],
+      facebook_positions: ['marketplace', 'search', 'video_feeds'],
+      instagram_positions: ['explore_home'],
+      audience_network_positions: ['classic'],
+    };
+  }
+  return RATIO_TO_PLACEMENTS[ratio];
+}
+
 interface CreativeText {
   primary_texts: string[];
   headlines: string[];
