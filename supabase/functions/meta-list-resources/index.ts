@@ -259,6 +259,97 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (resource === 'instagram_accounts') {
+      if (!pageId) {
+        return jsonResponse({ data: [], error: 'page_id ontbreekt voor instagram_accounts.', fallback: true }, 400);
+      }
+
+      // Stap 1: Page Access Token ophalen — Instagram-koppeling vereist page token,
+      // niet de gewone user/system-user token.
+      let pageToken: string | null = null;
+      let debugInfo = '';
+
+      const directRes = await fetch(`${META_API}/${pageId}?fields=access_token,name&access_token=${token}`);
+      const directJson = await directRes.json();
+
+      if (directJson.access_token) {
+        pageToken = directJson.access_token;
+      } else {
+        debugInfo += `Direct lookup failed: ${directJson.error?.message || 'no access_token returned'}. `;
+        const accountsRes = await fetch(
+          `${META_API}/me/accounts?fields=id,name,access_token&limit=200&access_token=${token}`,
+        );
+        const accountsJson = await accountsRes.json();
+        if (accountsJson.error) {
+          debugInfo += `me/accounts failed: ${accountsJson.error.message}. `;
+        } else {
+          const match = (accountsJson.data || []).find((p: any) => p.id === pageId);
+          if (match?.access_token) pageToken = match.access_token;
+          else debugInfo += `Page ${pageId} niet gevonden in toegankelijke pages. `;
+        }
+      }
+
+      if (!pageToken) {
+        throw new Error(
+          `Kon geen Page Access Token ophalen voor page ${pageId}. ${debugInfo}` +
+            'Controleer of de Page ID klopt en de token toegang heeft tot deze page.',
+        );
+      }
+
+      // Stap 2: Verzamel alle Instagram identities die aan deze Page hangen.
+      // We proberen meerdere endpoints en dedupliceren op id.
+      const seen = new Map<string, { id: string; name: string; source: string }>();
+      const add = (id: any, name: any, source: string) => {
+        const sid = String(id ?? '').trim();
+        if (!/^\d{6,}$/.test(sid)) return;
+        if (seen.has(sid)) return;
+        seen.set(sid, { id: sid, name: String(name ?? '') || `Instagram ${sid}`, source });
+      };
+
+      // a) instagram_business_account + connected_instagram_account op de page
+      try {
+        const r = await fetch(
+          `${META_API}/${pageId}?fields=instagram_business_account{id,username,name},connected_instagram_account{id,username,name}&access_token=${pageToken}`,
+        );
+        const j = await r.json();
+        if (j.instagram_business_account?.id) {
+          const a = j.instagram_business_account;
+          add(a.id, a.username || a.name, 'instagram_business_account');
+        }
+        if (j.connected_instagram_account?.id) {
+          const a = j.connected_instagram_account;
+          add(a.id, a.username || a.name, 'connected_instagram_account');
+        }
+      } catch (e) {
+        console.warn('IG fields lookup failed', e);
+      }
+
+      // b) /{page}/instagram_accounts
+      try {
+        const r = await fetch(`${META_API}/${pageId}/instagram_accounts?fields=id,username,name&limit=50&access_token=${pageToken}`);
+        const j = await r.json();
+        for (const it of j.data || []) add(it.id, it.username || it.name, 'instagram_accounts');
+      } catch (e) {
+        console.warn('IG accounts lookup failed', e);
+      }
+
+      // c) /{page}/page_backed_instagram_accounts (fallback voor pages zonder gekoppeld IG)
+      try {
+        const r = await fetch(`${META_API}/${pageId}/page_backed_instagram_accounts?fields=id,username,name&limit=50&access_token=${pageToken}`);
+        const j = await r.json();
+        for (const it of j.data || []) add(it.id, it.username || it.name, 'page_backed_instagram_accounts');
+      } catch (e) {
+        console.warn('IG page_backed lookup failed', e);
+      }
+
+      // Sorteer: echte business accounts (1784…) eerst.
+      data = Array.from(seen.values()).sort((a, b) => {
+        const aBiz = /^1784\d+$/.test(a.id) ? 0 : 1;
+        const bBiz = /^1784\d+$/.test(b.id) ? 0 : 1;
+        return aBiz - bBiz;
+      });
+    }
+
     // template_ads / template_ad_detail removed: launcher now auto-copies a source ad.
 
     return jsonResponse({
