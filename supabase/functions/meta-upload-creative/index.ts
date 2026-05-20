@@ -210,11 +210,11 @@ function buildCreativeParameters(opts: {
     link_url: link,
   };
 
-  if (primary?.image_hash) params.image_hash = primary.image_hash;
-
   const hasMultipleText =
     primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
   const hasMultipleAssets = assets.length > 1;
+
+  if (!hasMultipleAssets && primary?.image_hash) params.image_hash = primary.image_hash;
 
   if (hasMultipleText || hasMultipleAssets) {
     const sharedLabels = [{ name: 'shared_copy' }];
