@@ -289,6 +289,20 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
+function buildDirectCreativePayload(opts: {
+  pageId: string;
+  name: string;
+  text: CreativeText;
+  leadFormId: string;
+  assets: UploadedAsset[];
+}) {
+  return {
+    name: opts.name,
+    object_story_spec: { page_id: opts.pageId },
+    ...buildCreativeParameters({ text: opts.text, leadFormId: opts.leadFormId, assets: opts.assets }),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
