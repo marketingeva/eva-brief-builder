@@ -298,11 +298,9 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
-// Meta accepteert verschillende ID-formaten voor `instagram_user_id`:
-//  - 1784… (Instagram Business Account ID via Graph API)
-//  - andere numerieke IDs voor page-connected accounts (mits gepaard met juiste page_id)
-// We verzamelen daarom ALLE plausibele kandidaten en proberen ze één voor één
-// tegen de Meta adcreatives endpoint tot er één geaccepteerd wordt.
+// Meta Ads Manager gebruikt voor de Instagram-profiel dropdown meestal de
+// actor/user ID, terwijl Graph API vaak ook een 1784… Business Account ID geeft.
+// Voor zichtbaarheid in Ads Manager proberen we actor/user IDs daarom vóór 1784… IDs.
 
 
 
@@ -327,23 +325,42 @@ async function fetchIgCandidates(
     ordered.push({ id: s, source });
   };
 
-  // 1. Expliciet door de gebruiker gekozen IG-profiel krijgt altijd voorrang.
-  //    Dit is het profiel dat ze in de Meta-instellingen via de combobox hebben
-  //    geselecteerd op basis van de Page-koppeling.
-  if (explicitId) add(explicitId, 'client_setting');
+  const actorFirst: IgCandidate[] = [];
+  const graphFallback: IgCandidate[] = [];
+  const addRanked = (id: string | null | undefined, source: string) => {
+    const s = String(id ?? '').trim();
+    if (!/^\d{6,}$/.test(s) || seen.has(s)) return;
+    seen.add(s);
+    const candidate = { id: s, source };
+    if (/^1784\d+$/.test(s)) graphFallback.push(candidate);
+    else actorFirst.push(candidate);
+  };
+
+  // 1. Ad-account Instagram identities komen overeen met de Ads Manager dropdown.
+  try {
+    const accountIg = await getFromMeta(`${adAccount}/instagram_accounts?fields=id,ig_id,username&limit=200`, token);
+    for (const it of accountIg?.data || []) {
+      addRanked(it?.ig_id, 'ad_account.instagram_accounts.ig_id');
+      addRanked(it?.id, 'ad_account.instagram_accounts');
+    }
+  } catch (e) {
+    console.warn('IG candidates: ad account instagram_accounts failed', e);
+  }
 
   // 2. Page Access Token + officiële Page → IG koppeling. Dit is exact dezelfde
   //    bron die de instellingen-dialoog gebruikt, dus normaal is dit hetzelfde ID.
   let pageAccessToken: string | null = null;
   try {
     const pageRes = await getFromMeta(
-      `${pageId}?fields=access_token,instagram_business_account{id,username},connected_instagram_account{id,username}`,
+      `${pageId}?fields=access_token,instagram_business_account{id,ig_id,username},connected_instagram_account{id,ig_id,username}`,
       token,
     );
     if (pageRes?.error) console.warn('IG candidates: page lookup', JSON.stringify(pageRes.error));
     if (pageRes?.access_token) pageAccessToken = pageRes.access_token;
-    add(pageRes?.instagram_business_account?.id, 'page.instagram_business_account');
-    add(pageRes?.connected_instagram_account?.id, 'page.connected_instagram_account');
+    addRanked(pageRes?.instagram_business_account?.ig_id, 'page.instagram_business_account.ig_id');
+    addRanked(pageRes?.connected_instagram_account?.ig_id, 'page.connected_instagram_account.ig_id');
+    addRanked(pageRes?.instagram_business_account?.id, 'page.instagram_business_account');
+    addRanked(pageRes?.connected_instagram_account?.id, 'page.connected_instagram_account');
   } catch (e) {
     console.warn('IG candidates: page lookup failed', e);
   }
@@ -351,18 +368,27 @@ async function fetchIgCandidates(
   // 3. Page-level instagram_accounts en page_backed (alleen met page token).
   if (pageAccessToken) {
     try {
-      const pg = await getFromMeta(`${pageId}/instagram_accounts?fields=id,username`, pageAccessToken);
-      for (const it of pg?.data || []) add(it?.id, 'page.instagram_accounts');
+      const pg = await getFromMeta(`${pageId}/instagram_accounts?fields=id,ig_id,username`, pageAccessToken);
+      for (const it of pg?.data || []) {
+        addRanked(it?.ig_id, 'page.instagram_accounts.ig_id');
+        addRanked(it?.id, 'page.instagram_accounts');
+      }
     } catch (e) { console.warn('IG candidates: page.instagram_accounts failed', e); }
 
     try {
-      const pbia = await getFromMeta(`${pageId}/page_backed_instagram_accounts?fields=id,username`, pageAccessToken);
-      for (const it of pbia?.data || []) add(it?.id, 'page.page_backed_instagram_accounts');
+      const pbia = await getFromMeta(`${pageId}/page_backed_instagram_accounts?fields=id,ig_id,username`, pageAccessToken);
+      for (const it of pbia?.data || []) {
+        addRanked(it?.ig_id, 'page.page_backed_instagram_accounts.ig_id');
+        addRanked(it?.id, 'page.page_backed_instagram_accounts');
+      }
     } catch (e) { console.warn('IG candidates: page.page_backed failed', e); }
   }
 
+  // Expliciete instelling behouden, maar 1784… pas na actor/user IDs proberen.
+  addRanked(explicitId, 'client_setting');
+
   // Veiligheidsnet: filter de Facebook Page ID — die is nooit een geldige IG ID.
-  return ordered.filter((c) => c.id !== String(pageId).trim());
+  return [...actorFirst, ...graphFallback].filter((c) => c.id !== String(pageId).trim());
 }
 
 
