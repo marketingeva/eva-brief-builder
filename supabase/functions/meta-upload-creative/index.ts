@@ -298,130 +298,132 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
-function isInstagramBusinessId(value: unknown) {
-  return /^1784\d{8,}$/.test(String(value || ''));
-}
+// Meta accepteert verschillende ID-formaten voor `instagram_user_id`:
+//  - 1784… (Instagram Business Account ID via Graph API)
+//  - andere numerieke IDs voor page-connected accounts (mits gepaard met juiste page_id)
+// We verzamelen daarom ALLE plausibele kandidaten en proberen ze één voor één
+// tegen de Meta adcreatives endpoint tot er één geaccepteerd wordt.
 
-function pickInstagramBusinessId(payload: any) {
-  const candidates = [
-    payload?.instagram_business_account?.id,
-    payload?.connected_instagram_account?.id,
-    payload?.instagram_accounts?.data?.[0]?.instagram_business_account?.id,
-    payload?.instagram_accounts?.data?.[0]?.id,
-    payload?.data?.[0]?.instagram_business_account?.id,
-    payload?.data?.[0]?.id,
-  ];
-  return candidates.find(isInstagramBusinessId) || null;
-}
-
-interface PageLookup {
-  accessToken: string | null;
-  instagramId: string | null;
-}
-
-async function resolvePageInfo(token: string, pageId: string): Promise<PageLookup> {
-  const result: PageLookup = { accessToken: null, instagramId: null };
-  const direct = await getFromMeta(
-    `${pageId}?fields=access_token,instagram_business_account{id,username},connected_instagram_account{id,username}`,
-    token,
-  );
-  if (direct?.access_token) result.accessToken = direct.access_token;
-  const directIg = pickInstagramBusinessId(direct);
-  if (directIg) result.instagramId = directIg;
-  if (direct?.error) console.warn('Page direct lookup', JSON.stringify(direct.error));
-  if (result.accessToken && result.instagramId) return result;
-
-  let url = `${META_API}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&limit=100`;
-  for (let i = 0; i < 10 && url; i++) {
-    const pageList = await getFromMeta(url, token);
-    if (pageList?.error) {
-      console.warn('Page accounts lookup', JSON.stringify(pageList.error));
-      break;
-    }
-    const page = (pageList?.data || []).find((p: any) => String(p.id) === String(pageId));
-    if (page) {
-      if (!result.accessToken && page.access_token) result.accessToken = page.access_token;
-      if (!result.instagramId) {
-        const ig = pickInstagramBusinessId(page);
-        if (ig) result.instagramId = ig;
-      }
-      break;
-    }
-    url = pageList?.paging?.next || '';
+function collectIds(payload: any, out: Set<string>) {
+  if (!payload || typeof payload !== 'object') return;
+  const push = (v: unknown) => {
+    const s = String(v ?? '').trim();
+    if (/^\d{6,}$/.test(s)) out.add(s);
+  };
+  push(payload.instagram_business_account?.id);
+  push(payload.connected_instagram_account?.id);
+  push(payload.id);
+  for (const item of payload.data || []) {
+    push(item?.id);
+    push(item?.instagram_business_account?.id);
+    push(item?.connected_instagram_account?.id);
   }
-  return result;
+  for (const item of payload.instagram_accounts?.data || []) {
+    push(item?.id);
+    push(item?.instagram_business_account?.id);
+  }
+  for (const item of payload.connected_instagram_accounts?.data || []) {
+    push(item?.id);
+  }
+  for (const item of payload.page_backed_instagram_accounts?.data || []) {
+    push(item?.id);
+  }
 }
 
-async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
-  const pageInfo = await resolvePageInfo(token, pageId);
-  if (pageInfo.instagramId) {
-    console.log('IG actor resolved via page.me_accounts', pageInfo.instagramId);
-    return pageInfo.instagramId;
+interface IgCandidate {
+  id: string;
+  source: string;
+}
+
+async function fetchIgCandidates(
+  token: string,
+  adAccount: string,
+  pageId: string,
+  explicitId: string | null,
+): Promise<IgCandidate[]> {
+  const seen = new Set<string>();
+  const ordered: IgCandidate[] = [];
+  const add = (id: string | null | undefined, source: string) => {
+    const s = String(id ?? '').trim();
+    if (!/^\d{6,}$/.test(s) || seen.has(s)) return;
+    seen.add(s);
+    ordered.push({ id: s, source });
+  };
+
+  // Stap 1: Page bekijken om Business Account én Page access token op te halen.
+  let pageAccessToken: string | null = null;
+  try {
+    const pageRes = await getFromMeta(
+      `${pageId}?fields=access_token,instagram_business_account{id,username},connected_instagram_account{id,username}`,
+      token,
+    );
+    if (pageRes?.error) console.warn('IG candidates: page lookup', JSON.stringify(pageRes.error));
+    if (pageRes?.access_token) pageAccessToken = pageRes.access_token;
+    const ids = new Set<string>();
+    collectIds(pageRes, ids);
+    for (const id of ids) add(id, 'page.fields');
+  } catch (e) {
+    console.warn('IG candidates: page lookup failed', e);
   }
-  const pageToken = pageInfo.accessToken;
-  const tries: Array<{ label: string; pathOrUrl: string; lookupToken: string }> = [
-    ...(pageToken ? [
-      { label: 'page.fields.page_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: pageToken },
-      { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
-    ] : []),
-    { label: 'page.fields.user_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: token },
-    { label: 'adaccount.instagram_accounts', pathOrUrl: `${adAccount}/instagram_accounts?fields=id,username`, lookupToken: token },
-    ...(pageToken ? [
-      { label: 'page.page_backed_instagram_accounts.page_token', pathOrUrl: `${pageId}/page_backed_instagram_accounts?fields=id,username`, lookupToken: pageToken },
-    ] : []),
-  ];
-  for (const t of tries) {
+
+  // Stap 2: Connected instagram accounts op het ad account (officiële Meta endpoint).
+  try {
+    const acc = await getFromMeta(
+      `${adAccount}/connected_instagram_accounts?fields=id,username&limit=200`,
+      token,
+    );
+    if (acc?.error) console.warn('IG candidates: adaccount.connected_instagram_accounts', JSON.stringify(acc.error));
+    const ids = new Set<string>();
+    collectIds(acc, ids);
+    for (const id of ids) add(id, 'adaccount.connected_instagram_accounts');
+  } catch (e) {
+    console.warn('IG candidates: adaccount connected failed', e);
+  }
+
+  // Stap 3: instagram_accounts op het ad account.
+  try {
+    const acc = await getFromMeta(
+      `${adAccount}/instagram_accounts?fields=id,username,instagram_business_account{id,username}&limit=200`,
+      token,
+    );
+    if (acc?.error) console.warn('IG candidates: adaccount.instagram_accounts', JSON.stringify(acc.error));
+    const ids = new Set<string>();
+    collectIds(acc, ids);
+    for (const id of ids) add(id, 'adaccount.instagram_accounts');
+  } catch (e) {
+    console.warn('IG candidates: adaccount ig accounts failed', e);
+  }
+
+  // Stap 4: instagram_accounts op de page zelf, met page token indien beschikbaar.
+  if (pageAccessToken) {
     try {
-      const j = await getFromMeta(t.pathOrUrl, t.lookupToken);
-      const id = pickInstagramBusinessId(j);
-      if (id) {
-        console.log('IG actor resolved via', t.label, id);
-        return id;
-      }
-      if (j?.error) console.warn('IG lookup', t.label, JSON.stringify(j.error));
-    } catch (e) { console.warn('IG lookup failed', t.label, e); }
+      const pg = await getFromMeta(`${pageId}/instagram_accounts?fields=id,username`, pageAccessToken);
+      if (pg?.error) console.warn('IG candidates: page.instagram_accounts', JSON.stringify(pg.error));
+      const ids = new Set<string>();
+      collectIds(pg, ids);
+      for (const id of ids) add(id, 'page.instagram_accounts');
+    } catch (e) { console.warn('IG candidates: page.instagram_accounts failed', e); }
+
+    try {
+      const pbia = await getFromMeta(`${pageId}/page_backed_instagram_accounts?fields=id,username`, pageAccessToken);
+      if (pbia?.error) console.warn('IG candidates: page.page_backed', JSON.stringify(pbia.error));
+      const ids = new Set<string>();
+      collectIds(pbia, ids);
+      for (const id of ids) add(id, 'page.page_backed_instagram_accounts');
+    } catch (e) { console.warn('IG candidates: page.page_backed failed', e); }
   }
-  return null;
-}
 
+  // Stap 5: het door de gebruiker opgegeven ID als laatste fallback toevoegen.
+  if (explicitId) add(explicitId, 'client_setting');
 
-async function normalizeInstagramBusinessId(token: string, adAccount: string, pageId: string, rawId: string): Promise<string | null> {
-  if (isInstagramBusinessId(rawId)) return rawId;
+  // Sorteer: 1784… (Business Account IDs) eerst — die werken het breedst.
+  ordered.sort((a, b) => {
+    const aBiz = /^1784\d+$/.test(a.id) ? 0 : 1;
+    const bBiz = /^1784\d+$/.test(b.id) ? 0 : 1;
+    return aBiz - bBiz;
+  });
 
-  // 0) De pagina is de betrouwbaarste bron: Meta koppelt het juiste
-  //    Instagram Business Account aan de Facebook Page. Gebruik die eerst,
-  //    zeker wanneer de klant-instelling een Ads Manager UI-ID (1646…) bevat.
-  try {
-    const pageInfo = await resolvePageInfo(token, pageId);
-    if (pageInfo.instagramId) return String(pageInfo.instagramId);
-  } catch (e) { console.warn('normalize ig page lookup failed', e); }
-
-  // 1) Directe lookup op het ID: misschien is dit al een IG Business Account
-  //    of bevat het een instagram_business_account verwijzing.
-  try {
-    const direct = await getFromMeta(`${rawId}?fields=id,username,instagram_business_account{id,username}`, token);
-    if (isInstagramBusinessId(direct?.instagram_business_account?.id)) return String(direct.instagram_business_account.id);
-    if (isInstagramBusinessId(direct?.id)) return String(direct.id);
-    if (direct?.error) console.warn('normalize ig direct lookup', JSON.stringify(direct.error));
-  } catch (e) { console.warn('normalize ig direct lookup failed', e); }
-
-  // 2) Loop adaccount instagram_accounts en match op id of username
-  try {
-    let url = `${META_API}/${adAccount}/instagram_accounts?fields=id,username,instagram_business_account{id,username}&limit=200`;
-    for (let i = 0; i < 5 && url; i++) {
-      const list = await getFromMeta(url, token);
-      if (list?.error) { console.warn('normalize ig list', JSON.stringify(list.error)); break; }
-      const items: any[] = list?.data || [];
-      const match = items.find((it) => String(it.id) === String(rawId));
-      if (isInstagramBusinessId(match?.instagram_business_account?.id)) return String(match.instagram_business_account.id);
-      // Als één van de business_accounts.id == rawId, gebruik die
-      const reverse = items.find((it) => String(it.instagram_business_account?.id) === String(rawId));
-      if (isInstagramBusinessId(reverse?.instagram_business_account?.id)) return String(reverse.instagram_business_account.id);
-      url = list?.paging?.next || '';
-    }
-  } catch (e) { console.warn('normalize ig list failed', e); }
-
-  return null;
+  return ordered;
 }
 
 function buildDirectCreativePayload(opts: {
