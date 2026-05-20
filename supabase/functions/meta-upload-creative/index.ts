@@ -250,7 +250,7 @@ function buildCreativeParameters(opts: {
     params.asset_feed_spec = asset_feed_spec;
   }
 
-  // Meta accepteert het oude `standard_enhancements` veld niet meer, zelfs
+  // Meta accepteert het oude standaardverbeteringen-veld niet meer, zelfs
   // niet als opt-out. Stuur daarom alleen de afzonderlijke feature toggles mee.
   params.degrees_of_freedom_spec = {
     creative_features_spec: {
