@@ -225,7 +225,7 @@ function buildCreativeParameters(opts: {
       descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t, adlabels: sharedLabels })),
       link_urls: [{ website_url: link, adlabels: sharedLabels }],
       call_to_action_types: [ctaType],
-      call_to_actions: [callToAction],
+      call_to_actions: [{ ...callToAction, adlabels: sharedLabels }],
     };
 
     // Bouw stabiele labels per asset (verplicht voor asset_customization_rules).
@@ -261,6 +261,7 @@ function buildCreativeParameters(opts: {
           title_label: sharedLabels[0],
           description_label: sharedLabels[0],
           link_url_label: sharedLabels[0],
+          call_to_action_label: sharedLabels[0],
         };
         if (a.is_video) rule.video_label = { name: labelFor(a, i) };
         else rule.image_label = { name: labelFor(a, i) };
