@@ -346,11 +346,16 @@ async function resolvePageInfo(token: string, pageId: string): Promise<PageLooku
 }
 
 async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
-  const pageToken = await resolvePageAccessToken(token, pageId);
+  const pageInfo = await resolvePageInfo(token, pageId);
+  if (pageInfo.instagramId) {
+    console.log('IG actor resolved via page.me_accounts', pageInfo.instagramId);
+    return pageInfo.instagramId;
+  }
+  const pageToken = pageInfo.accessToken;
   const tries: Array<{ label: string; pathOrUrl: string; lookupToken: string }> = [
     ...(pageToken ? [
-      { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
       { label: 'page.fields.page_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: pageToken },
+      { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
     ] : []),
     { label: 'page.fields.user_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: token },
     { label: 'adaccount.instagram_accounts', pathOrUrl: `${adAccount}/instagram_accounts?fields=id,username`, lookupToken: token },
