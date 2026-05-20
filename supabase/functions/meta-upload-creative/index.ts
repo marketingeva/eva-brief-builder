@@ -250,8 +250,20 @@ function buildCreativeParameters(opts: {
     params.asset_feed_spec = asset_feed_spec;
   }
 
-  // We sturen geen creative_features_spec mee: Meta accepteert alleen een
-  // beperkte set keys en de defaults zijn voor onze use case prima.
+  // Meta vereist dat we expliciet afzonderlijke features opt-outen i.p.v.
+  // het oude 'standard enhancements' veld. Alleen de door Meta toegestane
+  // keys in creative_features_spec gebruiken.
+  params.degrees_of_freedom_spec = {
+    creative_features_spec: {
+      standard_enhancements_catalog: { enroll_status: 'OPT_OUT' },
+      image_animation: { enroll_status: 'OPT_OUT' },
+      text_overlay_translation: { enroll_status: 'OPT_OUT' },
+      ig_video_native_subtitle: { enroll_status: 'OPT_OUT' },
+      product_metadata_automation: { enroll_status: 'OPT_OUT' },
+      profile_card: { enroll_status: 'OPT_OUT' },
+      product_browsing: { enroll_status: 'OPT_OUT' },
+    },
+  };
 
   return params;
 }
