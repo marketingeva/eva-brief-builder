@@ -1,26 +1,52 @@
-Plan om dit goed te fixen:
+## Advies
+Ja, je richting klopt: we moeten niet één ID proberen alsof beide ID-types hetzelfde veld gebruiken. De fout laat precies zien dat Meta ze verschillend valideert:
 
-1. **Instagram-account expliciet ophalen en opslaan, net als Facebook Page**
-   - Breid de bestaande Meta resource-functie uit met een `instagram_accounts` resource.
-   - Gebruik hiervoor dezelfde bewezen Page-token aanpak als bij lead forms: eerst Page access token ophalen, daarna de aan de Page gekoppelde Instagram identity ophalen.
-   - Resultaat teruggeven als duidelijke lijst met `id`, `name/username` en source.
+- `1646842048691596` faalt als `instagram_user_id`
+- `17841404254570727` faalt als `instagram_actor_id`
 
-2. **Launcher UI gebruikt een echte Instagram-selectie in plaats van verborgen auto-guessing**
-   - Voeg in de Meta-instellingen een automatische Instagram lookup/selectie toe op basis van de ingestelde Facebook Page ID.
-   - Laat de gekozen Instagram ID opslaan in `clients.meta_instagram_account_id`, precies zoals de Facebook Page ID nu client-specifiek wordt opgeslagen.
-   - Houd handmatige invoer alleen als fallback, maar de normale route wordt: Page kiezen/instellen → Instagram account ophalen → opslaan → launcher gebruikt exact die identity.
+Dus de fix is: beide waarden gebruiken, maar elk op het juiste Meta-veld.
 
-3. **Upload-flow simpeler en deterministischer maken**
-   - Bij launch eerst de opgeslagen Instagram ID gebruiken.
-   - Alleen als die ontbreekt, fallback naar server-side lookup via dezelfde Page-token resolver.
-   - Stoppen met brede candidate guessing over ad-account endpoints als primaire route, omdat Meta Ads Manager de identity blijkbaar niet als “geselecteerd profiel” ziet ondanks creative-acceptatie.
+## Plan
+1. **Instagram-ID’s als pair behandelen**
+   - Bouw in `meta-upload-creative` een resolver die per Instagram-profiel zowel de `ig_id`/legacy actor ID als de `1784...` Business Account ID bewaart.
+   - Niet meer één platte kandidatenlijst met losse IDs proberen.
 
-4. **Ad creation aansluiten op Meta’s identity requirement**
-   - Voor placement asset creatives altijd `object_story_spec.page_id` én `object_story_spec.instagram_user_id` zetten.
-   - De gekozen/gevonden Instagram ID na creative creation verifiëren en loggen.
-   - Als Meta geen Instagram identity accepteert, een concrete fout teruggeven: “Instagram-profiel niet gevonden voor deze Page; open Meta-instellingen en selecteer het gekoppelde profiel.”
+2. **Payload aanpassen naar dual-ID payload**
+   - Voor directe creatives met meerdere formaten:
+     - `object_story_spec.instagram_user_id` krijgt het `1784...` Instagram Business Account ID.
+     - top-level `instagram_actor_id` krijgt het legacy actor/user ID `1646...`.
+   - Als één van beide ontbreekt, alleen dan een gecontroleerde fallback proberen.
 
-5. **Validatie**
-   - Edge function deployen.
-   - Met de Rivas client controleren dat de Instagram lookup hetzelfde account teruggeeft als de Page-koppeling.
-   - Controleren dat nieuwe uploads niet meer afhankelijk zijn van het oude `1646...` ID en dat de opgeslagen `1784...` identity wordt gebruikt.
+3. **Resource discovery gelijk trekken met Facebook Page-selectie**
+   - `meta-list-resources` laat per Instagram-account beide IDs zien/teruggeven, niet alleen `id`.
+   - De UI blijft simpel: gebruiker kiest één Instagram-profiel, intern slaan/gebruiken we de juiste ID-combinatie.
+
+4. **Geen verkeerde overschrijvingen meer**
+   - Voorkom dat een succesvolle fallback het opgeslagen client-ID vervangt door het verkeerde ID-type.
+   - Alleen opslaan als we zeker weten dat het bij hetzelfde profiel hoort.
+
+5. **Validatie via logs**
+   - Extra logging toevoegen rond de uiteindelijke payload-identiteit: welke `instagram_actor_id` en welke `instagram_user_id` gebruikt zijn.
+   - Daarna kan een nieuwe testlaunch direct bevestigen of Meta de Instagram-profielselectie accepteert.
+
+## Technische kern
+De huidige code gebruikt `cand.id` voor beide plekken:
+
+```ts
+story.instagram_user_id = cand.id;
+payload.instagram_actor_id = cand.id;
+```
+
+Dat is waarschijnlijk de oorzaak. Dit moet worden:
+
+```ts
+story.instagram_user_id = businessAccountId; // 1784...
+payload.instagram_actor_id = actorId;        // 1646...
+```
+
+Voor Rivas wordt dat dus:
+
+```ts
+instagram_user_id: "17841404254570727"
+instagram_actor_id: "1646842048691596"
+```
