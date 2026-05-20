@@ -541,6 +541,7 @@ Deno.serve(async (req) => {
 
           // Probeer ieder kandidaat-ID tot Meta er één accepteert.
           let creativeJson: any = null;
+          let acceptedIg: IgCandidate | null = null;
           let lastErr: Error | null = null;
           for (const cand of candidates) {
             try {
@@ -552,6 +553,7 @@ Deno.serve(async (req) => {
                 leadFormId: body.lead_form_id,
                 assets,
               }));
+              acceptedIg = cand;
               console.log('IG ID accepted by Meta:', cand.id, 'source:', cand.source);
               break;
             } catch (err) {
@@ -566,6 +568,36 @@ Deno.serve(async (req) => {
           }
           if (!creativeJson) {
             throw lastErr || new Error('Meta accepteerde geen enkel Instagram-account ID.');
+          }
+
+          // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
+          try {
+            const verify = await getFromMeta(
+              `${creativeJson.id}?fields=object_story_spec,instagram_user_id,effective_instagram_media_id`,
+              token,
+            );
+            console.log('Creative verify:', JSON.stringify({
+              id: creativeJson.id,
+              instagram_user_id: verify?.instagram_user_id,
+              oss_ig: verify?.object_story_spec?.instagram_user_id,
+              oss_page: verify?.object_story_spec?.page_id,
+            }));
+          } catch (e) {
+            console.warn('Creative verify failed', e);
+          }
+
+          // Persisteer het werkende IG ID op de klant, zodat volgende launches
+          // dit ID direct gebruiken i.p.v. het oude UI-ID (1646…).
+          if (acceptedIg && acceptedIg.source !== 'client_setting') {
+            try {
+              await supabase
+                .from('clients')
+                .update({ meta_instagram_account_id: acceptedIg.id } as any)
+                .eq('id', body.client_id);
+              console.log('Persisted accepted IG ID to client:', acceptedIg.id);
+            } catch (e) {
+              console.warn('Persist IG ID failed', e);
+            }
           }
 
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
