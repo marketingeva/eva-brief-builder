@@ -172,6 +172,29 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
     });
   };
 
+  const retryFailedUploads = (bundleId: string) => {
+    setBundles((cur) => {
+      const filesToRetry: File[] = [];
+      const next = cur.map((b) => {
+        if (b.id !== bundleId) return b;
+        return {
+          ...b,
+          variants: b.variants.map((v) => {
+            if (!v.upload_error) return v;
+            filesToRetry.push(v.file);
+            return { ...v, uploading: true, upload_error: undefined };
+          }),
+        };
+      });
+
+      queueMicrotask(() => {
+        for (const file of filesToRetry) uploadVariant(bundleId, file);
+      });
+
+      return next;
+    });
+  };
+
   const editing = bundles.find((c) => c.id === editingId);
 
   const canLaunch =
@@ -325,6 +348,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
                     onEditTexts={() => setEditingId(b.id)}
                     onRemove={() => removeBundle(b.id)}
                     onUnbundle={b.variants.length > 1 ? () => unbundle(b.id) : undefined}
+                    onRetryFailed={() => retryFailedUploads(b.id)}
                     onAddVariant={(files) => {
                       // Voeg toe als variant aan deze bundle (forceer dezelfde basenaam).
                       const fakeNamed = files.map((f) => {
