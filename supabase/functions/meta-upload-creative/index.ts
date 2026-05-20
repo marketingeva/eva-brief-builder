@@ -495,44 +495,46 @@ Deno.serve(async (req) => {
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const explicitIg = (body.instagram_account_id || '').trim() || null;
-          const candidates = await fetchIgCandidates(token, adAccount, body.page_id, explicitIg);
-          console.log('IG candidates:', candidates.map((c) => `${c.id}(${c.source})`).join(', ') || '<none>');
-          if (candidates.length === 0) {
+          const identities = await resolveIgIdentity(token, adAccount, body.page_id, explicitIg);
+          console.log(
+            'IG identities:',
+            identities.map((p) => `[actor=${p.actorId || '-'} business=${p.businessId || '-'} ${p.source}]`).join(', ') || '<none>',
+          );
+          if (identities.length === 0) {
             throw new Error(
               'Geen Instagram-account gevonden voor deze Facebook Page of ad account. ' +
               'Koppel een Instagram Business Account aan de Page in Meta Business Settings, of vul het Instagram Account ID in bij Meta-instellingen.',
             );
           }
 
-          // Probeer ieder kandidaat-ID tot Meta er één accepteert.
+          // Probeer ieder paar (actorId + businessId tegelijk) tot Meta er één accepteert.
           let creativeJson: any = null;
-          let acceptedIg: IgCandidate | null = null;
+          let acceptedIdentity: IgIdentity | null = null;
           let lastErr: Error | null = null;
-          for (const cand of candidates) {
+          for (const ident of identities) {
             try {
               creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                 pageId: body.page_id,
-                instagramActorId: cand.id,
+                identity: ident,
                 name: adName,
                 text: bundle.texts,
                 leadFormId: body.lead_form_id,
                 assets,
               }));
-              acceptedIg = cand;
-              console.log('IG ID accepted by Meta:', cand.id, 'source:', cand.source);
+              acceptedIdentity = ident;
+              console.log('IG identity accepted:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`);
               break;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               lastErr = err instanceof Error ? err : new Error(msg);
-              // Alleen doorgaan als de fout specifiek over instagram_user_id gaat.
               if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|1772103|2238281/i.test(msg)) {
                 throw err;
               }
-              console.warn('IG ID rejected:', cand.id, 'source:', cand.source, '-', msg);
+              console.warn('IG identity rejected:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`, '-', msg);
             }
           }
           if (!creativeJson) {
-            throw lastErr || new Error('Meta accepteerde geen enkel Instagram-account ID.');
+            throw lastErr || new Error('Meta accepteerde geen enkele Instagram-identiteit.');
           }
 
           // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
@@ -551,15 +553,14 @@ Deno.serve(async (req) => {
             console.warn('Creative verify failed', e);
           }
 
-          // Alleen een nieuw gevonden actor/user ID opslaan; 1784… Graph IDs niet
-          // meer over de handmatig/expliciet gekozen Ads Manager identity heen schrijven.
-          if (acceptedIg && acceptedIg.source !== 'client_setting' && !/^1784\d+$/.test(acceptedIg.id)) {
+          // Sla het actor-id op (Ads Manager dropdown), maar alleen als de gebruiker zelf nog niets had gekozen.
+          if (acceptedIdentity && !explicitIg && acceptedIdentity.actorId) {
             try {
               await supabase
                 .from('clients')
-                .update({ meta_instagram_account_id: acceptedIg.id } as any)
+                .update({ meta_instagram_account_id: acceptedIdentity.actorId } as any)
                 .eq('id', body.client_id);
-              console.log('Persisted accepted IG ID to client:', acceptedIg.id);
+              console.log('Persisted accepted IG actor ID to client:', acceptedIdentity.actorId);
             } catch (e) {
               console.warn('Persist IG ID failed', e);
             }
