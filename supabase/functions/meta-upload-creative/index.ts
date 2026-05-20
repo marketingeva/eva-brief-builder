@@ -224,7 +224,7 @@ function buildCreativeParameters(opts: {
       titles: (headlines.length ? headlines : [mainHeadline]).map((t) => ({ text: t, adlabels: sharedLabels })),
       descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t, adlabels: sharedLabels })),
       link_urls: [{ website_url: link, adlabels: sharedLabels }],
-      call_to_action_types: [{ type: ctaType, adlabels: sharedLabels }],
+      call_to_action_types: [ctaType],
       call_to_actions: [{ ...callToAction, adlabels: sharedLabels }],
     };
 
@@ -262,7 +262,6 @@ function buildCreativeParameters(opts: {
           description_label: sharedLabels[0],
           link_url_label: sharedLabels[0],
           call_to_action_label: sharedLabels[0],
-          call_to_action_type_label: sharedLabels[0],
         };
         if (a.is_video) rule.video_label = { name: labelFor(a, i) };
         else rule.image_label = { name: labelFor(a, i) };
