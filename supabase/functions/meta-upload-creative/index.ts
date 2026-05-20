@@ -307,31 +307,55 @@ function pickInstagramId(payload: any) {
   );
 }
 
-async function resolvePageAccessToken(token: string, pageId: string): Promise<string | null> {
-  const direct = await getFromMeta(`${pageId}?fields=access_token`, token);
-  if (direct?.access_token) return direct.access_token;
-  if (direct?.error) console.warn('Page token direct lookup', JSON.stringify(direct.error));
+interface PageLookup {
+  accessToken: string | null;
+  instagramId: string | null;
+}
+
+async function resolvePageInfo(token: string, pageId: string): Promise<PageLookup> {
+  const result: PageLookup = { accessToken: null, instagramId: null };
+  const direct = await getFromMeta(
+    `${pageId}?fields=access_token,instagram_business_account{id,username},connected_instagram_account{id,username}`,
+    token,
+  );
+  if (direct?.access_token) result.accessToken = direct.access_token;
+  const directIg = pickInstagramId(direct);
+  if (directIg) result.instagramId = directIg;
+  if (direct?.error) console.warn('Page direct lookup', JSON.stringify(direct.error));
+  if (result.accessToken && result.instagramId) return result;
 
   let url = `${META_API}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&limit=100`;
   for (let i = 0; i < 10 && url; i++) {
     const pageList = await getFromMeta(url, token);
     if (pageList?.error) {
-      console.warn('Page token accounts lookup', JSON.stringify(pageList.error));
-      return null;
+      console.warn('Page accounts lookup', JSON.stringify(pageList.error));
+      break;
     }
     const page = (pageList?.data || []).find((p: any) => String(p.id) === String(pageId));
-    if (page?.access_token) return page.access_token;
+    if (page) {
+      if (!result.accessToken && page.access_token) result.accessToken = page.access_token;
+      if (!result.instagramId) {
+        const ig = pickInstagramId(page);
+        if (ig) result.instagramId = ig;
+      }
+      break;
+    }
     url = pageList?.paging?.next || '';
   }
-  return null;
+  return result;
 }
 
 async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
-  const pageToken = await resolvePageAccessToken(token, pageId);
+  const pageInfo = await resolvePageInfo(token, pageId);
+  if (pageInfo.instagramId) {
+    console.log('IG actor resolved via page.me_accounts', pageInfo.instagramId);
+    return pageInfo.instagramId;
+  }
+  const pageToken = pageInfo.accessToken;
   const tries: Array<{ label: string; pathOrUrl: string; lookupToken: string }> = [
     ...(pageToken ? [
-      { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
       { label: 'page.fields.page_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: pageToken },
+      { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
     ] : []),
     { label: 'page.fields.user_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: token },
     { label: 'adaccount.instagram_accounts', pathOrUrl: `${adAccount}/instagram_accounts?fields=id,username`, lookupToken: token },
