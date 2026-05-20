@@ -536,7 +536,7 @@ Deno.serve(async (req) => {
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               lastErr = err instanceof Error ? err : new Error(msg);
-              if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|1772103|2238281/i.test(msg)) {
+              if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|Old Instagram ID|deprecated|1772103|2238281/i.test(msg)) {
                 throw err;
               }
               console.warn('IG identity rejected:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`, '-', msg);
