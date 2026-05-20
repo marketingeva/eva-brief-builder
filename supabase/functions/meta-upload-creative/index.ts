@@ -291,33 +291,33 @@ function buildCreativeParameters(opts: {
 }
 
 async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
-  // 1) Echte gekoppelde IG-account op de page
-  try {
-    const r = await fetch(`${META_API}/${pageId}?fields=instagram_business_account,connected_instagram_account&access_token=${encodeURIComponent(token)}`);
-    const j = await r.json();
-    const id = j?.instagram_business_account?.id || j?.connected_instagram_account?.id;
-    if (id) return id;
-  } catch (e) { console.warn('IG lookup failed', e); }
-  // 2) Bestaande page-backed IG account onder ad account
-  try {
-    const r = await fetch(`${META_API}/${adAccount}/page_backed_instagram_accounts?access_token=${encodeURIComponent(token)}`);
-    const j = await r.json();
-    const existing = j?.data?.[0]?.id;
-    if (existing) return existing;
-  } catch (e) { console.warn('PBIA list failed', e); }
-  // 3) Maak page-backed IG account
-  try {
-    const r = await fetch(`${META_API}/${adAccount}/page_backed_instagram_accounts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page_id: pageId, access_token: token }),
-    });
-    const j = await r.json();
-    if (j?.id) return j.id;
-    console.warn('PBIA create response', JSON.stringify(j));
-  } catch (e) { console.warn('PBIA create failed', e); }
+  const tries: Array<{ label: string; url: string }> = [
+    { label: 'page.instagram_business_account', url: `${META_API}/${pageId}?fields=instagram_business_account,connected_instagram_account` },
+    { label: 'page.instagram_accounts', url: `${META_API}/${pageId}?fields=instagram_accounts{id,username}` },
+    { label: 'page.page_backed_instagram_accounts', url: `${META_API}/${pageId}/page_backed_instagram_accounts` },
+    { label: 'adaccount.instagram_accounts', url: `${META_API}/${adAccount}/instagram_accounts` },
+    { label: 'adaccount.page_backed_instagram_accounts', url: `${META_API}/${adAccount}/page_backed_instagram_accounts` },
+  ];
+  for (const t of tries) {
+    try {
+      const sep = t.url.includes('?') ? '&' : '?';
+      const r = await fetch(`${t.url}${sep}access_token=${encodeURIComponent(token)}`);
+      const j = await r.json();
+      const id =
+        j?.instagram_business_account?.id ||
+        j?.connected_instagram_account?.id ||
+        j?.instagram_accounts?.data?.[0]?.id ||
+        j?.data?.[0]?.id;
+      if (id) {
+        console.log('IG actor resolved via', t.label, id);
+        return id;
+      }
+      if (j?.error) console.warn('IG lookup', t.label, JSON.stringify(j.error));
+    } catch (e) { console.warn('IG lookup failed', t.label, e); }
+  }
   return null;
 }
+
 
 function buildDirectCreativePayload(opts: {
   pageId: string;
