@@ -485,14 +485,34 @@ Deno.serve(async (req) => {
           if (!instagramActorId) {
             throw new Error('Geen Instagram-account beschikbaar. Vul het Instagram Account ID in bij Meta-instellingen voor deze klant (te vinden in Meta Ads Manager onder "Instagram profile").');
           }
-          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
-            pageId: body.page_id,
-            instagramActorId,
-            name: adName,
-            text: bundle.texts,
-            leadFormId: body.lead_form_id,
-            assets,
-          }));
+          let creativeJson: any;
+          try {
+            creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+              pageId: body.page_id,
+              instagramActorId,
+              instagramField: 'instagram_user_id',
+              name: adName,
+              text: bundle.texts,
+              leadFormId: body.lead_form_id,
+              assets,
+            }));
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (/instagram_user_id/i.test(msg) && /valid Instagram account/i.test(msg)) {
+              console.warn('instagram_user_id rejected, retrying with instagram_actor_id', msg);
+              creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+                pageId: body.page_id,
+                instagramActorId,
+                instagramField: 'instagram_actor_id',
+                name: adName,
+                text: bundle.texts,
+                leadFormId: body.lead_form_id,
+                assets,
+              }));
+            } else {
+              throw err;
+            }
+          }
 
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
             name: adName,
