@@ -179,6 +179,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       adset_id: selection.adset_id,
       lead_form_id: selection.lead_form_id,
       page_id: pageId!,
+      instagram_account_id: igId || null,
       disable_enhancements: true,
       status: 'PAUSED',
       creatives: bundles.map((b) => ({
