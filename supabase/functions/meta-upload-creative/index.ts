@@ -304,33 +304,8 @@ function buildCreativeParameters(opts: {
 // We verzamelen daarom ALLE plausibele kandidaten en proberen ze één voor één
 // tegen de Meta adcreatives endpoint tot er één geaccepteerd wordt.
 
-// Verzamel ALLEEN echte Instagram-account IDs. We negeren expliciet `payload.id`
-// (= meestal de Facebook Page ID) en root-level objecten zonder IG-context,
-// zodat we niet per ongeluk de Page ID als instagram_user_id proberen.
-function collectIds(payload: any, out: Set<string>) {
-  if (!payload || typeof payload !== 'object') return;
-  const push = (v: unknown) => {
-    const s = String(v ?? '').trim();
-    if (/^\d{6,}$/.test(s)) out.add(s);
-  };
-  push(payload.instagram_business_account?.id);
-  push(payload.connected_instagram_account?.id);
-  for (const item of payload.data || []) {
-    push(item?.id);
-    push(item?.instagram_business_account?.id);
-    push(item?.connected_instagram_account?.id);
-  }
-  for (const item of payload.instagram_accounts?.data || []) {
-    push(item?.id);
-    push(item?.instagram_business_account?.id);
-  }
-  for (const item of payload.connected_instagram_accounts?.data || []) {
-    push(item?.id);
-  }
-  for (const item of payload.page_backed_instagram_accounts?.data || []) {
-    push(item?.id);
-  }
-}
+
+
 
 interface IgCandidate {
   id: string;
