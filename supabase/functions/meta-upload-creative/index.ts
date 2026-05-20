@@ -379,6 +379,35 @@ async function resolveInstagramActorId(token: string, adAccount: string, pageId:
 }
 
 
+async function normalizeInstagramBusinessId(token: string, adAccount: string, rawId: string): Promise<string | null> {
+  // 1) Directe lookup op het ID: misschien is dit al een IG Business Account
+  //    of bevat het een instagram_business_account verwijzing.
+  try {
+    const direct = await getFromMeta(`${rawId}?fields=id,username,instagram_business_account{id,username}`, token);
+    if (direct?.instagram_business_account?.id) return String(direct.instagram_business_account.id);
+    if (direct?.id && /^17841/.test(String(direct.id))) return String(direct.id);
+    if (direct?.error) console.warn('normalize ig direct lookup', JSON.stringify(direct.error));
+  } catch (e) { console.warn('normalize ig direct lookup failed', e); }
+
+  // 2) Loop adaccount instagram_accounts en match op id of username
+  try {
+    let url = `${META_API}/${adAccount}/instagram_accounts?fields=id,username,instagram_business_account{id,username}&limit=200`;
+    for (let i = 0; i < 5 && url; i++) {
+      const list = await getFromMeta(url, token);
+      if (list?.error) { console.warn('normalize ig list', JSON.stringify(list.error)); break; }
+      const items: any[] = list?.data || [];
+      const match = items.find((it) => String(it.id) === String(rawId));
+      if (match?.instagram_business_account?.id) return String(match.instagram_business_account.id);
+      // Als één van de business_accounts.id == rawId, gebruik die
+      const reverse = items.find((it) => String(it.instagram_business_account?.id) === String(rawId));
+      if (reverse?.instagram_business_account?.id) return String(reverse.instagram_business_account.id);
+      url = list?.paging?.next || '';
+    }
+  } catch (e) { console.warn('normalize ig list failed', e); }
+
+  return null;
+}
+
 function buildDirectCreativePayload(opts: {
   pageId: string;
   instagramActorId: string | null;
@@ -479,11 +508,23 @@ Deno.serve(async (req) => {
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const explicitIg = (body.instagram_account_id || '').trim() || null;
-          const instagramActorId = explicitIg
+          let instagramActorId = explicitIg
             ? (console.log('IG actor via explicit client setting', explicitIg), explicitIg)
             : await resolveInstagramActorId(token, adAccount, body.page_id);
           if (!instagramActorId) {
             throw new Error('Geen Instagram-account beschikbaar. Vul het Instagram Account ID in bij Meta-instellingen voor deze klant (te vinden in Meta Ads Manager onder "Instagram profile").');
+          }
+          // Meta's adcreative API accepteert alleen het IG Business Account ID (17841…).
+          // Als de gebruiker het UI-ID uit Ads Manager (bv. 1646…) heeft ingevuld,
+          // mappen we dit eerst naar het echte business account ID.
+          if (!/^17841/.test(instagramActorId)) {
+            const normalized = await normalizeInstagramBusinessId(token, adAccount, instagramActorId);
+            if (normalized && normalized !== instagramActorId) {
+              console.log('IG ID', instagramActorId, '→ business account', normalized);
+              instagramActorId = normalized;
+            } else {
+              console.warn('IG ID', instagramActorId, 'kon niet gemapt worden naar 17841-formaat');
+            }
           }
           let creativeJson: any;
           try {
