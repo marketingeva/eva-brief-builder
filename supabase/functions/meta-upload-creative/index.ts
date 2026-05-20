@@ -418,14 +418,18 @@ async function fetchIgCandidates(
   // Stap 5: het door de gebruiker opgegeven ID als laatste fallback toevoegen.
   if (explicitId) add(explicitId, 'client_setting');
 
+  // Veiligheidsnet: filter de Facebook Page ID er uit — die is nooit een
+  // geldige instagram_user_id en veroorzaakt subtiele Meta-fouten.
+  const filtered = ordered.filter((c) => c.id !== String(pageId).trim());
+
   // Sorteer: 1784… (Business Account IDs) eerst — die werken het breedst.
-  ordered.sort((a, b) => {
+  filtered.sort((a, b) => {
     const aBiz = /^1784\d+$/.test(a.id) ? 0 : 1;
     const bBiz = /^1784\d+$/.test(b.id) ? 0 : 1;
     return aBiz - bBiz;
   });
 
-  return ordered;
+  return filtered;
 }
 
 function buildDirectCreativePayload(opts: {
