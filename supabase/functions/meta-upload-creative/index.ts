@@ -414,13 +414,19 @@ Deno.serve(async (req) => {
         let newAdId: string | undefined;
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+          const instagramActorId = await resolveInstagramActorId(token, adAccount, body.page_id);
+          if (!instagramActorId) {
+            throw new Error('Geen Instagram-account beschikbaar voor deze Facebook-pagina. Koppel een Instagram-account aan de pagina of geef de ad account toegang om een page-backed Instagram account aan te maken.');
+          }
           const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
             pageId: body.page_id,
+            instagramActorId,
             name: adName,
             text: bundle.texts,
             leadFormId: body.lead_form_id,
             assets,
           }));
+
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
             name: adName,
             adset_id: body.adset_id,
