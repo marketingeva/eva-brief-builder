@@ -64,10 +64,17 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
     bundleId: string,
     variantFile: File,
   ) => {
-    const path = `${clientId}/${Date.now()}-${variantFile.name}`;
-    const { error } = await supabase.storage
-      .from('ad-launcher-uploads')
-      .upload(path, variantFile);
+    const formData = new FormData();
+    formData.append('client_id', clientId);
+    formData.append('file', variantFile);
+
+    const { data, error } = await supabase.functions.invoke('ad-launcher-upload', {
+      body: formData,
+    });
+
+    const uploadError = error?.message || data?.error;
+    const path = data?.path as string | undefined;
+
     setBundles((cur) =>
       cur.map((b) => {
         if (b.id !== bundleId) return b;
@@ -75,7 +82,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
           ...b,
           variants: b.variants.map((v) =>
             v.file === variantFile
-              ? { ...v, uploading: false, storage_path: error ? undefined : path, upload_error: error?.message }
+              ? { ...v, uploading: false, storage_path: uploadError ? undefined : path, upload_error: uploadError }
               : v,
           ),
         };
