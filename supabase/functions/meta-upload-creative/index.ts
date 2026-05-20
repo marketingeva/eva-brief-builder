@@ -51,6 +51,20 @@ const RATIO_TO_PLACEMENTS: Record<AspectRatio, PlacementSpec> = {
 
 const RATIO_PRIORITY: AspectRatio[] = ['1:1', '4:5', '9:16', '16:9'];
 
+function placementsForRatio(ratio: AspectRatio, availableRatios: Set<AspectRatio>): PlacementSpec {
+  // Als 4:5 aanwezig is, moet die de feed-placements krijgen. Anders matcht
+  // de brede 1:1-regel dezelfde placements en toont Meta overal de 1:1 asset.
+  if (ratio === '1:1' && availableRatios.has('4:5')) {
+    return {
+      publisher_platforms: ['facebook', 'instagram', 'audience_network'],
+      facebook_positions: ['marketplace', 'search', 'video_feeds'],
+      instagram_positions: ['explore_home'],
+      audience_network_positions: ['classic'],
+    };
+  }
+  return RATIO_TO_PLACEMENTS[ratio];
+}
+
 interface CreativeText {
   primary_texts: string[];
   headlines: string[];
@@ -196,21 +210,22 @@ function buildCreativeParameters(opts: {
     link_url: link,
   };
 
-  if (primary?.image_hash) params.image_hash = primary.image_hash;
-
   const hasMultipleText =
     primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
   const hasMultipleAssets = assets.length > 1;
 
+  if (!hasMultipleAssets && primary?.image_hash) params.image_hash = primary.image_hash;
+
   if (hasMultipleText || hasMultipleAssets) {
+    const sharedLabels = [{ name: 'shared_copy' }];
     const asset_feed_spec: Record<string, unknown> = {
       ad_formats: [allVideo ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-      bodies: (primaryTexts.length ? primaryTexts : [mainPrimary]).map((t) => ({ text: t })),
-      titles: (headlines.length ? headlines : [mainHeadline]).map((t) => ({ text: t })),
-      descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t })),
-      link_urls: [{ website_url: link }],
+      bodies: (primaryTexts.length ? primaryTexts : [mainPrimary]).map((t) => ({ text: t, adlabels: sharedLabels })),
+      titles: (headlines.length ? headlines : [mainHeadline]).map((t) => ({ text: t, adlabels: sharedLabels })),
+      descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t, adlabels: sharedLabels })),
+      link_urls: [{ website_url: link, adlabels: sharedLabels }],
       call_to_action_types: [ctaType],
-      call_to_actions: [callToAction],
+      call_to_actions: [{ ...callToAction, adlabels: sharedLabels }],
     };
 
     // Bouw stabiele labels per asset (verplicht voor asset_customization_rules).
@@ -237,9 +252,16 @@ function buildCreativeParameters(opts: {
     // én elk asset een bekende ratio heeft.
     const ratioAssets = assets.filter((a) => a.ratio && (a.image_hash || a.video_id));
     if (hasMultipleAssets && ratioAssets.length === assets.length && (allImage || allVideo)) {
+      const availableRatios = new Set(ratioAssets.map((a) => a.ratio as AspectRatio));
+      asset_feed_spec.optimization_type = 'PLACEMENT';
       asset_feed_spec.asset_customization_rules = assets.map((a, i) => {
         const rule: Record<string, unknown> = {
-          customization_spec: RATIO_TO_PLACEMENTS[a.ratio as AspectRatio],
+          customization_spec: placementsForRatio(a.ratio as AspectRatio, availableRatios),
+          body_label: sharedLabels[0],
+          title_label: sharedLabels[0],
+          description_label: sharedLabels[0],
+          link_url_label: sharedLabels[0],
+          call_to_action_label: sharedLabels[0],
         };
         if (a.is_video) rule.video_label = { name: labelFor(a, i) };
         else rule.image_label = { name: labelFor(a, i) };
@@ -268,6 +290,28 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
+function buildDirectCreativePayload(opts: {
+  pageId: string;
+  name: string;
+  text: CreativeText;
+  leadFormId: string;
+  assets: UploadedAsset[];
+}) {
+  const params = buildCreativeParameters({ text: opts.text, leadFormId: opts.leadFormId, assets: opts.assets });
+  if (params.asset_feed_spec) {
+    delete params.body;
+    delete params.title;
+    delete params.link_description;
+    delete params.link_url;
+    delete params.image_hash;
+  }
+  return {
+    name: opts.name,
+    object_story_spec: { page_id: opts.pageId },
+    ...params,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -285,14 +329,15 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
-    const sourceAdId = await pickSourceAd(token, body.adset_id);
-    if (!sourceAdId) {
+    const needsSourceCopy = body.creatives.some((bundle) => bundle.variants.length <= 1);
+    const sourceAdId = needsSourceCopy ? await pickSourceAd(token, body.adset_id) : null;
+    if (needsSourceCopy && !sourceAdId) {
       throw new Error(
         'Geen bestaande advertentie gevonden in deze ad set om te dupliceren. ' +
           'Maak handmatig 1 werkende advertentie aan in deze ad set in Meta Ads Manager, en probeer opnieuw.',
       );
     }
-    console.log('Using source ad for copy:', sourceAdId);
+    if (sourceAdId) console.log('Using source ad for copy:', sourceAdId);
 
     const results: any[] = [];
 
@@ -333,17 +378,35 @@ Deno.serve(async (req) => {
           assets,
         });
 
-        console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
-        const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
-          adset_id: body.adset_id,
-          status_option: status,
-          rename_options: { rename_strategy: 'NO_RENAME' },
-          creative_parameters: creativeParameters,
-        });
-
-        const newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
+        let newAdId: string | undefined;
+        if (assets.length > 1) {
+          console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+            pageId: body.page_id,
+            name: adName,
+            text: bundle.texts,
+            leadFormId: body.lead_form_id,
+            assets,
+          }));
+          const adJson = await postToMeta(`${adAccount}/ads`, token, {
+            name: adName,
+            adset_id: body.adset_id,
+            creative: { creative_id: creativeJson.id },
+            status,
+          });
+          newAdId = adJson.id;
+        } else {
+          console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+          const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
+            adset_id: body.adset_id,
+            status_option: status,
+            rename_options: { rename_strategy: 'NO_RENAME' },
+            creative_parameters: creativeParameters,
+          });
+          newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
+        }
         if (!newAdId) {
-          throw new Error(`copies: geen copied_ad_id terug van Meta — ${JSON.stringify(copyJson)}`);
+          throw new Error('Geen nieuw ad_id terug van Meta.');
         }
 
         try {
