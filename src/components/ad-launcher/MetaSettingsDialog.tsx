@@ -106,7 +106,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
               disabled={loading}
             />
             <p className="text-xs text-muted-foreground">
-              Het Instagram-account dat in Meta Ads Manager onder "Instagram profile" verschijnt (bv. <code>1646842048691596</code> voor rivaszorggroep). Zonder dit ID gebruikt Meta een page-backed account, wat tot foutmeldingen kan leiden.
+              Optioneel. De launcher haalt het Instagram-account automatisch op via de Facebook Page. Vul hier alleen een Instagram User ID in als de automatische lookup faalt (bv. <code>17841400000000000</code>).
             </p>
           </div>
         </div>
