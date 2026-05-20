@@ -1,67 +1,142 @@
-## Probleem
+# Bundeling van creatives per formaat in Ad Launcher
 
-Twee bugs verhinderen dat opgeslagen advertenties zichtbaar blijven:
+Bij upload bundelt het systeem automatisch creatives met dezelfde basisnaam maar verschillende aspect-ratio suffixen (`_1x1`, `_4x5`, `_9x16`, `_16x9`, of `.1.1`, `.4.5`, etc.). Elke bundle = één advertentie in Meta met meerdere formaten ("rapid ad"-stijl), die per Meta-placement het juiste formaat toont.
 
-1. **Onzichtbaar in "Opgeslagen" tab**: De query `inspiration_favorites` met embed `client:clients(name)` faalt stilletjes omdat er **geen foreign key bestaat** tussen `inspiration_favorites.client_id` en `clients.id`. PostgREST geeft een error → geen data → "Opgeslagen advertenties (0)" terwijl de favoriet wél in de database staat.
+## Bundel-regel (jouw keuze: alleen aspect-ratio suffixen)
 
-2. **Verlies bij offline gaan**: `inspiration_favorites.item_id` heeft `ON DELETE CASCADE` naar `inspiration_items`. Als een Meta-ad uit de cache verdwijnt of opgeschoond wordt, verdwijnt de favoriet automatisch mee. Daarnaast maakt elke refresh nieuwe `inspiration_items`-rijen aan; alle live-data (afbeelding, tekst, headline) zit dáár — niet in de favoriet zelf.
+Regex strijkt aan het eind van de bestandsnaam (vóór extensie) deze tokens, met optionele `_`, `-`, `.` of spatie als separator:
 
-## Oplossing
-
-### 1. Database migratie
-
-```sql
--- Foreign key naar clients zodat embedding werkt
-ALTER TABLE public.inspiration_favorites
-  ADD CONSTRAINT inspiration_favorites_client_id_fkey
-  FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
-
--- Zwakke koppeling naar items: verwijderen van bron mag favoriet niet droppen
-ALTER TABLE public.inspiration_favorites DROP CONSTRAINT inspiration_favorites_item_id_fkey;
-ALTER TABLE public.inspiration_favorites ALTER COLUMN item_id DROP NOT NULL;
-ALTER TABLE public.inspiration_favorites
-  ADD CONSTRAINT inspiration_favorites_item_id_fkey
-  FOREIGN KEY (item_id) REFERENCES public.inspiration_items(id) ON DELETE SET NULL;
-
--- Snapshot-kolommen op inspiration_favorites: alle benodigde ad-data
-ALTER TABLE public.inspiration_favorites
-  ADD COLUMN advertiser_name      text,
-  ADD COLUMN advertiser_logo_url  text,
-  ADD COLUMN advertiser_page_url  text,
-  ADD COLUMN primary_text         text,
-  ADD COLUMN headline             text,
-  ADD COLUMN description          text,
-  ADD COLUMN cta                  text,
-  ADD COLUMN image_url            text,
-  ADD COLUMN video_url            text,
-  ADD COLUMN media_preview_url    text,
-  ADD COLUMN media_urls           text[] DEFAULT '{}',
-  ADD COLUMN media_type           text,
-  ADD COLUMN publisher_platforms  text[] DEFAULT '{}',
-  ADD COLUMN ad_library_url       text,
-  ADD COLUMN external_id          text,
-  ADD COLUMN started_running      text,
-  ADD COLUMN raw_payload          jsonb DEFAULT '{}'::jsonb;
-
--- Backfill bestaande favorieten met snapshot uit huidige items
-UPDATE public.inspiration_favorites f
-SET advertiser_name = i.advertiser_name, /* ... alle velden ... */
-FROM public.inspiration_items i
-WHERE i.id = f.item_id AND f.advertiser_name IS NULL;
+```
+1x1  1.1  1-1   →  1:1
+4x5  4.5  4-5   →  4:5   (5x4 ook → 4:5)
+9x16 9.16 9-16  →  9:16
+16x9 16.9 16-9  →  16:9
 ```
 
-### 2. Code-aanpassingen
+Voorbeeld bundle:
+```
+VPK_Amsterdam_1x1.jpg
+VPK_Amsterdam-4x5.jpg     →  bundle "VPK_Amsterdam" met 3 varianten
+VPK_Amsterdam 9.16.mp4
+```
+Bestanden zonder herkenbare ratio blijven losse "single-variant" bundles (gedraagt zich als nu).
 
-**`src/pages/AdsInspirationPage.tsx`**
-- `saveFavoriteWithContext`: voeg snapshot van alle ad-velden toe aan de insert (advertiser, primary_text, headline, description, cta, image_url, video_url, media_urls, ad_library_url, etc.).
-- `loadSavedFavoriteItems`: lees snapshotvelden direct uit `inspiration_favorites` zelf in plaats van via een join met `inspiration_items`. Gebruik `client:clients(name)` embed (werkt nu de FK bestaat).
-- Type `InspirationItem`-shape construeren uit favorite-row zodat bestaande UI ongewijzigd werkt.
+## Placement-mapping (Meta standaard)
 
-**`src/pages/client-workspace/InspirationHubTab.tsx`**
-- Idem: lees uit `inspiration_favorites` snapshotvelden, niet via join.
+| Ratio | Placements |
+|-------|-----------|
+| 1:1   | FB feed/marketplace/search/video_feeds, IG stream/explore, AN classic |
+| 4:5   | FB feed, IG stream/explore |
+| 9:16  | FB story + reels, IG story + reels, Messenger story |
+| 16:9  | FB in-stream video + right column, AN rewarded video |
 
-### 3. Resultaat
+Ontbrekende ratio's in een bundle: Meta crop't automatisch (Advantage+ placement), geen blocker.
 
-- Favoriet blijft permanent zichtbaar, ook als Meta-ad offline gaat of de scrape-cache verloopt.
-- Embed-error verdwijnt → "Opgeslagen advertenties" toont juiste aantal.
-- Geen extra workflow voor de gebruiker — alles werkt automatisch via de bestaande "hartje"-knop.
+## UI in launcher (één card per bundle, tabs per formaat)
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│  [preview groot — actieve tab]   VPK_Amsterdam           │
+│                                  3 formaten · Ready      │
+│  ┌──┬──┬──┐                      [P3] [H2] [D1] ✏️ 🗑    │
+│  │1:1│4:5│9:16│   ← tabs                                 │
+│  └──┴──┴──┘                                              │
+└──────────────────────────────────────────────────────────┘
+```
+
+- Eén set primary text / headline / description / CTA per bundle.
+- Tabs tonen mini-thumbnail per ratio; klik schakelt grote preview.
+- "Unbundle" knop in de overflow menu (handmatig terug naar losse ads).
+
+## Technische wijzigingen
+
+### NEW `src/lib/ad-bundle.ts`
+Pure util:
+- `parseCreativeName(fileName)` → `{ baseName, ratio, extension }`
+- `bundleByBaseName(items)` → `CreativeBundle[]` (dedupe op ratio per bundle)
+- `RATIO_TO_PLACEMENTS` constante (zie tabel hierboven)
+
+### EDIT `src/pages/client-workspace/AdLauncherTab.tsx`
+Vervang `CreativeRow` door `BundleRow`:
+```ts
+interface BundleVariant {
+  ratio: '1:1' | '4:5' | '9:16' | '16:9' | null;
+  file: File; preview_url: string;
+  storage_path?: string; uploading: boolean; upload_error?: string;
+}
+interface BundleRow {
+  id: string; baseName: string;
+  variants: BundleVariant[];
+  texts: CreativeText;
+  launch_status?: 'pending'|'success'|'failed';
+  launch_error?: string; ad_id?: string;
+}
+```
+- `handleFiles` parst elk bestand, voegt toe aan bestaande bundle of maakt nieuwe.
+- Launch payload stuurt nu `creatives: [{ base_name, texts, variants: [{ ratio, storage_path, file_name, file_type }] }]`.
+
+### NEW `src/components/ad-launcher/BundlePreviewCard.tsx`
+Eén card per bundle met:
+- Grote preview (afbeelding/video) van actieve tab
+- Tab-rij met thumbnails per ratio
+- "Voeg formaat toe" knop (drop-zone voor extra ratio die nog mist)
+- Edit-texts + verwijder + unbundle acties
+
+### EDIT `supabase/functions/meta-upload-creative/index.ts`
+Body-schema verandert naar:
+```ts
+creatives: Array<{
+  base_name: string;
+  texts: CreativeText;
+  variants: Array<{ ratio: string|null; storage_path: string; file_name: string; file_type: string }>;
+}>
+```
+
+Per bundle:
+1. Upload alle varianten naar Meta → `image_hash` of `video_id` per ratio.
+2. Kies "primary" variant (voorkeur 1:1, anders eerste) voor top-level `image_hash`/`video_id`.
+3. Bouw `asset_feed_spec` met:
+   - `images` of `videos` array met alle hashes/ids
+   - `asset_customization_rules`: per variant een rule met `customization_spec` uit `RATIO_TO_PLACEMENTS` + bijbehorende `image_hash` of `video_id`
+4. Stuur via bestaande Ads Copy API flow (`/{source_ad_id}/copies` met `creative_parameters`). Eén bundle = één nieuwe ad.
+5. `ad_launches.creative_filename` = `base_name (3 formaten)`.
+
+Voorbeeld `asset_feed_spec`:
+```json
+{
+  "ad_formats": ["SINGLE_IMAGE"],
+  "images": [{"hash": "H1"}, {"hash": "H45"}, {"hash": "H916"}],
+  "bodies": [...], "titles": [...], "descriptions": [...],
+  "link_urls": [{"website_url": "..."}],
+  "call_to_action_types": ["APPLY_NOW"],
+  "call_to_actions": [{...}],
+  "asset_customization_rules": [
+    { "customization_spec": { "publisher_platforms":["facebook","instagram","audience_network"],
+        "facebook_positions":["feed","marketplace","search","video_feeds"],
+        "instagram_positions":["stream","explore","explore_home"],
+        "audience_network_positions":["classic"] },
+      "image_label": { "name": "H1" } },
+    { "customization_spec": { "publisher_platforms":["facebook","instagram"],
+        "facebook_positions":["feed"], "instagram_positions":["stream","explore"] },
+      "image_label": { "name": "H45" } },
+    { "customization_spec": { "publisher_platforms":["facebook","instagram","messenger"],
+        "facebook_positions":["story","facebook_reels"],
+        "instagram_positions":["story","reels"], "messenger_positions":["story"] },
+      "image_label": { "name": "H916" } }
+  ]
+}
+```
+(Voor video gebruikt Meta dezelfde structuur met `videos` + `video_label`.)
+
+## Geen database-wijzigingen
+`ad_launches` blijft één row per resulterende Meta-ad. Filename krijgt een suffix `(N formaten)` zodat je in de history ziet dat het een bundle was.
+
+## Backwards compatible
+- Losse upload (1 file, geen ratio-suffix) = bundle met 1 variant `ratio:null` → edge function valt terug op huidige single-image/video flow (geen `asset_customization_rules`).
+- Geen breaking changes voor bestaande launches.
+
+## Wat ik aanmaak na goedkeuring
+- `src/lib/ad-bundle.ts` (util)
+- `src/components/ad-launcher/BundlePreviewCard.tsx` (UI)
+- Aanpassing in `src/pages/client-workspace/AdLauncherTab.tsx` (bundle state + payload)
+- Aanpassing in `supabase/functions/meta-upload-creative/index.ts` (variants → asset_customization_rules)
