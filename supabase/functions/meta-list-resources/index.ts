@@ -296,8 +296,9 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Stap 2: Verzamel alle Instagram identities die aan deze Page hangen.
-      // We proberen meerdere endpoints en dedupliceren op id.
+      // Stap 2: Verzamel alle Instagram identities die aan deze Page/ad account hangen.
+      // Belangrijk: Ads Manager gebruikt vaak de actor/user ID (niet de 1784… Graph ID),
+      // dus ad-account identities krijgen voorrang.
       const seen = new Map<string, { id: string; name: string; source: string }>();
       const add = (id: any, name: any, source: string) => {
         const sid = String(id ?? '').trim();
@@ -306,18 +307,34 @@ Deno.serve(async (req) => {
         seen.set(sid, { id: sid, name: String(name ?? '') || `Instagram ${sid}`, source });
       };
 
-      // a) instagram_business_account + connected_instagram_account op de page
+      // a) Ad-account Instagram accounts: dit is dezelfde identity-familie die
+      // Meta Ads Manager gebruikt in de Instagram-profiel dropdown.
+      try {
+        const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
+        const r = await fetch(`${META_API}/${account}/instagram_accounts?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
+        const j = await r.json();
+        for (const it of j.data || []) {
+          add(it.ig_id, it.username || it.name, 'ad_account.instagram_accounts.ig_id');
+          add(it.id, it.username || it.name, 'ad_account.instagram_accounts');
+        }
+      } catch (e) {
+        console.warn('IG ad account lookup failed', e);
+      }
+
+      // b) instagram_business_account + connected_instagram_account op de page
       try {
         const r = await fetch(
-          `${META_API}/${pageId}?fields=instagram_business_account{id,username,name},connected_instagram_account{id,username,name}&access_token=${pageToken}`,
+          `${META_API}/${pageId}?fields=instagram_business_account{id,ig_id,username,name},connected_instagram_account{id,ig_id,username,name}&access_token=${pageToken}`,
         );
         const j = await r.json();
         if (j.instagram_business_account?.id) {
           const a = j.instagram_business_account;
+          add(a.ig_id, a.username || a.name, 'instagram_business_account.ig_id');
           add(a.id, a.username || a.name, 'instagram_business_account');
         }
         if (j.connected_instagram_account?.id) {
           const a = j.connected_instagram_account;
+          add(a.ig_id, a.username || a.name, 'connected_instagram_account.ig_id');
           add(a.id, a.username || a.name, 'connected_instagram_account');
         }
       } catch (e) {
@@ -342,11 +359,15 @@ Deno.serve(async (req) => {
         console.warn('IG page_backed lookup failed', e);
       }
 
-      // Sorteer: echte business accounts (1784…) eerst.
+      // Sorteer: Ads Manager actor/user IDs eerst; 1784… Graph IDs blijven fallback.
       data = Array.from(seen.values()).sort((a, b) => {
-        const aBiz = /^1784\d+$/.test(a.id) ? 0 : 1;
-        const bBiz = /^1784\d+$/.test(b.id) ? 0 : 1;
-        return aBiz - bBiz;
+        const rank = (it: { id: string; source: string }) => {
+          if (!/^1784\d+$/.test(it.id) && it.source.startsWith('ad_account.')) return 0;
+          if (!/^1784\d+$/.test(it.id)) return 1;
+          if (it.source.startsWith('ad_account.')) return 2;
+          return 3;
+        };
+        return rank(a) - rank(b) || a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' });
       });
     }
 
