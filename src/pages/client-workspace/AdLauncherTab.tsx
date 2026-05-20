@@ -1,27 +1,25 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Rocket, Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Sparkles, ImagePlus } from 'lucide-react';
+import { Rocket, Loader2, Sparkles, ImagePlus } from 'lucide-react';
 import CreativeUploadZone from '@/components/ad-launcher/CreativeUploadZone';
 import MetaSelectors, { MetaSelection } from '@/components/ad-launcher/MetaSelectors';
 import CreativeTextsPanel, { CreativeText } from '@/components/ad-launcher/CreativeTextsPanel';
 import NewAdsetDialog from '@/components/ad-launcher/NewAdsetDialog';
+import BundlePreviewCard, { type BundleVariant } from '@/components/ad-launcher/BundlePreviewCard';
+import { parseCreativeName, bundleKey, type AspectRatio } from '@/lib/ad-bundle';
 
 interface Props {
   clientId: string;
   clientName?: string;
 }
 
-interface CreativeRow {
+interface BundleRow {
   id: string;
-  file: File;
-  storage_path?: string;
-  preview_url: string;
-  uploading: boolean;
-  upload_error?: string;
+  baseName: string;
+  variants: BundleVariant[];
   texts: CreativeText;
   launch_status?: 'pending' | 'success' | 'failed';
   launch_error?: string;
@@ -43,7 +41,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [selection, setSelection] = useState<MetaSelection>({
     campaign_id: '', adset_id: '', lead_form_id: '',
   });
-  const [creatives, setCreatives] = useState<CreativeRow[]>([]);
+  const [bundles, setBundles] = useState<BundleRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [newAdsetOpen, setNewAdsetOpen] = useState(false);
@@ -57,39 +55,121 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       });
   }, [clientId]);
 
-  const handleFiles = async (files: File[]) => {
-    const newRows: CreativeRow[] = files.map((f) => ({
-      id: crypto.randomUUID(),
-      file: f,
-      preview_url: URL.createObjectURL(f),
-      uploading: true,
-      texts: defaultText(),
-    }));
-    setCreatives((c) => [...c, ...newRows]);
+  // Reset bundles wanneer van klant gewisseld wordt.
+  useEffect(() => { setBundles([]); }, [clientId]);
 
-    for (const row of newRows) {
-      const path = `${clientId}/${Date.now()}-${row.file.name}`;
-      const { error } = await supabase.storage.from('ad-launcher-uploads').upload(path, row.file);
-      setCreatives((cur) => cur.map((r) => r.id === row.id
-        ? { ...r, uploading: false, storage_path: error ? undefined : path, upload_error: error?.message }
-        : r));
-    }
+  const uploadVariant = async (
+    bundleId: string,
+    variantFile: File,
+  ) => {
+    const path = `${clientId}/${Date.now()}-${variantFile.name}`;
+    const { error } = await supabase.storage
+      .from('ad-launcher-uploads')
+      .upload(path, variantFile);
+    setBundles((cur) =>
+      cur.map((b) => {
+        if (b.id !== bundleId) return b;
+        return {
+          ...b,
+          variants: b.variants.map((v) =>
+            v.file === variantFile
+              ? { ...v, uploading: false, storage_path: error ? undefined : path, upload_error: error?.message }
+              : v,
+          ),
+        };
+      }),
+    );
   };
 
-  const removeRow = (id: string) => {
-    setCreatives((c) => c.filter((r) => r.id !== id));
+  const addFilesToBundles = (files: File[]) => {
+    // Parse en groepeer in-place: voeg toe aan bestaande bundles of maak nieuwe.
+    setBundles((prev) => {
+      const next = [...prev];
+      const filesToUpload: { bundleId: string; file: File }[] = [];
+
+      for (const f of files) {
+        const { baseName, ratio } = parseCreativeName(f.name);
+        const key = bundleKey(baseName);
+        const variant: BundleVariant = {
+          ratio,
+          file: f,
+          preview_url: URL.createObjectURL(f),
+          uploading: true,
+        };
+        const existing = next.find((b) => bundleKey(b.baseName) === key);
+        if (existing) {
+          // Dedupe: skip als deze ratio al bestaat
+          if (ratio && existing.variants.some((v) => v.ratio === ratio)) {
+            URL.revokeObjectURL(variant.preview_url);
+            toast({
+              title: 'Formaat al aanwezig',
+              description: `${baseName} heeft al een ${ratio} variant.`,
+            });
+            continue;
+          }
+          existing.variants.push(variant);
+          filesToUpload.push({ bundleId: existing.id, file: f });
+        } else {
+          const id = crypto.randomUUID();
+          next.push({
+            id,
+            baseName,
+            variants: [variant],
+            texts: defaultText(),
+          });
+          filesToUpload.push({ bundleId: id, file: f });
+        }
+      }
+
+      // Trigger uploads buiten setState
+      queueMicrotask(() => {
+        for (const { bundleId, file } of filesToUpload) {
+          uploadVariant(bundleId, file);
+        }
+      });
+
+      return next;
+    });
   };
 
-  const editing = creatives.find((c) => c.id === editingId);
+  const handleFiles = (files: File[]) => {
+    addFilesToBundles(files);
+  };
+
+  const removeBundle = (id: string) => {
+    setBundles((c) => {
+      const b = c.find((x) => x.id === id);
+      b?.variants.forEach((v) => URL.revokeObjectURL(v.preview_url));
+      return c.filter((r) => r.id !== id);
+    });
+  };
+
+  const unbundle = (id: string) => {
+    setBundles((c) => {
+      const idx = c.findIndex((b) => b.id === id);
+      if (idx < 0) return c;
+      const target = c[idx];
+      const split: BundleRow[] = target.variants.map((v) => ({
+        id: crypto.randomUUID(),
+        baseName: v.file.name.replace(/\.[^.]+$/, ''),
+        variants: [v],
+        texts: { ...target.texts },
+      }));
+      return [...c.slice(0, idx), ...split, ...c.slice(idx + 1)];
+    });
+  };
+
+  const editing = bundles.find((c) => c.id === editingId);
 
   const canLaunch =
-    selection.campaign_id && selection.adset_id && selection.lead_form_id && pageId &&
-    creatives.length > 0 && creatives.every((c) => c.storage_path && !c.uploading);
+    !!selection.campaign_id && !!selection.adset_id && !!selection.lead_form_id && !!pageId &&
+    bundles.length > 0 &&
+    bundles.every((b) => b.variants.every((v) => v.storage_path && !v.uploading));
 
   const launch = async () => {
     if (!canLaunch) return;
     setLaunching(true);
-    setCreatives((c) => c.map((r) => ({ ...r, launch_status: 'pending', launch_error: undefined })));
+    setBundles((c) => c.map((r) => ({ ...r, launch_status: 'pending', launch_error: undefined })));
 
     const payload = {
       client_id: clientId,
@@ -99,11 +179,15 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       page_id: pageId!,
       disable_enhancements: true,
       status: 'PAUSED',
-      creatives: creatives.map((r) => ({
-        storage_path: r.storage_path!,
-        file_name: r.file.name,
-        file_type: r.file.type,
-        texts: { ...r.texts, link_url: r.texts.link_url || 'http://fb.me/' },
+      creatives: bundles.map((b) => ({
+        base_name: b.baseName,
+        texts: { ...b.texts, link_url: b.texts.link_url || 'http://fb.me/' },
+        variants: b.variants.map((v) => ({
+          ratio: v.ratio,
+          storage_path: v.storage_path!,
+          file_name: v.file.name,
+          file_type: v.file.type,
+        })),
       })),
     };
 
@@ -112,13 +196,13 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
 
     if (error || data?.error) {
       toast({ title: 'Launch mislukt', description: error?.message || data?.error, variant: 'destructive' });
-      setCreatives((c) => c.map((r) => ({ ...r, launch_status: 'failed', launch_error: error?.message || data?.error })));
+      setBundles((c) => c.map((r) => ({ ...r, launch_status: 'failed', launch_error: error?.message || data?.error })));
       return;
     }
 
     const results: any[] = data.results || [];
-    setCreatives((c) => c.map((r) => {
-      const res = results.find((x) => x.file_name === r.file.name);
+    setBundles((c) => c.map((r) => {
+      const res = results.find((x) => x.base_name === r.baseName);
       if (!res) return r;
       return res.success
         ? { ...r, launch_status: 'success', ad_id: res.ad_id }
@@ -148,7 +232,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
             <h3 className="text-sm font-semibold">Upload creatives</h3>
             <CreativeUploadZone onFiles={handleFiles} />
             <p className="text-[11px] text-muted-foreground">
-              Bestanden worden tijdelijk opgeslagen totdat de advertenties gelanceerd zijn. Nieuwe ads worden altijd <strong>gepauzeerd</strong> aangemaakt in Meta — je activeert ze daar handmatig.
+              Bestanden met dezelfde basisnaam en een verschillend aspect-ratio suffix (bv. <code>_1x1</code>, <code>_4x5</code>, <code>_9x16</code>) worden automatisch als <strong>één advertentie</strong> met meerdere formaten samengevoegd. Nieuwe ads zijn altijd <strong>gepauzeerd</strong> in Meta.
             </p>
           </Card>
         </div>
@@ -178,7 +262,8 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
               <div>
                 <h3 className="text-base font-semibold">Preview & Launch</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Preview {creatives.length} creative{creatives.length === 1 ? '' : 's'} ready to launch.
+                  {bundles.length} advertentie{bundles.length === 1 ? '' : 's'} klaar
+                  {bundles.some((b) => b.variants.length > 1) && ' (bundles)'}.
                 </p>
               </div>
             </div>
@@ -193,7 +278,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
             </div>
           </div>
 
-          {creatives.length === 0 ? (
+          {bundles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="relative mb-6">
                 <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2.5s' }} />
@@ -206,82 +291,60 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
               </div>
               <h4 className="text-base font-semibold text-foreground">Nog geen creatives</h4>
               <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-                Sleep afbeeldingen of video's naar de upload-zone hiernaast. Zodra ze geladen zijn, verschijnt hier een preview.
+                Sleep afbeeldingen of video's naar de upload-zone hiernaast. Bestanden met dezelfde naam en een formaat-suffix (1x1, 4x5, 9x16) worden automatisch gebundeld.
               </p>
-              <div className="mt-6 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                <span>Wachten op upload...</span>
-              </div>
             </div>
           ) : (
-            <div className="space-y-2 animate-fade-in">
-              {creatives.map((row) => {
-                const sizeMb = (row.file.size / (1024 * 1024)).toFixed(2);
-                const ext = row.file.name.split('.').pop()?.toUpperCase() || (row.file.type.split('/')[1] || '').toUpperCase();
-                const ready = !row.uploading && !row.upload_error && !row.launch_status;
-                const pCount = row.texts.primary_texts.filter(Boolean).length;
-                const hCount = row.texts.headlines.filter(Boolean).length;
-                const dCount = row.texts.descriptions.filter(Boolean).length;
+            <div className="space-y-3 animate-fade-in">
+              {bundles.map((b) => {
+                const pCount = b.texts.primary_texts.filter(Boolean).length;
+                const hCount = b.texts.headlines.filter(Boolean).length;
+                const dCount = b.texts.descriptions.filter(Boolean).length;
                 return (
-                  <div key={row.id} className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                    {row.file.type.startsWith('video') ? (
-                      <video src={row.preview_url} className="w-24 h-24 rounded-md object-cover bg-muted shrink-0" />
-                    ) : (
-                      <img src={row.preview_url} className="w-24 h-24 rounded-md object-cover bg-muted shrink-0" alt="" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{row.file.name}</p>
-                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
-                        <span>{sizeMb} MB</span>
-                        <span>·</span>
-                        <span>{ext}</span>
-                        <span>·</span>
-                        {row.uploading && (
-                          <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Uploaden</span>
-                        )}
-                        {row.upload_error && <span className="text-destructive">{row.upload_error}</span>}
-                        {ready && (
-                          <span className="flex items-center gap-1 text-success">
-                            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Ready
-                          </span>
-                        )}
-                        {row.launch_status === 'pending' && (
-                          <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Lanceren</span>
-                        )}
-                        {row.launch_status === 'success' && (
-                          <span className="flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> Aangemaakt (gepauzeerd)</span>
-                        )}
-                        {row.launch_status === 'failed' && (
-                          <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" /> {row.launch_error}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {([
-                        ['P', pCount, 'Primary texts'],
-                        ['H', hCount, 'Headlines'],
-                        ['D', dCount, 'Descriptions'],
-                      ] as const).map(([label, count, title]) => (
-                        <span
-                          key={label}
-                          title={`${title}: ${count}`}
-                          className={`inline-flex items-center justify-center h-7 w-7 rounded-full text-[11px] font-semibold border ${
-                            count > 0
-                              ? 'bg-success/15 text-success border-success/30'
-                              : 'bg-muted text-muted-foreground border-transparent'
-                          }`}
-                        >
-                          {label}
-                        </span>
-                      ))}
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingId(row.id)} title="Teksten bewerken">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeRow(row.id)} title="Verwijderen">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                  <BundlePreviewCard
+                    key={b.id}
+                    baseName={b.baseName}
+                    variants={b.variants}
+                    textCounts={{ p: pCount, h: hCount, d: dCount }}
+                    launchStatus={b.launch_status}
+                    launchError={b.launch_error}
+                    onEditTexts={() => setEditingId(b.id)}
+                    onRemove={() => removeBundle(b.id)}
+                    onUnbundle={b.variants.length > 1 ? () => unbundle(b.id) : undefined}
+                    onAddVariant={(files) => {
+                      // Voeg toe als variant aan deze bundle (forceer dezelfde basenaam).
+                      const fakeNamed = files.map((f) => {
+                        const { ratio } = parseCreativeName(f.name);
+                        return { f, ratio };
+                      });
+                      // Voeg direct toe aan deze bundle, geen rebundling.
+                      setBundles((prev) => {
+                        const target = prev.find((x) => x.id === b.id);
+                        if (!target) return prev;
+                        const uploads: File[] = [];
+                        for (const { f, ratio } of fakeNamed) {
+                          if (ratio && target.variants.some((v) => v.ratio === ratio)) {
+                            toast({
+                              title: 'Formaat al aanwezig',
+                              description: `${b.baseName} heeft al een ${ratio} variant.`,
+                            });
+                            continue;
+                          }
+                          target.variants.push({
+                            ratio,
+                            file: f,
+                            preview_url: URL.createObjectURL(f),
+                            uploading: true,
+                          });
+                          uploads.push(f);
+                        }
+                        queueMicrotask(() => {
+                          for (const file of uploads) uploadVariant(b.id, file);
+                        });
+                        return [...prev];
+                      });
+                    }}
+                  />
                 );
               })}
             </div>
@@ -295,7 +358,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
           onOpenChange={(o) => !o && setEditingId(null)}
           initial={editing.texts}
           clientName={clientName}
-          onSave={(texts) => setCreatives((c) => c.map((r) => r.id === editingId ? { ...r, texts } : r))}
+          onSave={(texts) => setBundles((c) => c.map((r) => r.id === editingId ? { ...r, texts } : r))}
         />
       )}
 
@@ -315,3 +378,6 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
     </div>
   );
 }
+
+// Suppress unused warnings for utility-only types if needed
+export type { AspectRatio };
