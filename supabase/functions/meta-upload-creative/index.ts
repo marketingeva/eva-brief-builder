@@ -297,10 +297,18 @@ function buildDirectCreativePayload(opts: {
   leadFormId: string;
   assets: UploadedAsset[];
 }) {
+  const params = buildCreativeParameters({ text: opts.text, leadFormId: opts.leadFormId, assets: opts.assets });
+  if (params.asset_feed_spec) {
+    delete params.body;
+    delete params.title;
+    delete params.link_description;
+    delete params.link_url;
+    delete params.image_hash;
+  }
   return {
     name: opts.name,
     object_story_spec: { page_id: opts.pageId },
-    ...buildCreativeParameters({ text: opts.text, leadFormId: opts.leadFormId, assets: opts.assets }),
+    ...params,
   };
 }
 
