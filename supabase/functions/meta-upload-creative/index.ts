@@ -479,11 +479,23 @@ Deno.serve(async (req) => {
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const explicitIg = (body.instagram_account_id || '').trim() || null;
-          const instagramActorId = explicitIg
+          let instagramActorId = explicitIg
             ? (console.log('IG actor via explicit client setting', explicitIg), explicitIg)
             : await resolveInstagramActorId(token, adAccount, body.page_id);
           if (!instagramActorId) {
             throw new Error('Geen Instagram-account beschikbaar. Vul het Instagram Account ID in bij Meta-instellingen voor deze klant (te vinden in Meta Ads Manager onder "Instagram profile").');
+          }
+          // Meta's adcreative API accepteert alleen het IG Business Account ID (17841…).
+          // Als de gebruiker het UI-ID uit Ads Manager (bv. 1646…) heeft ingevuld,
+          // mappen we dit eerst naar het echte business account ID.
+          if (!/^17841/.test(instagramActorId)) {
+            const normalized = await normalizeInstagramBusinessId(token, adAccount, instagramActorId);
+            if (normalized && normalized !== instagramActorId) {
+              console.log('IG ID', instagramActorId, '→ business account', normalized);
+              instagramActorId = normalized;
+            } else {
+              console.warn('IG ID', instagramActorId, 'kon niet gemapt worden naar 17841-formaat');
+            }
           }
           let creativeJson: any;
           try {
