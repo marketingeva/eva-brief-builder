@@ -818,6 +818,7 @@ export type Database = {
           description: string | null
           id: string
           logo_url: string | null
+          meta_instagram_account_id: string | null
           meta_name_filter: string | null
           meta_page_id: string | null
           mission: string | null
@@ -833,6 +834,7 @@ export type Database = {
           description?: string | null
           id?: string
           logo_url?: string | null
+          meta_instagram_account_id?: string | null
           meta_name_filter?: string | null
           meta_page_id?: string | null
           mission?: string | null
@@ -848,6 +850,7 @@ export type Database = {
           description?: string | null
           id?: string
           logo_url?: string | null
+          meta_instagram_account_id?: string | null
           meta_name_filter?: string | null
           meta_page_id?: string | null
           mission?: string | null
