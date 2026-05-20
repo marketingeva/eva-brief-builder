@@ -379,7 +379,15 @@ async function resolveInstagramActorId(token: string, adAccount: string, pageId:
 }
 
 
-async function normalizeInstagramBusinessId(token: string, adAccount: string, rawId: string): Promise<string | null> {
+async function normalizeInstagramBusinessId(token: string, adAccount: string, pageId: string, rawId: string): Promise<string | null> {
+  // 0) De pagina is de betrouwbaarste bron: Meta koppelt het juiste
+  //    Instagram Business Account aan de Facebook Page. Gebruik die eerst,
+  //    zeker wanneer de klant-instelling een Ads Manager UI-ID (1646…) bevat.
+  try {
+    const pageInfo = await resolvePageInfo(token, pageId);
+    if (pageInfo.instagramId) return String(pageInfo.instagramId);
+  } catch (e) { console.warn('normalize ig page lookup failed', e); }
+
   // 1) Directe lookup op het ID: misschien is dit al een IG Business Account
   //    of bevat het een instagram_business_account verwijzing.
   try {
@@ -411,7 +419,6 @@ async function normalizeInstagramBusinessId(token: string, adAccount: string, ra
 function buildDirectCreativePayload(opts: {
   pageId: string;
   instagramActorId: string | null;
-  instagramField?: 'instagram_user_id' | 'instagram_actor_id';
   name: string;
   text: CreativeText;
   leadFormId: string;
@@ -427,8 +434,7 @@ function buildDirectCreativePayload(opts: {
   }
   const story: any = { page_id: opts.pageId };
   if (opts.instagramActorId) {
-    const field = opts.instagramField || 'instagram_user_id';
-    story[field] = opts.instagramActorId;
+    story.instagram_user_id = opts.instagramActorId;
   }
   return {
     name: opts.name,
@@ -518,7 +524,7 @@ Deno.serve(async (req) => {
           // Als de gebruiker het UI-ID uit Ads Manager (bv. 1646…) heeft ingevuld,
           // mappen we dit eerst naar het echte business account ID.
           if (!/^17841/.test(instagramActorId)) {
-            const normalized = await normalizeInstagramBusinessId(token, adAccount, instagramActorId);
+            const normalized = await normalizeInstagramBusinessId(token, adAccount, body.page_id, instagramActorId);
             if (normalized && normalized !== instagramActorId) {
               console.log('IG ID', instagramActorId, '→ business account', normalized);
               instagramActorId = normalized;
@@ -526,34 +532,14 @@ Deno.serve(async (req) => {
               console.warn('IG ID', instagramActorId, 'kon niet gemapt worden naar 17841-formaat');
             }
           }
-          let creativeJson: any;
-          try {
-            creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
-              pageId: body.page_id,
-              instagramActorId,
-              instagramField: 'instagram_user_id',
-              name: adName,
-              text: bundle.texts,
-              leadFormId: body.lead_form_id,
-              assets,
-            }));
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            if (/instagram_user_id/i.test(msg) && /valid Instagram account/i.test(msg)) {
-              console.warn('instagram_user_id rejected, retrying with instagram_actor_id', msg);
-              creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
-                pageId: body.page_id,
-                instagramActorId,
-                instagramField: 'instagram_actor_id',
-                name: adName,
-                text: bundle.texts,
-                leadFormId: body.lead_form_id,
-                assets,
-              }));
-            } else {
-              throw err;
-            }
-          }
+          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+            pageId: body.page_id,
+            instagramActorId,
+            name: adName,
+            text: bundle.texts,
+            leadFormId: body.lead_form_id,
+            assets,
+          }));
 
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
             name: adName,
