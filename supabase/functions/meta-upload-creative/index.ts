@@ -317,14 +317,6 @@ async function fetchIgCandidates(
   explicitId: string | null,
 ): Promise<IgCandidate[]> {
   const seen = new Set<string>();
-  const ordered: IgCandidate[] = [];
-  const add = (id: string | null | undefined, source: string) => {
-    const s = String(id ?? '').trim();
-    if (!/^\d{6,}$/.test(s) || seen.has(s)) return;
-    seen.add(s);
-    ordered.push({ id: s, source });
-  };
-
   const actorFirst: IgCandidate[] = [];
   const graphFallback: IgCandidate[] = [];
   const addRanked = (id: string | null | undefined, source: string) => {
