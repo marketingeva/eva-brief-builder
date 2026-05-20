@@ -368,17 +368,35 @@ Deno.serve(async (req) => {
           assets,
         });
 
-        console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
-        const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
-          adset_id: body.adset_id,
-          status_option: status,
-          rename_options: { rename_strategy: 'NO_RENAME' },
-          creative_parameters: creativeParameters,
-        });
-
-        const newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
+        let newAdId: string | undefined;
+        if (assets.length > 1) {
+          console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+            pageId: body.page_id,
+            name: adName,
+            text: bundle.texts,
+            leadFormId: body.lead_form_id,
+            assets,
+          }));
+          const adJson = await postToMeta(`${adAccount}/ads`, token, {
+            name: adName,
+            adset_id: body.adset_id,
+            creative: { creative_id: creativeJson.id },
+            status,
+          });
+          newAdId = adJson.id;
+        } else {
+          console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+          const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
+            adset_id: body.adset_id,
+            status_option: status,
+            rename_options: { rename_strategy: 'NO_RENAME' },
+            creative_parameters: creativeParameters,
+          });
+          newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
+        }
         if (!newAdId) {
-          throw new Error(`copies: geen copied_ad_id terug van Meta — ${JSON.stringify(copyJson)}`);
+          throw new Error('Geen nieuw ad_id terug van Meta.');
         }
 
         try {
