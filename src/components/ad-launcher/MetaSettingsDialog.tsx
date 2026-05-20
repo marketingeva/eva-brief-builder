@@ -4,6 +4,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ChevronsUpDown, Check, Loader2, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface Props {
@@ -14,10 +18,21 @@ interface Props {
   onSaved?: () => void;
 }
 
+interface IgAccount {
+  id: string;
+  name: string;
+  source?: string;
+}
+
 export default function MetaSettingsDialog({ open, onOpenChange, clientId, clientName, onSaved }: Props) {
   const [filter, setFilter] = useState('');
   const [pageId, setPageId] = useState('');
   const [igId, setIgId] = useState('');
+  const [igAccounts, setIgAccounts] = useState<IgAccount[]>([]);
+  const [igLoading, setIgLoading] = useState(false);
+  const [igError, setIgError] = useState<string | null>(null);
+  const [igOpen, setIgOpen] = useState(false);
+  const [manual, setManual] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -36,6 +51,35 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
         setLoading(false);
       });
   }, [open, clientId]);
+
+  const fetchIgAccounts = async (pid: string) => {
+    if (!pid.trim()) {
+      setIgAccounts([]);
+      return;
+    }
+    setIgLoading(true);
+    setIgError(null);
+    const { data, error } = await supabase.functions.invoke<{ data?: IgAccount[]; error?: string }>(
+      'meta-list-resources',
+      { body: { resource: 'instagram_accounts', page_id: pid.trim() } },
+    );
+    setIgLoading(false);
+    if (error || data?.error) {
+      setIgError(error?.message || data?.error || 'Kon Instagram-accounts niet ophalen.');
+      setIgAccounts([]);
+      return;
+    }
+    const accounts = data?.data || [];
+    setIgAccounts(accounts);
+    // Als opgeslagen IG ID niet in de lijst zit, en lijst heeft 1 entry: auto-selecteer.
+    if (accounts.length === 1 && !igId) setIgId(accounts[0].id);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    fetchIgAccounts(pageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pageId]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -56,6 +100,8 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
     onSaved?.();
     onOpenChange(false);
   };
+
+  const selectedIg = igAccounts.find((a) => a.id === igId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,17 +143,111 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="igId">Instagram Account ID</Label>
-            <Input
-              id="igId"
-              placeholder="17841400000000000"
-              value={igId}
-              onChange={(e) => setIgId(e.target.value)}
-              disabled={loading}
-            />
-            <p className="text-xs text-muted-foreground">
-              Optioneel. De launcher haalt het Instagram-account automatisch op via de Facebook Page. Vul hier alleen een Instagram User ID in als de automatische lookup faalt (bv. <code>17841400000000000</code>).
-            </p>
+            <div className="flex items-center justify-between">
+              <Label>Instagram-profiel</Label>
+              <button
+                type="button"
+                onClick={() => fetchIgAccounts(pageId)}
+                disabled={!pageId || igLoading}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 disabled:opacity-50"
+              >
+                {igLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Verversen
+              </button>
+            </div>
+
+            {!manual ? (
+              <>
+                <Popover open={igOpen} onOpenChange={setIgOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      disabled={!pageId || igLoading}
+                      className="w-full justify-between font-normal h-10"
+                    >
+                      <span className="truncate">
+                        {selectedIg
+                          ? `@${selectedIg.name} (${selectedIg.id})`
+                          : igId
+                          ? `ID ${igId}`
+                          : pageId
+                          ? 'Kies Instagram-profiel'
+                          : 'Eerst Page ID invoeren'}
+                      </span>
+                      {igLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      ) : (
+                        <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]" align="start">
+                    <Command>
+                      <CommandInput placeholder="Zoek Instagram-account..." />
+                      <CommandList>
+                        <CommandEmpty>
+                          {igError || 'Geen Instagram-accounts gevonden voor deze Page.'}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {igAccounts.map((a) => (
+                            <CommandItem
+                              key={a.id}
+                              value={`${a.name} ${a.id}`}
+                              onSelect={() => {
+                                setIgId(a.id);
+                                setIgOpen(false);
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="flex-1 truncate">
+                                @{a.name}
+                                <span className="text-muted-foreground"> · {a.id}</span>
+                              </span>
+                              {igId === a.id && <Check className="h-4 w-4" />}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Het Instagram-profiel dat aan de Page is gekoppeld in Meta Business Settings.
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setManual(true)}
+                  >
+                    Handmatig invoeren
+                  </button>
+                </div>
+                {igError && <p className="text-xs text-destructive">{igError}</p>}
+              </>
+            ) : (
+              <>
+                <Input
+                  placeholder="17841400000000000"
+                  value={igId}
+                  onChange={(e) => setIgId(e.target.value)}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Handmatige fallback. Gebruik de Instagram User ID (begint meestal met <code>1784…</code>).
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setManual(false)}
+                  >
+                    Terug naar lijst
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
