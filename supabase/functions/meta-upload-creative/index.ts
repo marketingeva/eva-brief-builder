@@ -217,12 +217,13 @@ function buildCreativeParameters(opts: {
   const hasMultipleAssets = assets.length > 1;
 
   if (hasMultipleText || hasMultipleAssets) {
+    const sharedLabels = [{ name: 'shared_copy' }];
     const asset_feed_spec: Record<string, unknown> = {
       ad_formats: [allVideo ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-      bodies: (primaryTexts.length ? primaryTexts : [mainPrimary]).map((t) => ({ text: t })),
-      titles: (headlines.length ? headlines : [mainHeadline]).map((t) => ({ text: t })),
-      descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t })),
-      link_urls: [{ website_url: link }],
+      bodies: (primaryTexts.length ? primaryTexts : [mainPrimary]).map((t) => ({ text: t, adlabels: sharedLabels })),
+      titles: (headlines.length ? headlines : [mainHeadline]).map((t) => ({ text: t, adlabels: sharedLabels })),
+      descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t, adlabels: sharedLabels })),
+      link_urls: [{ website_url: link, adlabels: sharedLabels }],
       call_to_action_types: [ctaType],
       call_to_actions: [callToAction],
     };
@@ -251,9 +252,15 @@ function buildCreativeParameters(opts: {
     // én elk asset een bekende ratio heeft.
     const ratioAssets = assets.filter((a) => a.ratio && (a.image_hash || a.video_id));
     if (hasMultipleAssets && ratioAssets.length === assets.length && (allImage || allVideo)) {
+      const availableRatios = new Set(ratioAssets.map((a) => a.ratio as AspectRatio));
+      asset_feed_spec.optimization_type = 'PLACEMENT';
       asset_feed_spec.asset_customization_rules = assets.map((a, i) => {
         const rule: Record<string, unknown> = {
-          customization_spec: RATIO_TO_PLACEMENTS[a.ratio as AspectRatio],
+          customization_spec: placementsForRatio(a.ratio as AspectRatio, availableRatios),
+          body_label: sharedLabels[0],
+          title_label: sharedLabels[0],
+          description_label: sharedLabels[0],
+          link_url_label: sharedLabels[0],
         };
         if (a.is_video) rule.video_label = { name: labelFor(a, i) };
         else rule.image_label = { name: labelFor(a, i) };
