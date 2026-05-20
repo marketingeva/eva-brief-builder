@@ -382,6 +382,7 @@ async function resolveInstagramActorId(token: string, adAccount: string, pageId:
 function buildDirectCreativePayload(opts: {
   pageId: string;
   instagramActorId: string | null;
+  instagramField?: 'instagram_user_id' | 'instagram_actor_id';
   name: string;
   text: CreativeText;
   leadFormId: string;
@@ -396,7 +397,10 @@ function buildDirectCreativePayload(opts: {
     delete params.image_hash;
   }
   const story: any = { page_id: opts.pageId };
-  if (opts.instagramActorId) story.instagram_user_id = opts.instagramActorId;
+  if (opts.instagramActorId) {
+    const field = opts.instagramField || 'instagram_user_id';
+    story[field] = opts.instagramActorId;
+  }
   return {
     name: opts.name,
     object_story_spec: story,
