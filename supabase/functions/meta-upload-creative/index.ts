@@ -298,95 +298,102 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
-// Meta Ads Manager gebruikt voor de Instagram-profiel dropdown meestal de
-// actor/user ID, terwijl Graph API vaak ook een 1784… Business Account ID geeft.
-// Voor zichtbaarheid in Ads Manager proberen we actor/user IDs daarom vóór 1784… IDs.
+// Meta heeft TWEE Instagram-ID's per profiel:
+//  - Legacy actor/user ID (bv. 1646…)  → hoort op `instagram_actor_id`
+//  - Graph Business Account ID (1784…) → hoort op `instagram_user_id`
+// Beide tegelijk meegeven werkt het meest betrouwbaar in Ads Manager.
 
-
-
-
-interface IgCandidate {
-  id: string;
+interface IgIdentity {
+  actorId: string | null;    // legacy / ads-manager dropdown ID (niet-1784)
+  businessId: string | null; // 1784… IGBA
   source: string;
 }
 
-async function fetchIgCandidates(
+function isGraphId(id: string) {
+  return /^1784\d+$/.test(id);
+}
+
+async function resolveIgIdentity(
   token: string,
   adAccount: string,
   pageId: string,
   explicitId: string | null,
-): Promise<IgCandidate[]> {
-  const seen = new Set<string>();
-  const actorFirst: IgCandidate[] = [];
-  const graphFallback: IgCandidate[] = [];
-  const addRanked = (id: string | null | undefined, source: string) => {
-    const s = String(id ?? '').trim();
-    if (!/^\d{6,}$/.test(s) || seen.has(s)) return;
-    seen.add(s);
-    const candidate = { id: s, source };
-    if (/^1784\d+$/.test(s)) graphFallback.push(candidate);
-    else actorFirst.push(candidate);
+): Promise<IgIdentity[]> {
+  const pairs: IgIdentity[] = [];
+  const seenKey = new Set<string>();
+  const push = (actor: string | null, biz: string | null, source: string) => {
+    const a = (actor || '').trim() || null;
+    const b = (biz || '').trim() || null;
+    if (!a && !b) return;
+    if (a && a === String(pageId).trim()) return; // page-id is nooit een IG-id
+    const key = `${a || ''}|${b || ''}`;
+    if (seenKey.has(key)) return;
+    seenKey.add(key);
+    pairs.push({ actorId: a, businessId: b, source });
   };
 
-  // 1. Ad-account Instagram identities komen overeen met de Ads Manager dropdown.
-  try {
-    const accountIg = await getFromMeta(`${adAccount}/instagram_accounts?fields=id,ig_id,username&limit=200`, token);
-    for (const it of accountIg?.data || []) {
-      addRanked(it?.ig_id, 'ad_account.instagram_accounts.ig_id');
-      addRanked(it?.id, 'ad_account.instagram_accounts');
-    }
-  } catch (e) {
-    console.warn('IG candidates: ad account instagram_accounts failed', e);
-  }
-
-  // 2. Page Access Token + officiële Page → IG koppeling. Dit is exact dezelfde
-  //    bron die de instellingen-dialoog gebruikt, dus normaal is dit hetzelfde ID.
+  // 1) Page lookup: levert het paar direct (id = 1784…, ig_id = actor/legacy).
   let pageAccessToken: string | null = null;
   try {
     const pageRes = await getFromMeta(
       `${pageId}?fields=access_token,instagram_business_account{id,ig_id,username},connected_instagram_account{id,ig_id,username}`,
       token,
     );
-    if (pageRes?.error) console.warn('IG candidates: page lookup', JSON.stringify(pageRes.error));
     if (pageRes?.access_token) pageAccessToken = pageRes.access_token;
-    addRanked(pageRes?.instagram_business_account?.ig_id, 'page.instagram_business_account.ig_id');
-    addRanked(pageRes?.connected_instagram_account?.ig_id, 'page.connected_instagram_account.ig_id');
-    addRanked(pageRes?.instagram_business_account?.id, 'page.instagram_business_account');
-    addRanked(pageRes?.connected_instagram_account?.id, 'page.connected_instagram_account');
+    const iba = pageRes?.instagram_business_account;
+    if (iba?.id || iba?.ig_id) push(iba?.ig_id || null, iba?.id || null, 'page.instagram_business_account');
+    const cia = pageRes?.connected_instagram_account;
+    if (cia?.id || cia?.ig_id) push(cia?.ig_id || null, cia?.id || null, 'page.connected_instagram_account');
   } catch (e) {
-    console.warn('IG candidates: page lookup failed', e);
+    console.warn('IG identity: page lookup failed', e);
   }
 
-  // 3. Page-level instagram_accounts en page_backed (alleen met page token).
+  // 2) Ad-account instagram_accounts: levert ook beide id's.
+  try {
+    const accountIg = await getFromMeta(
+      `${adAccount}/instagram_accounts?fields=id,ig_id,username&limit=200`,
+      token,
+    );
+    for (const it of accountIg?.data || []) {
+      push(it?.ig_id || null, it?.id || null, 'ad_account.instagram_accounts');
+    }
+  } catch (e) {
+    console.warn('IG identity: ad account lookup failed', e);
+  }
+
+  // 3) Page-token paths (extra info, ook hier krijgen we id/ig_id).
   if (pageAccessToken) {
     try {
       const pg = await getFromMeta(`${pageId}/instagram_accounts?fields=id,ig_id,username`, pageAccessToken);
-      for (const it of pg?.data || []) {
-        addRanked(it?.ig_id, 'page.instagram_accounts.ig_id');
-        addRanked(it?.id, 'page.instagram_accounts');
-      }
-    } catch (e) { console.warn('IG candidates: page.instagram_accounts failed', e); }
-
+      for (const it of pg?.data || []) push(it?.ig_id || null, it?.id || null, 'page.instagram_accounts');
+    } catch (e) { console.warn('IG identity: page.instagram_accounts failed', e); }
     try {
       const pbia = await getFromMeta(`${pageId}/page_backed_instagram_accounts?fields=id,ig_id,username`, pageAccessToken);
-      for (const it of pbia?.data || []) {
-        addRanked(it?.ig_id, 'page.page_backed_instagram_accounts.ig_id');
-        addRanked(it?.id, 'page.page_backed_instagram_accounts');
-      }
-    } catch (e) { console.warn('IG candidates: page.page_backed failed', e); }
+      for (const it of pbia?.data || []) push(it?.ig_id || null, it?.id || null, 'page.page_backed_instagram_accounts');
+    } catch (e) { console.warn('IG identity: page.page_backed failed', e); }
   }
 
-  // Expliciete instelling behouden, maar 1784… pas na actor/user IDs proberen.
-  addRanked(explicitId, 'client_setting');
+  // 4) Expliciete keuze: zoek bijbehorend paar; anders los toevoegen.
+  if (explicitId) {
+    const eid = explicitId.trim();
+    const matched = pairs.find((p) => p.actorId === eid || p.businessId === eid);
+    if (matched) {
+      const idx = pairs.indexOf(matched);
+      pairs.splice(idx, 1);
+      pairs.unshift({ ...matched, source: `${matched.source}+client_setting` });
+    } else if (isGraphId(eid)) {
+      pairs.unshift({ actorId: null, businessId: eid, source: 'client_setting' });
+    } else {
+      pairs.unshift({ actorId: eid, businessId: null, source: 'client_setting' });
+    }
+  }
 
-  // Veiligheidsnet: filter de Facebook Page ID — die is nooit een geldige IG ID.
-  return [...actorFirst, ...graphFallback].filter((c) => c.id !== String(pageId).trim());
+  return pairs;
 }
-
 
 function buildDirectCreativePayload(opts: {
   pageId: string;
-  instagramActorId: string | null;
+  identity: IgIdentity | null;
   name: string;
   text: CreativeText;
   leadFormId: string;
@@ -401,18 +408,19 @@ function buildDirectCreativePayload(opts: {
     delete params.image_hash;
   }
   const story: any = { page_id: opts.pageId };
-  if (opts.instagramActorId) {
-    story.instagram_user_id = opts.instagramActorId;
-  }
+  const id = opts.identity;
+  // instagram_user_id verwacht het 1784… Graph ID.
+  if (id?.businessId) story.instagram_user_id = id.businessId;
+  else if (id?.actorId) story.instagram_user_id = id.actorId;
+
   const payload: Record<string, unknown> = {
     name: opts.name,
     object_story_spec: story,
     ...params,
   };
-  if (opts.instagramActorId) {
-    // Ads Manager leest deze identity uit als Instagram-profiel selector.
-    payload.instagram_actor_id = opts.instagramActorId;
-  }
+  // instagram_actor_id verwacht het legacy actor/user ID (Ads Manager dropdown).
+  if (id?.actorId) payload.instagram_actor_id = id.actorId;
+  else if (id?.businessId) payload.instagram_actor_id = id.businessId;
   return payload;
 }
 
