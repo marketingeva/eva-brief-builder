@@ -304,6 +304,9 @@ function buildCreativeParameters(opts: {
 // We verzamelen daarom ALLE plausibele kandidaten en proberen ze één voor één
 // tegen de Meta adcreatives endpoint tot er één geaccepteerd wordt.
 
+// Verzamel ALLEEN echte Instagram-account IDs. We negeren expliciet `payload.id`
+// (= meestal de Facebook Page ID) en root-level objecten zonder IG-context,
+// zodat we niet per ongeluk de Page ID als instagram_user_id proberen.
 function collectIds(payload: any, out: Set<string>) {
   if (!payload || typeof payload !== 'object') return;
   const push = (v: unknown) => {
@@ -312,7 +315,6 @@ function collectIds(payload: any, out: Set<string>) {
   };
   push(payload.instagram_business_account?.id);
   push(payload.connected_instagram_account?.id);
-  push(payload.id);
   for (const item of payload.data || []) {
     push(item?.id);
     push(item?.instagram_business_account?.id);
