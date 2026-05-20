@@ -213,26 +213,36 @@ function buildCreativeParameters(opts: {
       call_to_actions: [callToAction],
     };
 
+    // Bouw stabiele labels per asset (verplicht voor asset_customization_rules).
+    const labelFor = (a: UploadedAsset, i: number) =>
+      `asset_${i}_${(a.ratio || 'auto').replace(':', 'x')}`;
+
     if (allVideo) {
       asset_feed_spec.videos = assets
         .filter((a) => a.video_id)
-        .map((a) => ({ video_id: a.video_id }));
+        .map((a, i) => ({
+          video_id: a.video_id,
+          adlabels: [{ name: labelFor(a, i) }],
+        }));
     } else if (allImage) {
       asset_feed_spec.images = assets
         .filter((a) => a.image_hash)
-        .map((a) => ({ hash: a.image_hash }));
+        .map((a, i) => ({
+          hash: a.image_hash,
+          adlabels: [{ name: labelFor(a, i) }],
+        }));
     }
 
     // Placement-customization: alleen toepassen als er meer dan 1 asset is
     // én elk asset een bekende ratio heeft.
     const ratioAssets = assets.filter((a) => a.ratio && (a.image_hash || a.video_id));
-    if (hasMultipleAssets && ratioAssets.length === assets.length) {
-      asset_feed_spec.asset_customization_rules = ratioAssets.map((a) => {
+    if (hasMultipleAssets && ratioAssets.length === assets.length && (allImage || allVideo)) {
+      asset_feed_spec.asset_customization_rules = assets.map((a, i) => {
         const rule: Record<string, unknown> = {
           customization_spec: RATIO_TO_PLACEMENTS[a.ratio as AspectRatio],
         };
-        if (a.is_video && a.video_id) rule.video_label = { name: a.video_id };
-        else if (a.image_hash) rule.image_label = { name: a.image_hash };
+        if (a.is_video) rule.video_label = { name: labelFor(a, i) };
+        else rule.image_label = { name: labelFor(a, i) };
         return rule;
       });
     }
