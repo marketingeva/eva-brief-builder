@@ -386,6 +386,8 @@ async function resolveInstagramActorId(token: string, adAccount: string, pageId:
 
 
 async function normalizeInstagramBusinessId(token: string, adAccount: string, pageId: string, rawId: string): Promise<string | null> {
+  if (isInstagramBusinessId(rawId)) return rawId;
+
   // 0) De pagina is de betrouwbaarste bron: Meta koppelt het juiste
   //    Instagram Business Account aan de Facebook Page. Gebruik die eerst,
   //    zeker wanneer de klant-instelling een Ads Manager UI-ID (1646…) bevat.
@@ -398,8 +400,8 @@ async function normalizeInstagramBusinessId(token: string, adAccount: string, pa
   //    of bevat het een instagram_business_account verwijzing.
   try {
     const direct = await getFromMeta(`${rawId}?fields=id,username,instagram_business_account{id,username}`, token);
-    if (direct?.instagram_business_account?.id) return String(direct.instagram_business_account.id);
-    if (direct?.id && /^17841/.test(String(direct.id))) return String(direct.id);
+    if (isInstagramBusinessId(direct?.instagram_business_account?.id)) return String(direct.instagram_business_account.id);
+    if (isInstagramBusinessId(direct?.id)) return String(direct.id);
     if (direct?.error) console.warn('normalize ig direct lookup', JSON.stringify(direct.error));
   } catch (e) { console.warn('normalize ig direct lookup failed', e); }
 
@@ -411,10 +413,10 @@ async function normalizeInstagramBusinessId(token: string, adAccount: string, pa
       if (list?.error) { console.warn('normalize ig list', JSON.stringify(list.error)); break; }
       const items: any[] = list?.data || [];
       const match = items.find((it) => String(it.id) === String(rawId));
-      if (match?.instagram_business_account?.id) return String(match.instagram_business_account.id);
+      if (isInstagramBusinessId(match?.instagram_business_account?.id)) return String(match.instagram_business_account.id);
       // Als één van de business_accounts.id == rawId, gebruik die
       const reverse = items.find((it) => String(it.instagram_business_account?.id) === String(rawId));
-      if (reverse?.instagram_business_account?.id) return String(reverse.instagram_business_account.id);
+      if (isInstagramBusinessId(reverse?.instagram_business_account?.id)) return String(reverse.instagram_business_account.id);
       url = list?.paging?.next || '';
     }
   } catch (e) { console.warn('normalize ig list failed', e); }
