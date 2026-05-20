@@ -531,13 +531,14 @@ Deno.serve(async (req) => {
           // Meta's adcreative API accepteert alleen het IG Business Account ID (17841…).
           // Als de gebruiker het UI-ID uit Ads Manager (bv. 1646…) heeft ingevuld,
           // mappen we dit eerst naar het echte business account ID.
-          if (!/^17841/.test(instagramActorId)) {
+          if (!isInstagramBusinessId(instagramActorId)) {
             const normalized = await normalizeInstagramBusinessId(token, adAccount, body.page_id, instagramActorId);
             if (normalized && normalized !== instagramActorId) {
               console.log('IG ID', instagramActorId, '→ business account', normalized);
               instagramActorId = normalized;
             } else {
-              console.warn('IG ID', instagramActorId, 'kon niet gemapt worden naar 17841-formaat');
+              console.warn('IG ID', instagramActorId, 'kon niet gemapt worden naar 1784-formaat; object_story_spec gebruikt alleen page_id');
+              instagramActorId = null;
             }
           }
           const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
