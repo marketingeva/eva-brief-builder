@@ -290,8 +290,38 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
+async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
+  // 1) Echte gekoppelde IG-account op de page
+  try {
+    const r = await fetch(`${META_API}/${pageId}?fields=instagram_business_account,connected_instagram_account&access_token=${encodeURIComponent(token)}`);
+    const j = await r.json();
+    const id = j?.instagram_business_account?.id || j?.connected_instagram_account?.id;
+    if (id) return id;
+  } catch (e) { console.warn('IG lookup failed', e); }
+  // 2) Bestaande page-backed IG account onder ad account
+  try {
+    const r = await fetch(`${META_API}/${adAccount}/page_backed_instagram_accounts?access_token=${encodeURIComponent(token)}`);
+    const j = await r.json();
+    const existing = j?.data?.[0]?.id;
+    if (existing) return existing;
+  } catch (e) { console.warn('PBIA list failed', e); }
+  // 3) Maak page-backed IG account
+  try {
+    const r = await fetch(`${META_API}/${adAccount}/page_backed_instagram_accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page_id: pageId, access_token: token }),
+    });
+    const j = await r.json();
+    if (j?.id) return j.id;
+    console.warn('PBIA create response', JSON.stringify(j));
+  } catch (e) { console.warn('PBIA create failed', e); }
+  return null;
+}
+
 function buildDirectCreativePayload(opts: {
   pageId: string;
+  instagramActorId: string | null;
   name: string;
   text: CreativeText;
   leadFormId: string;
@@ -305,12 +335,15 @@ function buildDirectCreativePayload(opts: {
     delete params.link_url;
     delete params.image_hash;
   }
+  const story: any = { page_id: opts.pageId };
+  if (opts.instagramActorId) story.instagram_actor_id = opts.instagramActorId;
   return {
     name: opts.name,
-    object_story_spec: { page_id: opts.pageId },
+    object_story_spec: story,
     ...params,
   };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -381,13 +414,19 @@ Deno.serve(async (req) => {
         let newAdId: string | undefined;
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+          const instagramActorId = await resolveInstagramActorId(token, adAccount, body.page_id);
+          if (!instagramActorId) {
+            throw new Error('Geen Instagram-account beschikbaar voor deze Facebook-pagina. Koppel een Instagram-account aan de pagina of geef de ad account toegang om een page-backed Instagram account aan te maken.');
+          }
           const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
             pageId: body.page_id,
+            instagramActorId,
             name: adName,
             text: bundle.texts,
             leadFormId: body.lead_form_id,
             assets,
           }));
+
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
             name: adName,
             adset_id: body.adset_id,
