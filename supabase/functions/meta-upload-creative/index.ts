@@ -250,24 +250,13 @@ function buildCreativeParameters(opts: {
     params.asset_feed_spec = asset_feed_spec;
   }
 
-  // Meta accepteert het oude standaardverbeteringen-veld niet meer, zelfs
-  // niet als opt-out. Stuur daarom alleen de afzonderlijke feature toggles mee.
+  // Meta accepteert alleen een beperkte set keys in creative_features_spec.
+  // We sturen alleen de keys mee die geldig zijn en die we willen uitschakelen.
   params.degrees_of_freedom_spec = {
     creative_features_spec: {
-      image_touchups: { enroll_status: 'OPT_OUT' },
-      image_brightness_and_contrast: { enroll_status: 'OPT_OUT' },
-      enhance_cta: { enroll_status: 'OPT_OUT' },
-      text_optimizations: { enroll_status: 'OPT_OUT' },
-      image_templates: { enroll_status: 'OPT_OUT' },
-      video_auto_crop: { enroll_status: 'OPT_OUT' },
-      image_uncrop: { enroll_status: 'OPT_OUT' },
-      adapt_to_placement: { enroll_status: 'OPT_OUT' },
-      media_type_automation: { enroll_status: 'OPT_OUT' },
-      product_extensions: { enroll_status: 'OPT_OUT' },
-      description_automation: { enroll_status: 'OPT_OUT' },
-      add_text_overlay: { enroll_status: 'OPT_OUT' },
-      site_extensions: { enroll_status: 'OPT_OUT' },
-      music: { enroll_status: 'OPT_OUT' },
+      standard_enhancements_catalog: { enroll_status: 'OPT_OUT' },
+      image_animation: { enroll_status: 'OPT_OUT' },
+      text_overlay_translation: { enroll_status: 'OPT_OUT' },
     },
   };
 
