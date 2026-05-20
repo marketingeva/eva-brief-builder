@@ -250,6 +250,28 @@ function buildCreativeParameters(opts: {
     params.asset_feed_spec = asset_feed_spec;
   }
 
+  // Meta vereist sinds 2024 dat "standard enhancements" niet meer als veld
+  // worden meegegeven. Schakel ze expliciet uit per feature.
+  params.degrees_of_freedom_spec = {
+    creative_features_spec: {
+      standard_enhancements: { enroll_status: 'OPT_OUT' },
+      image_touchups: { enroll_status: 'OPT_OUT' },
+      image_brightness_and_contrast: { enroll_status: 'OPT_OUT' },
+      enhance_cta: { enroll_status: 'OPT_OUT' },
+      text_optimizations: { enroll_status: 'OPT_OUT' },
+      image_templates: { enroll_status: 'OPT_OUT' },
+      video_auto_crop: { enroll_status: 'OPT_OUT' },
+      image_uncrop: { enroll_status: 'OPT_OUT' },
+      adapt_to_placement: { enroll_status: 'OPT_OUT' },
+      media_type_automation: { enroll_status: 'OPT_OUT' },
+      product_extensions: { enroll_status: 'OPT_OUT' },
+      description_automation: { enroll_status: 'OPT_OUT' },
+      add_text_overlay: { enroll_status: 'OPT_OUT' },
+      site_extensions: { enroll_status: 'OPT_OUT' },
+      music: { enroll_status: 'OPT_OUT' },
+    },
+  };
+
   return params;
 }
 
