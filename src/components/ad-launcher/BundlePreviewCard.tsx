@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Plus, Unlink } from 'lucide-react';
+import { Pencil, Trash2, CheckCircle2, AlertCircle, Loader2, Plus, Unlink, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AspectRatio } from '@/lib/ad-bundle';
 import { KNOWN_RATIOS } from '@/lib/ad-bundle';
@@ -24,6 +24,7 @@ interface Props {
   onRemove: () => void;
   onUnbundle?: () => void;
   onAddVariant: (files: File[]) => void;
+  onRetryFailed?: () => void;
 }
 
 // Aspect-class voor de grote preview-frame.
@@ -44,6 +45,7 @@ export default function BundlePreviewCard({
   onRemove,
   onUnbundle,
   onAddVariant,
+  onRetryFailed,
 }: Props) {
   // Sorteer varianten op KNOWN_RATIOS volgorde; onbekenden achteraan.
   const sorted = [...variants].sort((a, b) => {
@@ -61,6 +63,7 @@ export default function BundlePreviewCard({
   const anyUploading = variants.some((v) => v.uploading);
   const missingRatios = KNOWN_RATIOS.filter((r) => !variants.some((v) => v.ratio === r));
   const isBundle = variants.length > 1;
+  const anyFailed = variants.some((v) => v.upload_error);
 
   return (
     <div className="border rounded-xl p-4 bg-card space-y-3">
@@ -154,6 +157,11 @@ export default function BundlePreviewCard({
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEditTexts} title="Teksten bewerken">
                 <Pencil className="h-4 w-4" />
               </Button>
+              {anyFailed && onRetryFailed && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRetryFailed} title="Mislukte uploads opnieuw proberen">
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              )}
               {isBundle && onUnbundle && (
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onUnbundle} title="Bundle splitsen">
                   <Unlink className="h-4 w-4" />
