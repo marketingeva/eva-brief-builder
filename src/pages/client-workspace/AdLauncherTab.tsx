@@ -64,10 +64,21 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
     bundleId: string,
     variantFile: File,
   ) => {
-    const path = `${clientId}/${Date.now()}-${variantFile.name}`;
-    const { error } = await supabase.storage
-      .from('ad-launcher-uploads')
-      .upload(path, variantFile);
+    const formData = new FormData();
+    formData.append('client_id', clientId);
+    formData.append('file', variantFile);
+
+    const { data, error } = await supabase.functions.invoke('ad-launcher-upload', {
+      body: formData,
+    });
+
+    const uploadError = error?.message || data?.error || (!data?.path ? 'Upload mislukt' : undefined);
+    const path = data?.path as string | undefined;
+
+    if (uploadError) {
+      toast({ title: 'Upload mislukt', description: uploadError, variant: 'destructive' });
+    }
+
     setBundles((cur) =>
       cur.map((b) => {
         if (b.id !== bundleId) return b;
@@ -75,7 +86,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
           ...b,
           variants: b.variants.map((v) =>
             v.file === variantFile
-              ? { ...v, uploading: false, storage_path: error ? undefined : path, upload_error: error?.message }
+              ? { ...v, uploading: false, storage_path: uploadError ? undefined : path, upload_error: uploadError }
               : v,
           ),
         };
@@ -158,6 +169,29 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
         texts: { ...target.texts },
       }));
       return [...c.slice(0, idx), ...split, ...c.slice(idx + 1)];
+    });
+  };
+
+  const retryFailedUploads = (bundleId: string) => {
+    setBundles((cur) => {
+      const filesToRetry: File[] = [];
+      const next = cur.map((b) => {
+        if (b.id !== bundleId) return b;
+        return {
+          ...b,
+          variants: b.variants.map((v) => {
+            if (!v.upload_error) return v;
+            filesToRetry.push(v.file);
+            return { ...v, uploading: true, upload_error: undefined };
+          }),
+        };
+      });
+
+      queueMicrotask(() => {
+        for (const file of filesToRetry) uploadVariant(bundleId, file);
+      });
+
+      return next;
     });
   };
 
@@ -314,6 +348,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
                     onEditTexts={() => setEditingId(b.id)}
                     onRemove={() => removeBundle(b.id)}
                     onUnbundle={b.variants.length > 1 ? () => unbundle(b.id) : undefined}
+                    onRetryFailed={() => retryFailedUploads(b.id)}
                     onAddVariant={(files) => {
                       // Voeg toe als variant aan deze bundle (forceer dezelfde basenaam).
                       const fakeNamed = files.map((f) => {
