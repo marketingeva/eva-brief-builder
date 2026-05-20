@@ -379,6 +379,35 @@ async function resolveInstagramActorId(token: string, adAccount: string, pageId:
 }
 
 
+async function normalizeInstagramBusinessId(token: string, adAccount: string, rawId: string): Promise<string | null> {
+  // 1) Directe lookup op het ID: misschien is dit al een IG Business Account
+  //    of bevat het een instagram_business_account verwijzing.
+  try {
+    const direct = await getFromMeta(`${rawId}?fields=id,username,instagram_business_account{id,username}`, token);
+    if (direct?.instagram_business_account?.id) return String(direct.instagram_business_account.id);
+    if (direct?.id && /^17841/.test(String(direct.id))) return String(direct.id);
+    if (direct?.error) console.warn('normalize ig direct lookup', JSON.stringify(direct.error));
+  } catch (e) { console.warn('normalize ig direct lookup failed', e); }
+
+  // 2) Loop adaccount instagram_accounts en match op id of username
+  try {
+    let url = `${META_API}/${adAccount}/instagram_accounts?fields=id,username,instagram_business_account{id,username}&limit=200`;
+    for (let i = 0; i < 5 && url; i++) {
+      const list = await getFromMeta(url, token);
+      if (list?.error) { console.warn('normalize ig list', JSON.stringify(list.error)); break; }
+      const items: any[] = list?.data || [];
+      const match = items.find((it) => String(it.id) === String(rawId));
+      if (match?.instagram_business_account?.id) return String(match.instagram_business_account.id);
+      // Als één van de business_accounts.id == rawId, gebruik die
+      const reverse = items.find((it) => String(it.instagram_business_account?.id) === String(rawId));
+      if (reverse?.instagram_business_account?.id) return String(reverse.instagram_business_account.id);
+      url = list?.paging?.next || '';
+    }
+  } catch (e) { console.warn('normalize ig list failed', e); }
+
+  return null;
+}
+
 function buildDirectCreativePayload(opts: {
   pageId: string;
   instagramActorId: string | null;
