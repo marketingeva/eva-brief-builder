@@ -38,6 +38,7 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const { toast } = useToast();
   const [nameFilter, setNameFilter] = useState<string | null>(null);
   const [pageId, setPageId] = useState<string | null>(null);
+  const [igId, setIgId] = useState<string | null>(null);
   const [selection, setSelection] = useState<MetaSelection>({
     campaign_id: '', adset_id: '', lead_form_id: '',
   });
@@ -48,10 +49,11 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
   const [adsetRefreshKey, setAdsetRefreshKey] = useState(0);
 
   useEffect(() => {
-    supabase.from('clients').select('meta_name_filter, meta_page_id').eq('id', clientId).single()
+    supabase.from('clients').select('meta_name_filter, meta_page_id, meta_instagram_account_id').eq('id', clientId).single()
       .then(({ data }) => {
         setNameFilter(data?.meta_name_filter || null);
         setPageId(data?.meta_page_id || null);
+        setIgId((data as any)?.meta_instagram_account_id || null);
       });
   }, [clientId]);
 
