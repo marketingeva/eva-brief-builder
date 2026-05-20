@@ -304,6 +304,9 @@ function buildCreativeParameters(opts: {
 // We verzamelen daarom ALLE plausibele kandidaten en proberen ze één voor één
 // tegen de Meta adcreatives endpoint tot er één geaccepteerd wordt.
 
+// Verzamel ALLEEN echte Instagram-account IDs. We negeren expliciet `payload.id`
+// (= meestal de Facebook Page ID) en root-level objecten zonder IG-context,
+// zodat we niet per ongeluk de Page ID als instagram_user_id proberen.
 function collectIds(payload: any, out: Set<string>) {
   if (!payload || typeof payload !== 'object') return;
   const push = (v: unknown) => {
@@ -312,7 +315,6 @@ function collectIds(payload: any, out: Set<string>) {
   };
   push(payload.instagram_business_account?.id);
   push(payload.connected_instagram_account?.id);
-  push(payload.id);
   for (const item of payload.data || []) {
     push(item?.id);
     push(item?.instagram_business_account?.id);
@@ -416,14 +418,18 @@ async function fetchIgCandidates(
   // Stap 5: het door de gebruiker opgegeven ID als laatste fallback toevoegen.
   if (explicitId) add(explicitId, 'client_setting');
 
+  // Veiligheidsnet: filter de Facebook Page ID er uit — die is nooit een
+  // geldige instagram_user_id en veroorzaakt subtiele Meta-fouten.
+  const filtered = ordered.filter((c) => c.id !== String(pageId).trim());
+
   // Sorteer: 1784… (Business Account IDs) eerst — die werken het breedst.
-  ordered.sort((a, b) => {
+  filtered.sort((a, b) => {
     const aBiz = /^1784\d+$/.test(a.id) ? 0 : 1;
     const bBiz = /^1784\d+$/.test(b.id) ? 0 : 1;
     return aBiz - bBiz;
   });
 
-  return ordered;
+  return filtered;
 }
 
 function buildDirectCreativePayload(opts: {
@@ -535,6 +541,7 @@ Deno.serve(async (req) => {
 
           // Probeer ieder kandidaat-ID tot Meta er één accepteert.
           let creativeJson: any = null;
+          let acceptedIg: IgCandidate | null = null;
           let lastErr: Error | null = null;
           for (const cand of candidates) {
             try {
@@ -546,6 +553,7 @@ Deno.serve(async (req) => {
                 leadFormId: body.lead_form_id,
                 assets,
               }));
+              acceptedIg = cand;
               console.log('IG ID accepted by Meta:', cand.id, 'source:', cand.source);
               break;
             } catch (err) {
@@ -560,6 +568,36 @@ Deno.serve(async (req) => {
           }
           if (!creativeJson) {
             throw lastErr || new Error('Meta accepteerde geen enkel Instagram-account ID.');
+          }
+
+          // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
+          try {
+            const verify = await getFromMeta(
+              `${creativeJson.id}?fields=object_story_spec,instagram_user_id,effective_instagram_media_id`,
+              token,
+            );
+            console.log('Creative verify:', JSON.stringify({
+              id: creativeJson.id,
+              instagram_user_id: verify?.instagram_user_id,
+              oss_ig: verify?.object_story_spec?.instagram_user_id,
+              oss_page: verify?.object_story_spec?.page_id,
+            }));
+          } catch (e) {
+            console.warn('Creative verify failed', e);
+          }
+
+          // Persisteer het werkende IG ID op de klant, zodat volgende launches
+          // dit ID direct gebruiken i.p.v. het oude UI-ID (1646…).
+          if (acceptedIg && acceptedIg.source !== 'client_setting') {
+            try {
+              await supabase
+                .from('clients')
+                .update({ meta_instagram_account_id: acceptedIg.id } as any)
+                .eq('id', body.client_id);
+              console.log('Persisted accepted IG ID to client:', acceptedIg.id);
+            } catch (e) {
+              console.warn('Persist IG ID failed', e);
+            }
           }
 
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
