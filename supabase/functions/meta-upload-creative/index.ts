@@ -404,11 +404,16 @@ function buildDirectCreativePayload(opts: {
   if (opts.instagramActorId) {
     story.instagram_user_id = opts.instagramActorId;
   }
-  return {
+  const payload: Record<string, unknown> = {
     name: opts.name,
     object_story_spec: story,
     ...params,
   };
+  if (opts.instagramActorId) {
+    // Ads Manager leest deze identity uit als Instagram-profiel selector.
+    payload.instagram_actor_id = opts.instagramActorId;
+  }
+  return payload;
 }
 
 
@@ -512,7 +517,7 @@ Deno.serve(async (req) => {
               const msg = err instanceof Error ? err.message : String(err);
               lastErr = err instanceof Error ? err : new Error(msg);
               // Alleen doorgaan als de fout specifiek over instagram_user_id gaat.
-              if (!/instagram_user_id|valid Instagram account|Instagram-account|1772103|2238281/i.test(msg)) {
+              if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|1772103|2238281/i.test(msg)) {
                 throw err;
               }
               console.warn('IG ID rejected:', cand.id, 'source:', cand.source, '-', msg);
@@ -538,9 +543,9 @@ Deno.serve(async (req) => {
             console.warn('Creative verify failed', e);
           }
 
-          // Persisteer het werkende IG ID op de klant, zodat volgende launches
-          // dit ID direct gebruiken i.p.v. het oude UI-ID (1646…).
-          if (acceptedIg && acceptedIg.source !== 'client_setting') {
+          // Alleen een nieuw gevonden actor/user ID opslaan; 1784… Graph IDs niet
+          // meer over de handmatig/expliciet gekozen Ads Manager identity heen schrijven.
+          if (acceptedIg && acceptedIg.source !== 'client_setting' && !/^1784\d+$/.test(acceptedIg.id)) {
             try {
               await supabase
                 .from('clients')
