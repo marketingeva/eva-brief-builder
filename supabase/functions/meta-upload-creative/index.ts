@@ -352,7 +352,13 @@ async function fetchIgCandidates(
     ordered.push({ id: s, source });
   };
 
-  // Stap 1: Page bekijken om Business Account én Page access token op te halen.
+  // 1. Expliciet door de gebruiker gekozen IG-profiel krijgt altijd voorrang.
+  //    Dit is het profiel dat ze in de Meta-instellingen via de combobox hebben
+  //    geselecteerd op basis van de Page-koppeling.
+  if (explicitId) add(explicitId, 'client_setting');
+
+  // 2. Page Access Token + officiële Page → IG koppeling. Dit is exact dezelfde
+  //    bron die de instellingen-dialoog gebruikt, dus normaal is dit hetzelfde ID.
   let pageAccessToken: string | null = null;
   try {
     const pageRes = await getFromMeta(
@@ -361,76 +367,29 @@ async function fetchIgCandidates(
     );
     if (pageRes?.error) console.warn('IG candidates: page lookup', JSON.stringify(pageRes.error));
     if (pageRes?.access_token) pageAccessToken = pageRes.access_token;
-    const ids = new Set<string>();
-    collectIds(pageRes, ids);
-    for (const id of ids) add(id, 'page.fields');
+    add(pageRes?.instagram_business_account?.id, 'page.instagram_business_account');
+    add(pageRes?.connected_instagram_account?.id, 'page.connected_instagram_account');
   } catch (e) {
     console.warn('IG candidates: page lookup failed', e);
   }
 
-  // Stap 2: Connected instagram accounts op het ad account (officiële Meta endpoint).
-  try {
-    const acc = await getFromMeta(
-      `${adAccount}/connected_instagram_accounts?fields=id,username&limit=200`,
-      token,
-    );
-    if (acc?.error) console.warn('IG candidates: adaccount.connected_instagram_accounts', JSON.stringify(acc.error));
-    const ids = new Set<string>();
-    collectIds(acc, ids);
-    for (const id of ids) add(id, 'adaccount.connected_instagram_accounts');
-  } catch (e) {
-    console.warn('IG candidates: adaccount connected failed', e);
-  }
-
-  // Stap 3: instagram_accounts op het ad account.
-  try {
-    const acc = await getFromMeta(
-      `${adAccount}/instagram_accounts?fields=id,username,instagram_business_account{id,username}&limit=200`,
-      token,
-    );
-    if (acc?.error) console.warn('IG candidates: adaccount.instagram_accounts', JSON.stringify(acc.error));
-    const ids = new Set<string>();
-    collectIds(acc, ids);
-    for (const id of ids) add(id, 'adaccount.instagram_accounts');
-  } catch (e) {
-    console.warn('IG candidates: adaccount ig accounts failed', e);
-  }
-
-  // Stap 4: instagram_accounts op de page zelf, met page token indien beschikbaar.
+  // 3. Page-level instagram_accounts en page_backed (alleen met page token).
   if (pageAccessToken) {
     try {
       const pg = await getFromMeta(`${pageId}/instagram_accounts?fields=id,username`, pageAccessToken);
-      if (pg?.error) console.warn('IG candidates: page.instagram_accounts', JSON.stringify(pg.error));
-      const ids = new Set<string>();
-      collectIds(pg, ids);
-      for (const id of ids) add(id, 'page.instagram_accounts');
+      for (const it of pg?.data || []) add(it?.id, 'page.instagram_accounts');
     } catch (e) { console.warn('IG candidates: page.instagram_accounts failed', e); }
 
     try {
       const pbia = await getFromMeta(`${pageId}/page_backed_instagram_accounts?fields=id,username`, pageAccessToken);
-      if (pbia?.error) console.warn('IG candidates: page.page_backed', JSON.stringify(pbia.error));
-      const ids = new Set<string>();
-      collectIds(pbia, ids);
-      for (const id of ids) add(id, 'page.page_backed_instagram_accounts');
+      for (const it of pbia?.data || []) add(it?.id, 'page.page_backed_instagram_accounts');
     } catch (e) { console.warn('IG candidates: page.page_backed failed', e); }
   }
 
-  // Stap 5: het door de gebruiker opgegeven ID als laatste fallback toevoegen.
-  if (explicitId) add(explicitId, 'client_setting');
-
-  // Veiligheidsnet: filter de Facebook Page ID er uit — die is nooit een
-  // geldige instagram_user_id en veroorzaakt subtiele Meta-fouten.
-  const filtered = ordered.filter((c) => c.id !== String(pageId).trim());
-
-  // Sorteer: 1784… (Business Account IDs) eerst — die werken het breedst.
-  filtered.sort((a, b) => {
-    const aBiz = /^1784\d+$/.test(a.id) ? 0 : 1;
-    const bBiz = /^1784\d+$/.test(b.id) ? 0 : 1;
-    return aBiz - bBiz;
-  });
-
-  return filtered;
+  // Veiligheidsnet: filter de Facebook Page ID — die is nooit een geldige IG ID.
+  return ordered.filter((c) => c.id !== String(pageId).trim());
 }
+
 
 function buildDirectCreativePayload(opts: {
   pageId: string;
