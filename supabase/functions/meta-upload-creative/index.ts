@@ -373,7 +373,8 @@ async function resolveIgIdentity(
     } catch (e) { console.warn('IG identity: page.page_backed failed', e); }
   }
 
-  // 4) Expliciete keuze: zoek bijbehorend paar; anders los toevoegen.
+  // 4) Expliciete keuze: zoek bijbehorend paar; als Meta de ID's los teruggeeft,
+  // combineer de handmatig gekozen ID met de beste gevonden tegenhanger.
   if (explicitId) {
     const eid = explicitId.trim();
     const matched = pairs.find((p) => p.actorId === eid || p.businessId === eid);
@@ -382,9 +383,19 @@ async function resolveIgIdentity(
       pairs.splice(idx, 1);
       pairs.unshift({ ...matched, source: `${matched.source}+client_setting` });
     } else if (isGraphId(eid)) {
-      pairs.unshift({ actorId: null, businessId: eid, source: 'client_setting' });
+      const inferredActor = pairs.find((p) => p.actorId)?.actorId || null;
+      pairs.unshift({
+        actorId: inferredActor,
+        businessId: eid,
+        source: inferredActor ? 'client_setting+inferred_actor' : 'client_setting',
+      });
     } else {
-      pairs.unshift({ actorId: eid, businessId: null, source: 'client_setting' });
+      const inferredBusiness = pairs.find((p) => p.businessId)?.businessId || null;
+      pairs.unshift({
+        actorId: eid,
+        businessId: inferredBusiness,
+        source: inferredBusiness ? 'client_setting+inferred_business' : 'client_setting',
+      });
     }
   }
 
@@ -411,7 +422,6 @@ function buildDirectCreativePayload(opts: {
   const id = opts.identity;
   // instagram_user_id verwacht het 1784… Graph ID.
   if (id?.businessId) story.instagram_user_id = id.businessId;
-  else if (id?.actorId) story.instagram_user_id = id.actorId;
 
   const payload: Record<string, unknown> = {
     name: opts.name,
@@ -420,7 +430,6 @@ function buildDirectCreativePayload(opts: {
   };
   // instagram_actor_id verwacht het legacy actor/user ID (Ads Manager dropdown).
   if (id?.actorId) payload.instagram_actor_id = id.actorId;
-  else if (id?.businessId) payload.instagram_actor_id = id.businessId;
   return payload;
 }
 
@@ -527,7 +536,7 @@ Deno.serve(async (req) => {
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               lastErr = err instanceof Error ? err : new Error(msg);
-              if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|1772103|2238281/i.test(msg)) {
+              if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|Old Instagram ID|deprecated|1772103|2238281/i.test(msg)) {
                 throw err;
               }
               console.warn('IG identity rejected:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`, '-', msg);
