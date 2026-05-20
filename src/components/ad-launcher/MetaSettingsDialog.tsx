@@ -17,6 +17,7 @@ interface Props {
 export default function MetaSettingsDialog({ open, onOpenChange, clientId, clientName, onSaved }: Props) {
   const [filter, setFilter] = useState('');
   const [pageId, setPageId] = useState('');
+  const [igId, setIgId] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -25,12 +26,13 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
     setLoading(true);
     supabase
       .from('clients')
-      .select('meta_name_filter, meta_page_id')
+      .select('meta_name_filter, meta_page_id, meta_instagram_account_id')
       .eq('id', clientId)
       .maybeSingle()
       .then(({ data }) => {
         setFilter(data?.meta_name_filter ?? '');
         setPageId(data?.meta_page_id ?? '');
+        setIgId((data as any)?.meta_instagram_account_id ?? '');
         setLoading(false);
       });
   }, [open, clientId]);
@@ -42,7 +44,8 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
       .update({
         meta_name_filter: filter.trim() || null,
         meta_page_id: pageId.trim() || null,
-      })
+        meta_instagram_account_id: igId.trim() || null,
+      } as any)
       .eq('id', clientId);
     setSaving(false);
     if (error) {
@@ -90,6 +93,20 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
             />
             <p className="text-xs text-muted-foreground">
               Page ID waaronder de lead-formulieren hangen. Te vinden in Meta Business Manager → Pages → About → Page ID.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="igId">Instagram Account ID</Label>
+            <Input
+              id="igId"
+              placeholder="17841400000000000"
+              value={igId}
+              onChange={(e) => setIgId(e.target.value)}
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground">
+              Het Instagram-account dat in Meta Ads Manager onder "Instagram profile" verschijnt (bv. <code>1646842048691596</code> voor rivaszorggroep). Zonder dit ID gebruikt Meta een page-backed account, wat tot foutmeldingen kan leiden.
             </p>
           </div>
         </div>

@@ -92,6 +92,7 @@ interface LaunchBody {
   adset_id: string;
   lead_form_id: string;
   page_id: string;
+  instagram_account_id?: string | null;
   status?: 'PAUSED' | 'ACTIVE';
   creatives: CreativeBundle[];
 }
@@ -473,9 +474,12 @@ Deno.serve(async (req) => {
         let newAdId: string | undefined;
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
-          const instagramActorId = await resolveInstagramActorId(token, adAccount, body.page_id);
+          const explicitIg = (body.instagram_account_id || '').trim() || null;
+          const instagramActorId = explicitIg
+            ? (console.log('IG actor via explicit client setting', explicitIg), explicitIg)
+            : await resolveInstagramActorId(token, adAccount, body.page_id);
           if (!instagramActorId) {
-            throw new Error('Geen Instagram-account beschikbaar voor deze Facebook-pagina. Koppel een Instagram-account aan de pagina of geef de ad account toegang om een page-backed Instagram account aan te maken.');
+            throw new Error('Geen Instagram-account beschikbaar. Vul het Instagram Account ID in bij Meta-instellingen voor deze klant (te vinden in Meta Ads Manager onder "Instagram profile").');
           }
           const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
             pageId: body.page_id,
