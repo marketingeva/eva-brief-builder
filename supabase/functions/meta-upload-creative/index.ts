@@ -329,13 +329,15 @@ async function resolvePageAccessToken(token: string, pageId: string): Promise<st
 async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
   const pageToken = await resolvePageAccessToken(token, pageId);
   const tries: Array<{ label: string; pathOrUrl: string; lookupToken: string }> = [
-    { label: 'page.fields.user_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: token },
     ...(pageToken ? [
-      { label: 'page.fields.page_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: pageToken },
       { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
+      { label: 'page.fields.page_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: pageToken },
+    ] : []),
+    { label: 'page.fields.user_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: token },
+    { label: 'adaccount.instagram_accounts', pathOrUrl: `${adAccount}/instagram_accounts?fields=id,username`, lookupToken: token },
+    ...(pageToken ? [
       { label: 'page.page_backed_instagram_accounts.page_token', pathOrUrl: `${pageId}/page_backed_instagram_accounts?fields=id,username`, lookupToken: pageToken },
     ] : []),
-    { label: 'adaccount.instagram_accounts', pathOrUrl: `${adAccount}/instagram_accounts?fields=id,username`, lookupToken: token },
   ];
   for (const t of tries) {
     try {
@@ -369,7 +371,7 @@ function buildDirectCreativePayload(opts: {
     delete params.image_hash;
   }
   const story: any = { page_id: opts.pageId };
-  if (opts.instagramActorId) story.instagram_actor_id = opts.instagramActorId;
+  if (opts.instagramActorId) story.instagram_user_id = opts.instagramActorId;
   return {
     name: opts.name,
     object_story_spec: story,
