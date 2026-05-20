@@ -145,6 +145,13 @@ async function uploadVideo(adAccount: string, token: string, blob: Blob, filenam
   return j.id as string;
 }
 
+async function getFromMeta(pathOrUrl: string, token: string) {
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${META_API}/${pathOrUrl}`;
+  const sep = url.includes('?') ? '&' : '?';
+  const r = await fetch(`${url}${sep}access_token=${encodeURIComponent(token)}`);
+  return await r.json();
+}
+
 function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
@@ -290,24 +297,50 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
+function pickInstagramId(payload: any) {
+  return (
+    payload?.instagram_business_account?.id ||
+    payload?.connected_instagram_account?.id ||
+    payload?.instagram_accounts?.data?.[0]?.id ||
+    payload?.data?.[0]?.id ||
+    null
+  );
+}
+
+async function resolvePageAccessToken(token: string, pageId: string): Promise<string | null> {
+  const direct = await getFromMeta(`${pageId}?fields=access_token`, token);
+  if (direct?.access_token) return direct.access_token;
+  if (direct?.error) console.warn('Page token direct lookup', JSON.stringify(direct.error));
+
+  let url = `${META_API}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}&limit=100`;
+  for (let i = 0; i < 10 && url; i++) {
+    const pageList = await getFromMeta(url, token);
+    if (pageList?.error) {
+      console.warn('Page token accounts lookup', JSON.stringify(pageList.error));
+      return null;
+    }
+    const page = (pageList?.data || []).find((p: any) => String(p.id) === String(pageId));
+    if (page?.access_token) return page.access_token;
+    url = pageList?.paging?.next || '';
+  }
+  return null;
+}
+
 async function resolveInstagramActorId(token: string, adAccount: string, pageId: string): Promise<string | null> {
-  const tries: Array<{ label: string; url: string }> = [
-    { label: 'page.instagram_business_account', url: `${META_API}/${pageId}?fields=instagram_business_account,connected_instagram_account` },
-    { label: 'page.instagram_accounts', url: `${META_API}/${pageId}?fields=instagram_accounts{id,username}` },
-    { label: 'page.page_backed_instagram_accounts', url: `${META_API}/${pageId}/page_backed_instagram_accounts` },
-    { label: 'adaccount.instagram_accounts', url: `${META_API}/${adAccount}/instagram_accounts` },
-    { label: 'adaccount.page_backed_instagram_accounts', url: `${META_API}/${adAccount}/page_backed_instagram_accounts` },
+  const pageToken = await resolvePageAccessToken(token, pageId);
+  const tries: Array<{ label: string; pathOrUrl: string; lookupToken: string }> = [
+    { label: 'page.fields.user_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: token },
+    ...(pageToken ? [
+      { label: 'page.fields.page_token', pathOrUrl: `${pageId}?fields=instagram_business_account{id,username},connected_instagram_account{id,username}`, lookupToken: pageToken },
+      { label: 'page.instagram_accounts.page_token', pathOrUrl: `${pageId}/instagram_accounts?fields=id,username`, lookupToken: pageToken },
+      { label: 'page.page_backed_instagram_accounts.page_token', pathOrUrl: `${pageId}/page_backed_instagram_accounts?fields=id,username`, lookupToken: pageToken },
+    ] : []),
+    { label: 'adaccount.instagram_accounts', pathOrUrl: `${adAccount}/instagram_accounts?fields=id,username`, lookupToken: token },
   ];
   for (const t of tries) {
     try {
-      const sep = t.url.includes('?') ? '&' : '?';
-      const r = await fetch(`${t.url}${sep}access_token=${encodeURIComponent(token)}`);
-      const j = await r.json();
-      const id =
-        j?.instagram_business_account?.id ||
-        j?.connected_instagram_account?.id ||
-        j?.instagram_accounts?.data?.[0]?.id ||
-        j?.data?.[0]?.id;
+      const j = await getFromMeta(t.pathOrUrl, t.lookupToken);
+      const id = pickInstagramId(j);
       if (id) {
         console.log('IG actor resolved via', t.label, id);
         return id;
