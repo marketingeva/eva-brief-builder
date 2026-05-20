@@ -72,8 +72,12 @@ export default function AdLauncherTab({ clientId, clientName }: Props) {
       body: formData,
     });
 
-    const uploadError = error?.message || data?.error;
+    const uploadError = error?.message || data?.error || (!data?.path ? 'Upload mislukt' : undefined);
     const path = data?.path as string | undefined;
+
+    if (uploadError) {
+      toast({ title: 'Upload mislukt', description: uploadError, variant: 'destructive' });
+    }
 
     setBundles((cur) =>
       cur.map((b) => {
