@@ -1,36 +1,26 @@
-## Doel
-Zorgen dat de launcher niet alleen succesvol een ad aanmaakt, maar dat Meta Ads Manager bij **Identity → Instagram profile** automatisch het juiste Instagram-profiel toont in plaats van “Use Facebook Page” + foutmelding.
+Plan om dit goed te fixen:
 
-## Bevinding
-De laatste upload is technisch gelukt: de backend vond en accepteerde `instagram_user_id=17841404254570727` via `page.page_backed_instagram_accounts`, en er is een ad aangemaakt. De screenshot wijst erop dat Meta de identiteit in de UI nog niet volledig herkent/selecteert op ad-niveau. Volgens Meta moet bij Instagram/mixed placements de creative expliciet een `page_id` én `instagram_user_id` bevatten. Bij asset-feed creatives is dat extra gevoelig: de identity moet in de juiste creativevelden staan en niet alleen indirect via een fallback.
+1. **Instagram-account expliciet ophalen en opslaan, net als Facebook Page**
+   - Breid de bestaande Meta resource-functie uit met een `instagram_accounts` resource.
+   - Gebruik hiervoor dezelfde bewezen Page-token aanpak als bij lead forms: eerst Page access token ophalen, daarna de aan de Page gekoppelde Instagram identity ophalen.
+   - Resultaat teruggeven als duidelijke lijst met `id`, `name/username` en source.
 
-## Plan
-1. **Payload hardenen volgens Meta’s docs**
-   - Bij multi-format/asset-feed uploads altijd `instagram_user_id` meesturen zodra Instagram-placements aanwezig zijn.
-   - `instagram_actor_id` volledig verwijderd houden.
-   - `object_story_spec` expliciet houden als `{ page_id, instagram_user_id }`.
-   - Daarnaast het geaccepteerde IG ID ook als top-level creative identity veld meesturen waar Meta dit ondersteunt, zodat Ads Manager de Instagram identity betrouwbaar invult.
+2. **Launcher UI gebruikt een echte Instagram-selectie in plaats van verborgen auto-guessing**
+   - Voeg in de Meta-instellingen een automatische Instagram lookup/selectie toe op basis van de ingestelde Facebook Page ID.
+   - Laat de gekozen Instagram ID opslaan in `clients.meta_instagram_account_id`, precies zoals de Facebook Page ID nu client-specifiek wordt opgeslagen.
+   - Houd handmatige invoer alleen als fallback, maar de normale route wordt: Page kiezen/instellen → Instagram account ophalen → opslaan → launcher gebruikt exact die identity.
 
-2. **Geen Page-ID als Instagram-kandidaat gebruiken**
-   - De huidige resolver neemt ook `page.fields` mee, waardoor de Facebook Page ID (`179116...`) als IG-kandidaat kan worden geprobeerd.
-   - Dat wordt uitgesloten: alleen IDs uit echte IG-bronnen gebruiken (`instagram_business_account`, `connected_instagram_account`, `page_backed_instagram_accounts`, `instagram_accounts`, ad-account IG endpoints, of handmatige instelling).
+3. **Upload-flow simpeler en deterministischer maken**
+   - Bij launch eerst de opgeslagen Instagram ID gebruiken.
+   - Alleen als die ontbreekt, fallback naar server-side lookup via dezelfde Page-token resolver.
+   - Stoppen met brede candidate guessing over ad-account endpoints als primaire route, omdat Meta Ads Manager de identity blijkbaar niet als “geselecteerd profiel” ziet ondanks creative-acceptatie.
 
-3. **Geaccepteerde IG ID opslaan voor de klant**
-   - Als Meta een automatisch gevonden IG ID accepteert, deze opslaan in `clients.meta_instagram_account_id`.
-   - Daardoor gebruikt de volgende launch meteen de werkende Meta Graph Instagram User ID in plaats van de oude `1646...` UI-ID.
-
-4. **Controle na aanmaken**
-   - Na `adcreatives` aanmaken de creative teruglezen met `object_story_spec` en identityvelden.
-   - Loggen welk IG ID daadwerkelijk op de creative staat, zodat dit niet meer giswerk is.
+4. **Ad creation aansluiten op Meta’s identity requirement**
+   - Voor placement asset creatives altijd `object_story_spec.page_id` én `object_story_spec.instagram_user_id` zetten.
+   - De gekozen/gevonden Instagram ID na creative creation verifiëren en loggen.
+   - Als Meta geen Instagram identity accepteert, een concrete fout teruggeven: “Instagram-profiel niet gevonden voor deze Page; open Meta-instellingen en selecteer het gekoppelde profiel.”
 
 5. **Validatie**
    - Edge function deployen.
-   - Testen met dezelfde Rivas-client/adset.
-   - Controleren in logs dat:
-     - de oude `1646...` niet meer als eerste/foute kandidaat gebruikt wordt;
-     - de geaccepteerde `17841404254570727` op de creative staat;
-     - het klantrecord daarna dit werkende ID bewaart.
-
-## Technische details
-- Bestand: `supabase/functions/meta-upload-creative/index.ts`
-- Mogelijke kleine UI-tekstupdate blijft beperkt tot de bestaande Meta-instellingen, alleen als nodig om duidelijk te maken dat het opgeslagen ID de Meta Graph Instagram User ID is.
+   - Met de Rivas client controleren dat de Instagram lookup hetzelfde account teruggeeft als de Page-koppeling.
+   - Controleren dat nieuwe uploads niet meer afhankelijk zijn van het oude `1646...` ID en dat de opgeslagen `1784...` identity wordt gebruikt.
