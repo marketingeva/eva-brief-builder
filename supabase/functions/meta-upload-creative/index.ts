@@ -1,16 +1,10 @@
-// Uploads creatives to Meta and creates ads under the chosen ad set.
+// Uploads creatives (incl. bundles met meerdere aspect-ratio's) naar Meta en
+// maakt advertenties aan onder de gekozen ad set via de Ads Copy API.
 //
-// Strategy: AUTO-COPY.
-// 1) Automatically pick a known-good source ad from the chosen ad set
-//    (preferably an ACTIVE lead-gen ad).
-// 2) Duplicate it via the Ads Copy API: POST /{source_ad_id}/copies
-// 3) Use `creative_parameters` to override only the fields we care about
-//    (image_hash / video_id, body, title, link_description, link_url,
-//    call_to_action with the lead_gen_form_id).
-// 4) For multiple text variants, use asset_feed_spec inside creative_parameters
-//    so all variants live inside ONE ad.
-// 5) Fallback: if no source ad exists in the ad set, fall back to a minimal
-//    legacy creative payload so the launcher still works.
+// Bundling: één "creative" in de payload kan meerdere `variants` hebben, elk
+// met een eigen aspect-ratio (1:1, 4:5, 9:16, 16:9). Per bundle wordt één
+// Meta-ad aangemaakt waarin alle ratio's via `asset_customization_rules` aan
+// de juiste placements gekoppeld worden ("rapid ad"-stijl).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -20,6 +14,43 @@ const corsHeaders = {
 
 const META_API = 'https://graph.facebook.com/v21.0';
 
+type AspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
+
+interface PlacementSpec {
+  publisher_platforms: string[];
+  facebook_positions?: string[];
+  instagram_positions?: string[];
+  messenger_positions?: string[];
+  audience_network_positions?: string[];
+}
+
+const RATIO_TO_PLACEMENTS: Record<AspectRatio, PlacementSpec> = {
+  '1:1': {
+    publisher_platforms: ['facebook', 'instagram', 'audience_network'],
+    facebook_positions: ['feed', 'marketplace', 'search', 'video_feeds'],
+    instagram_positions: ['stream', 'explore', 'explore_home'],
+    audience_network_positions: ['classic'],
+  },
+  '4:5': {
+    publisher_platforms: ['facebook', 'instagram'],
+    facebook_positions: ['feed'],
+    instagram_positions: ['stream', 'explore'],
+  },
+  '9:16': {
+    publisher_platforms: ['facebook', 'instagram', 'messenger'],
+    facebook_positions: ['story', 'facebook_reels'],
+    instagram_positions: ['story', 'reels'],
+    messenger_positions: ['story'],
+  },
+  '16:9': {
+    publisher_platforms: ['facebook', 'audience_network'],
+    facebook_positions: ['instream_video', 'right_hand_column'],
+    audience_network_positions: ['rewarded_video'],
+  },
+};
+
+const RATIO_PRIORITY: AspectRatio[] = ['1:1', '4:5', '9:16', '16:9'];
+
 interface CreativeText {
   primary_texts: string[];
   headlines: string[];
@@ -28,11 +59,17 @@ interface CreativeText {
   link_url: string;
 }
 
-interface CreativeItem {
+interface CreativeVariant {
+  ratio: AspectRatio | null;
   storage_path: string;
   file_name: string;
   file_type: string;
+}
+
+interface CreativeBundle {
+  base_name: string;
   texts: CreativeText;
+  variants: CreativeVariant[];
 }
 
 interface LaunchBody {
@@ -42,7 +79,7 @@ interface LaunchBody {
   lead_form_id: string;
   page_id: string;
   status?: 'PAUSED' | 'ACTIVE';
-  creatives: CreativeItem[];
+  creatives: CreativeBundle[];
 }
 
 function metaErrorMessage(prefix: string, error: any) {
@@ -98,7 +135,6 @@ function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-/** Pick a usable source ad from the chosen ad set. Prefer ACTIVE ads. */
 async function pickSourceAd(token: string, adsetId: string): Promise<string | null> {
   const url = `${META_API}/${adsetId}/ads?fields=id,name,status,effective_status&limit=50&access_token=${token}`;
   const r = await fetch(url);
@@ -108,21 +144,28 @@ async function pickSourceAd(token: string, adsetId: string): Promise<string | nu
     return null;
   }
   const ads: any[] = j.data || [];
-  const active = ads.find((a) => a.effective_status === 'ACTIVE');
-  if (active) return active.id;
-  const paused = ads.find((a) => a.effective_status === 'PAUSED');
-  if (paused) return paused.id;
-  return ads[0]?.id || null;
+  return (
+    ads.find((a) => a.effective_status === 'ACTIVE')?.id ??
+    ads.find((a) => a.effective_status === 'PAUSED')?.id ??
+    ads[0]?.id ??
+    null
+  );
 }
 
-/** Build creative_parameters for the copy. Override only what we want to change. */
+interface UploadedAsset {
+  ratio: AspectRatio | null;
+  file_name: string;
+  image_hash?: string;
+  video_id?: string;
+  is_video: boolean;
+}
+
 function buildCreativeParameters(opts: {
   text: CreativeText;
   leadFormId: string;
-  imageHash?: string;
-  videoId?: string;
+  assets: UploadedAsset[];
 }) {
-  const { text, leadFormId, imageHash, videoId } = opts;
+  const { text, leadFormId, assets } = opts;
 
   const primaryTexts = cleanVariants(text.primary_texts).slice(0, 5);
   const headlines = cleanVariants(text.headlines).slice(0, 5);
@@ -139,7 +182,13 @@ function buildCreativeParameters(opts: {
     value: { link, lead_gen_form_id: leadFormId },
   };
 
-  // Top-level creative parameter overrides supported by Ad Copies API.
+  // Kies "primary" asset: voorkeur 1:1, anders eerste bekende ratio, anders eerste.
+  const primary =
+    RATIO_PRIORITY.map((r) => assets.find((a) => a.ratio === r)).find(Boolean) ??
+    assets[0];
+  const allVideo = assets.every((a) => a.is_video);
+  const allImage = assets.every((a) => !a.is_video);
+
   const params: Record<string, unknown> = {
     body: mainPrimary,
     title: mainHeadline,
@@ -147,23 +196,47 @@ function buildCreativeParameters(opts: {
     link_url: link,
   };
 
-  if (imageHash) params.image_hash = imageHash;
+  if (primary?.image_hash) params.image_hash = primary.image_hash;
 
-  const hasMultiple =
+  const hasMultipleText =
     primaryTexts.length > 1 || headlines.length > 1 || descriptions.length > 1;
+  const hasMultipleAssets = assets.length > 1;
 
-  if (hasMultiple) {
+  if (hasMultipleText || hasMultipleAssets) {
     const asset_feed_spec: Record<string, unknown> = {
-      ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-      bodies: primaryTexts.map((t) => ({ text: t })),
-      titles: headlines.map((t) => ({ text: t })),
-      descriptions: descriptions.map((t) => ({ text: t })),
+      ad_formats: [allVideo ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
+      bodies: (primaryTexts.length ? primaryTexts : [mainPrimary]).map((t) => ({ text: t })),
+      titles: (headlines.length ? headlines : [mainHeadline]).map((t) => ({ text: t })),
+      descriptions: (descriptions.length ? descriptions : [mainDescription]).map((t) => ({ text: t })),
       link_urls: [{ website_url: link }],
       call_to_action_types: [ctaType],
       call_to_actions: [callToAction],
     };
-    if (videoId) asset_feed_spec.videos = [{ video_id: videoId }];
-    else if (imageHash) asset_feed_spec.images = [{ hash: imageHash }];
+
+    if (allVideo) {
+      asset_feed_spec.videos = assets
+        .filter((a) => a.video_id)
+        .map((a) => ({ video_id: a.video_id }));
+    } else if (allImage) {
+      asset_feed_spec.images = assets
+        .filter((a) => a.image_hash)
+        .map((a) => ({ hash: a.image_hash }));
+    }
+
+    // Placement-customization: alleen toepassen als er meer dan 1 asset is
+    // én elk asset een bekende ratio heeft.
+    const ratioAssets = assets.filter((a) => a.ratio && (a.image_hash || a.video_id));
+    if (hasMultipleAssets && ratioAssets.length === assets.length) {
+      asset_feed_spec.asset_customization_rules = ratioAssets.map((a) => {
+        const rule: Record<string, unknown> = {
+          customization_spec: RATIO_TO_PLACEMENTS[a.ratio as AspectRatio],
+        };
+        if (a.is_video && a.video_id) rule.video_label = { name: a.video_id };
+        else if (a.image_hash) rule.image_label = { name: a.image_hash };
+        return rule;
+      });
+    }
+
     params.asset_feed_spec = asset_feed_spec;
   }
 
@@ -187,7 +260,6 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
-    // Find a source ad in the ad set to copy from.
     const sourceAdId = await pickSourceAd(token, body.adset_id);
     if (!sourceAdId) {
       throw new Error(
@@ -199,41 +271,44 @@ Deno.serve(async (req) => {
 
     const results: any[] = [];
 
-    for (const c of body.creatives) {
+    for (const bundle of body.creatives) {
+      const ratiosLabel = bundle.variants.map((v) => v.ratio || 'auto').join(', ');
+      const adName = `${bundle.base_name}${bundle.variants.length > 1 ? ` (${bundle.variants.length} formaten)` : ''}`;
+      const filenameLabel = `${bundle.base_name} [${ratiosLabel}]`;
+
       const launchRowBase: any = {
         client_id: body.client_id,
         campaign_id: body.campaign_id,
         adset_id: body.adset_id,
         lead_form_id: body.lead_form_id,
-        creative_filename: c.file_name,
+        creative_filename: filenameLabel,
       };
 
       try {
-        const { data: fileData, error: dlErr } = await supabase.storage
-          .from('ad-launcher-uploads')
-          .download(c.storage_path);
-        if (dlErr || !fileData) throw new Error(`storage download: ${dlErr?.message}`);
-
-        const isVideo = (c.file_type || '').startsWith('video');
-        let imageHash: string | undefined;
-        let videoId: string | undefined;
-        if (isVideo) {
-          videoId = await uploadVideo(adAccount, token, fileData, c.file_name);
-        } else {
-          imageHash = await uploadImage(adAccount, token, fileData, c.file_name);
+        // 1) Upload elk variant-bestand naar Meta
+        const assets: UploadedAsset[] = [];
+        for (const v of bundle.variants) {
+          const { data: fileData, error: dlErr } = await supabase.storage
+            .from('ad-launcher-uploads')
+            .download(v.storage_path);
+          if (dlErr || !fileData) throw new Error(`storage download (${v.file_name}): ${dlErr?.message}`);
+          const isVideo = (v.file_type || '').startsWith('video');
+          if (isVideo) {
+            const video_id = await uploadVideo(adAccount, token, fileData, v.file_name);
+            assets.push({ ratio: v.ratio, file_name: v.file_name, video_id, is_video: true });
+          } else {
+            const image_hash = await uploadImage(adAccount, token, fileData, v.file_name);
+            assets.push({ ratio: v.ratio, file_name: v.file_name, image_hash, is_video: false });
+          }
         }
 
-        const adName = c.file_name.replace(/\.[^.]+$/, '');
         const creativeParameters = buildCreativeParameters({
-          text: c.texts,
+          text: bundle.texts,
           leadFormId: body.lead_form_id,
-          imageHash,
-          videoId,
+          assets,
         });
 
-        // Use Meta's Ads Copy API: clones the entire ad and only overrides
-        // the supplied creative parameters. Avoids rebuilding object_story_spec.
-        console.log('Copying ad', sourceAdId, 'with overrides for', adName);
+        console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
         const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
           adset_id: body.adset_id,
           status_option: status,
@@ -246,17 +321,11 @@ Deno.serve(async (req) => {
           throw new Error(`copies: geen copied_ad_id terug van Meta — ${JSON.stringify(copyJson)}`);
         }
 
-        // Rename the new ad to match the uploaded file (best-effort).
         try {
           await postToMeta(`${newAdId}`, token, { name: adName });
         } catch (e) {
           console.warn('rename copy failed', e);
         }
-
-        const variantsCount =
-          cleanVariants(c.texts.primary_texts).length +
-          cleanVariants(c.texts.headlines).length +
-          cleanVariants(c.texts.descriptions).length;
 
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
@@ -265,21 +334,22 @@ Deno.serve(async (req) => {
         });
 
         results.push({
-          file_name: c.file_name,
+          base_name: bundle.base_name,
+          file_name: filenameLabel,
           ad_id: newAdId,
-          variants_bundled: variantsCount,
+          variants_count: bundle.variants.length,
           source_ad_id: sourceAdId,
           success: true,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('Launch failed for', c.file_name, msg);
+        console.error('Launch failed for', bundle.base_name, msg);
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
           status: 'failed',
           error: msg,
         });
-        results.push({ file_name: c.file_name, error: msg, success: false });
+        results.push({ base_name: bundle.base_name, file_name: filenameLabel, error: msg, success: false });
       }
     }
 
