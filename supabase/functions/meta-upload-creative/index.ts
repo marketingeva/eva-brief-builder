@@ -524,33 +524,43 @@ Deno.serve(async (req) => {
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const explicitIg = (body.instagram_account_id || '').trim() || null;
-          let instagramActorId = explicitIg
-            ? (console.log('IG actor via explicit client setting', explicitIg), explicitIg)
-            : await resolveInstagramActorId(token, adAccount, body.page_id);
-          if (!instagramActorId) {
-            throw new Error('Geen Instagram-account beschikbaar. Vul het Instagram Account ID in bij Meta-instellingen voor deze klant (te vinden in Meta Ads Manager onder "Instagram profile").');
+          const candidates = await fetchIgCandidates(token, adAccount, body.page_id, explicitIg);
+          console.log('IG candidates:', candidates.map((c) => `${c.id}(${c.source})`).join(', ') || '<none>');
+          if (candidates.length === 0) {
+            throw new Error(
+              'Geen Instagram-account gevonden voor deze Facebook Page of ad account. ' +
+              'Koppel een Instagram Business Account aan de Page in Meta Business Settings, of vul het Instagram Account ID in bij Meta-instellingen.',
+            );
           }
-          // Meta's adcreative API accepteert alleen het IG Business Account ID (17841…).
-          // Als de gebruiker het UI-ID uit Ads Manager (bv. 1646…) heeft ingevuld,
-          // mappen we dit eerst naar het echte business account ID.
-          if (!isInstagramBusinessId(instagramActorId)) {
-            const normalized = await normalizeInstagramBusinessId(token, adAccount, body.page_id, instagramActorId);
-            if (normalized && normalized !== instagramActorId) {
-              console.log('IG ID', instagramActorId, '→ business account', normalized);
-              instagramActorId = normalized;
-            } else {
-              console.warn('IG ID', instagramActorId, 'kon niet gemapt worden naar 1784-formaat; object_story_spec gebruikt alleen page_id');
-              instagramActorId = null;
+
+          // Probeer ieder kandidaat-ID tot Meta er één accepteert.
+          let creativeJson: any = null;
+          let lastErr: Error | null = null;
+          for (const cand of candidates) {
+            try {
+              creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+                pageId: body.page_id,
+                instagramActorId: cand.id,
+                name: adName,
+                text: bundle.texts,
+                leadFormId: body.lead_form_id,
+                assets,
+              }));
+              console.log('IG ID accepted by Meta:', cand.id, 'source:', cand.source);
+              break;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              lastErr = err instanceof Error ? err : new Error(msg);
+              // Alleen doorgaan als de fout specifiek over instagram_user_id gaat.
+              if (!/instagram_user_id|valid Instagram account|Instagram-account|1772103|2238281/i.test(msg)) {
+                throw err;
+              }
+              console.warn('IG ID rejected:', cand.id, 'source:', cand.source, '-', msg);
             }
           }
-          const creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
-            pageId: body.page_id,
-            instagramActorId,
-            name: adName,
-            text: bundle.texts,
-            leadFormId: body.lead_form_id,
-            assets,
-          }));
+          if (!creativeJson) {
+            throw lastErr || new Error('Meta accepteerde geen enkel Instagram-account ID.');
+          }
 
           const adJson = await postToMeta(`${adAccount}/ads`, token, {
             name: adName,
