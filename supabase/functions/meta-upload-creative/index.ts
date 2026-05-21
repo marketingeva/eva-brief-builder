@@ -395,10 +395,13 @@ async function resolveIgIdentity(
   // 2c) Business Manager assets: Ads Manager haalt de identity-dropdown vaak uit
   // business-level Instagram assets, niet alleen uit page-backed fallbacks.
   const businessIds = new Set<string>();
+  const diagnostics: string[] = [];
   try {
     const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name},owner_business{id,name}`, token);
+    if (accountInfo?.error) diagnostics.push(`Ad account business lookup: ${accountInfo.error.message}`);
     if (accountInfo?.business?.id) businessIds.add(accountInfo.business.id);
     if (accountInfo?.owner_business?.id) businessIds.add(accountInfo.owner_business.id);
+    if (businessIds.size === 0) diagnostics.push('Meta geeft geen business/owner_business terug voor dit ad account.');
   } catch (e) {
     console.warn('IG identity: ad account business lookup failed', e);
   }
@@ -437,6 +440,7 @@ async function resolveIgIdentity(
           push(it?.ig_id || null, it?.id || null, 'ad_account.instagram_accounts+authorized');
         }
       } catch (e) {
+        diagnostics.push(`Instagram-profiel autoriseren voor ad account mislukt: ${e instanceof Error ? e.message : String(e)}`);
         console.warn('IG identity: authorize ad account failed', e);
       }
     }
@@ -477,6 +481,13 @@ async function resolveIgIdentity(
         businessId: inferredBusiness,
         source: inferredBusiness ? 'client_setting+inferred_business' : 'client_setting',
       });
+    }
+  }
+
+  if (diagnostics.length > 0) {
+    console.warn('IG identity diagnostics:', diagnostics.join(' | '));
+    for (const pair of pairs) {
+      pair.source = `${pair.source}+diagnostics:${diagnostics.join(' / ')}`;
     }
   }
 
