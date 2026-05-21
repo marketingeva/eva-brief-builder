@@ -65,6 +65,27 @@ async function fetchAll(url: string, token: string) {
   return out;
 }
 
+async function postToMeta(path: string, token: string, payload: Record<string, unknown>) {
+  const params = new URLSearchParams();
+  params.set('access_token', token);
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue;
+    params.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+  }
+  const response = await fetch(`${META_API}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+  });
+  const json = await response.json();
+  if (json.error) throw new Error(json.error.message || 'Meta error');
+  return json;
+}
+
+function rawAdAccountId(adAccount: string) {
+  return adAccount.replace(/^act_/, '');
+}
+
 function asTrimmedString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
