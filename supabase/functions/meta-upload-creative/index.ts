@@ -292,8 +292,37 @@ interface IgIdentity {
   source: string;
 }
 
+type IgPayloadMode = 'split' | 'actor_only' | 'business_only';
+
 function isGraphId(id: string) {
   return /^1784\d+$/.test(id);
+}
+
+function adLevelInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
+  if (!identity) return null;
+  if (mode === 'business_only') return identity.businessId || identity.actorId;
+  return identity.actorId || identity.businessId;
+}
+
+function storyInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
+  if (!identity) return null;
+  if (mode === 'actor_only') return identity.actorId || identity.businessId;
+  return identity.businessId || identity.actorId;
+}
+
+function payloadModesForIdentity(identity: IgIdentity): IgPayloadMode[] {
+  if (identity.actorId && identity.businessId && identity.actorId !== identity.businessId) {
+    return ['split', 'actor_only'];
+  }
+  if (identity.actorId) return ['actor_only'];
+  if (identity.businessId) return ['business_only'];
+  return [];
+}
+
+function isPageBackedFallback(identity: IgIdentity) {
+  const source = identity.source || '';
+  const hasRealAssetSource = /instagram_business_account|connected_instagram_account|ad_account\.|business\.|page\.instagram_accounts/.test(source);
+  return Boolean(identity.businessId && !identity.actorId && source.includes('page_backed') && !hasRealAssetSource);
 }
 
 async function resolveIgIdentity(
@@ -357,6 +386,32 @@ async function resolveIgIdentity(
     console.warn('IG identity: ad account connected lookup failed', e);
   }
 
+  // 2c) Business Manager assets: Ads Manager haalt de identity-dropdown vaak uit
+  // business-level Instagram assets, niet alleen uit page-backed fallbacks.
+  const businessIds = new Set<string>();
+  try {
+    const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name},owner_business{id,name}`, token);
+    if (accountInfo?.business?.id) businessIds.add(accountInfo.business.id);
+    if (accountInfo?.owner_business?.id) businessIds.add(accountInfo.owner_business.id);
+  } catch (e) {
+    console.warn('IG identity: ad account business lookup failed', e);
+  }
+  for (const businessId of businessIds) {
+    for (const edge of ['instagram_accounts', 'owned_instagram_accounts', 'client_instagram_accounts']) {
+      try {
+        const businessIg = await getFromMeta(
+          `${businessId}/${edge}?fields=id,ig_id,username,name&limit=200`,
+          token,
+        );
+        for (const it of businessIg?.data || []) {
+          push(it?.ig_id || null, it?.id || null, `business.${edge}`);
+        }
+      } catch (e) {
+        console.warn(`IG identity: business ${edge} lookup failed`, e);
+      }
+    }
+  }
+
   // 3) Page-token paths (extra info, ook hier krijgen we id/ig_id).
   if (pageAccessToken) {
     try {
@@ -379,14 +434,14 @@ async function resolveIgIdentity(
       pairs.splice(idx, 1);
       pairs.unshift({ ...matched, source: `${matched.source}+client_setting` });
     } else if (isGraphId(eid)) {
-      const inferredActor = pairs.find((p) => p.actorId)?.actorId || null;
+      const inferredActor = pairs.find((p) => p.actorId && !p.source.includes('page_backed'))?.actorId || null;
       pairs.unshift({
         actorId: inferredActor,
         businessId: eid,
         source: inferredActor ? 'client_setting+inferred_actor' : 'client_setting',
       });
     } else {
-      const inferredBusiness = pairs.find((p) => p.businessId)?.businessId || null;
+      const inferredBusiness = pairs.find((p) => p.businessId && !p.source.includes('page_backed'))?.businessId || null;
       pairs.unshift({
         actorId: eid,
         businessId: inferredBusiness,
@@ -401,6 +456,7 @@ async function resolveIgIdentity(
 function buildDirectCreativePayload(opts: {
   pageId: string;
   identity: IgIdentity | null;
+  mode: IgPayloadMode;
   includeStoryLinkData?: boolean;
   name: string;
   text: CreativeText;
@@ -428,8 +484,9 @@ function buildDirectCreativePayload(opts: {
 
   const story: any = { page_id: opts.pageId };
   const id = opts.identity;
-  // instagram_user_id verwacht het 1784… Graph ID.
-  if (id?.businessId) story.instagram_user_id = id.businessId;
+  const storyIg = storyInstagramId(id, opts.mode);
+  const adLevelIg = adLevelInstagramId(id, opts.mode);
+  if (storyIg) story.instagram_user_id = storyIg;
 
   if (opts.includeStoryLinkData !== false) {
     if (primary?.is_video && primary.video_id && !params.asset_feed_spec) {
@@ -456,7 +513,7 @@ function buildDirectCreativePayload(opts: {
     object_story_spec: story,
     ...params,
   };
-  if (id?.businessId) payload.instagram_user_id = id.businessId;
+  if (adLevelIg) payload.instagram_user_id = adLevelIg;
   return payload;
 }
 
@@ -530,83 +587,105 @@ Deno.serve(async (req) => {
             );
           }
 
-          // Probeer ieder profiel met het moderne instagram_user_id veld. Legacy actor IDs
-          // worden alleen gebruikt om het 1784… Business ID te vinden; niet meer in de payload.
+          // Ads Manager gebruikt de top-level instagram_user_id als ad-level identity.
+          // Bij sommige accounts is dat de legacy actor ID, terwijl object_story_spec
+          // juist de 1784… Graph ID nodig heeft. Daarom proberen we expliciete modes.
           let creativeJson: any = null;
           let acceptedIdentity: IgIdentity | null = null;
+          let acceptedMode: IgPayloadMode | null = null;
           let lastErr: Error | null = null;
           for (const ident of identities) {
-            if (!ident.businessId) {
-              console.warn('IG identity skipped: missing modern instagram_user_id', `actor=${ident.actorId || '-'} (${ident.source})`);
+            if (isPageBackedFallback(ident)) {
+              lastErr = new Error(
+                'Alleen een Page-backed Instagram fallback gevonden, niet het echte Instagram-profiel. ' +
+                'Koppel of wijs het Instagram-profiel toe aan dezelfde Facebook Page én hetzelfde ad account in Meta Business.',
+              );
+              console.warn('IG identity skipped: page-backed fallback only', `business=${ident.businessId || '-'} (${ident.source})`);
               continue;
             }
-            try {
-              creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
-                pageId: body.page_id,
-                identity: ident,
-                includeStoryLinkData: true,
-                name: adName,
-                text: bundle.texts,
-                leadFormId: body.lead_form_id,
-                assets,
-              }));
-              acceptedIdentity = ident;
-              console.log('IG identity accepted via instagram_user_id:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`);
-              break;
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              lastErr = err instanceof Error ? err : new Error(msg);
-              if (/object_story_spec|link_data|asset_feed_spec|cannot be used together|Invalid parameter/i.test(msg) && ident.businessId) {
-                try {
-                  creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
-                    pageId: body.page_id,
-                    identity: ident,
-                    includeStoryLinkData: false,
-                    name: adName,
-                    text: bundle.texts,
-                    leadFormId: body.lead_form_id,
-                    assets,
-                  }));
-                  acceptedIdentity = { ...ident, source: `${ident.source}+minimal_story_retry` };
-                  console.log('IG identity accepted with minimal story spec:', `business=${ident.businessId} (${ident.source})`);
-                  break;
-                } catch (retryErr) {
-                  const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-                  lastErr = retryErr instanceof Error ? retryErr : new Error(retryMsg);
-                  console.warn('IG identity minimal-story retry rejected:', `business=${ident.businessId} (${ident.source})`, '-', retryMsg);
+            for (const mode of payloadModesForIdentity(ident)) {
+              try {
+                creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+                  pageId: body.page_id,
+                  identity: ident,
+                  mode,
+                  includeStoryLinkData: true,
+                  name: adName,
+                  text: bundle.texts,
+                  leadFormId: body.lead_form_id,
+                  assets,
+                }));
+                acceptedIdentity = ident;
+                acceptedMode = mode;
+                console.log('IG identity accepted:', `mode=${mode} actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`);
+                break;
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                lastErr = err instanceof Error ? err : new Error(msg);
+                if (/object_story_spec|link_data|asset_feed_spec|cannot be used together|Invalid parameter/i.test(msg)) {
+                  try {
+                    creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+                      pageId: body.page_id,
+                      identity: ident,
+                      mode,
+                      includeStoryLinkData: false,
+                      name: adName,
+                      text: bundle.texts,
+                      leadFormId: body.lead_form_id,
+                      assets,
+                    }));
+                    acceptedIdentity = { ...ident, source: `${ident.source}+minimal_story_retry` };
+                    acceptedMode = mode;
+                    console.log('IG identity accepted with minimal story spec:', `mode=${mode} actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`);
+                    break;
+                  } catch (retryErr) {
+                    const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+                    lastErr = retryErr instanceof Error ? retryErr : new Error(retryMsg);
+                    console.warn('IG identity minimal-story retry rejected:', `mode=${mode} actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`, '-', retryMsg);
+                  }
                 }
+                if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|Old Instagram ID|deprecated|1772103|2238281/i.test(msg)) {
+                  throw err;
+                }
+                console.warn('IG identity rejected:', `mode=${mode} actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`, '-', msg);
               }
-              if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|Old Instagram ID|deprecated|1772103|2238281/i.test(msg)) {
-                throw err;
-              }
-              console.warn('IG identity rejected:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`, '-', msg);
+              if (creativeJson) break;
             }
+            if (creativeJson) break;
           }
-          if (!creativeJson) {
+          if (!creativeJson || !acceptedIdentity || !acceptedMode) {
             throw lastErr || new Error('Meta accepteerde geen enkele Instagram-identiteit.');
           }
           newCreativeId = creativeJson.id;
 
-          // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
+          // Verifieer welk IG ID Meta daadwerkelijk op ad-level én story-level heeft gezet.
           try {
             const verify = await getFromMeta(
               `${creativeJson.id}?fields=object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec`,
               token,
             );
-            const expectedIg = acceptedIdentity?.businessId || null;
-            const actualIg = verify?.object_story_spec?.instagram_user_id || verify?.instagram_user_id || null;
+            const expectedAdLevelIg = adLevelInstagramId(acceptedIdentity, acceptedMode);
+            const expectedStoryIg = storyInstagramId(acceptedIdentity, acceptedMode);
+            const actualAdLevelIg = verify?.instagram_user_id || verify?.actor_id || null;
+            const actualStoryIg = verify?.object_story_spec?.instagram_user_id || null;
             console.log('Creative verify:', JSON.stringify({
               id: creativeJson.id,
+              mode: acceptedMode,
               instagram_user_id: verify?.instagram_user_id,
               oss_ig: verify?.object_story_spec?.instagram_user_id,
               oss_page: verify?.object_story_spec?.page_id,
               actor_id: verify?.actor_id,
               effective_object_story_id: verify?.effective_object_story_id,
-              expected_ig: expectedIg,
-              matched: !expectedIg || actualIg === expectedIg,
+              expected_ad_level_ig: expectedAdLevelIg,
+              expected_story_ig: expectedStoryIg,
+              ad_level_matched: !expectedAdLevelIg || actualAdLevelIg === expectedAdLevelIg,
+              story_matched: !expectedStoryIg || actualStoryIg === expectedStoryIg,
             }));
-            if (expectedIg && actualIg !== expectedIg) {
-              throw new Error(`Meta creative koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            if (expectedAdLevelIg && actualAdLevelIg !== expectedAdLevelIg) {
+              throw new Error(`Meta creative koppelde ad-level Instagram ${actualAdLevelIg || 'niet'} in plaats van ${expectedAdLevelIg}.`);
+            }
+            if (expectedStoryIg && actualStoryIg !== expectedStoryIg) {
+              throw new Error(`Meta creative koppelde story Instagram ${actualStoryIg || 'niet'} in plaats van ${expectedStoryIg}.`);
             }
           } catch (e) {
             throw new Error(`Creative Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
@@ -637,21 +716,29 @@ Deno.serve(async (req) => {
               `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec}`,
               token,
             );
-            const expectedIg = acceptedIdentity?.businessId || null;
-            const actualIg = adVerify?.creative?.object_story_spec?.instagram_user_id || adVerify?.creative?.instagram_user_id || null;
+            const expectedAdLevelIg = adLevelInstagramId(acceptedIdentity, acceptedMode);
+            const expectedStoryIg = storyInstagramId(acceptedIdentity, acceptedMode);
+            const actualAdLevelIg = adVerify?.creative?.instagram_user_id || adVerify?.creative?.actor_id || null;
+            const actualStoryIg = adVerify?.creative?.object_story_spec?.instagram_user_id || null;
             console.log('Ad verify:', JSON.stringify({
               id: adVerify?.id,
               creative_id: adVerify?.creative?.id,
+              mode: acceptedMode,
               instagram_user_id: adVerify?.creative?.instagram_user_id,
               oss_ig: adVerify?.creative?.object_story_spec?.instagram_user_id,
               oss_page: adVerify?.creative?.object_story_spec?.page_id,
               actor_id: adVerify?.creative?.actor_id,
               effective_object_story_id: adVerify?.creative?.effective_object_story_id,
-              expected_ig: expectedIg,
-              matched: !expectedIg || actualIg === expectedIg,
+              expected_ad_level_ig: expectedAdLevelIg,
+              expected_story_ig: expectedStoryIg,
+              ad_level_matched: !expectedAdLevelIg || actualAdLevelIg === expectedAdLevelIg,
+              story_matched: !expectedStoryIg || actualStoryIg === expectedStoryIg,
             }));
-            if (expectedIg && actualIg !== expectedIg) {
-              throw new Error(`Meta ad koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            if (expectedAdLevelIg && actualAdLevelIg !== expectedAdLevelIg) {
+              throw new Error(`Meta ad koppelde ad-level Instagram ${actualAdLevelIg || 'niet'} in plaats van ${expectedAdLevelIg}.`);
+            }
+            if (expectedStoryIg && actualStoryIg !== expectedStoryIg) {
+              throw new Error(`Meta ad koppelde story Instagram ${actualStoryIg || 'niet'} in plaats van ${expectedStoryIg}.`);
             }
           } catch (e) {
             throw new Error(`Ad Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
