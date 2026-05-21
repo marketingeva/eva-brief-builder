@@ -633,7 +633,19 @@ Deno.serve(async (req) => {
               console.warn('IG identity skipped: page-backed fallback only', `business=${ident.businessId || '-'} (${ident.source})`);
               continue;
             }
-            for (const mode of payloadModesForIdentity(ident)) {
+            const modes = payloadModesForIdentity(ident);
+            if (modes.length === 0) {
+              if (ident.actorId && !ident.businessId) {
+                lastErr = new Error(
+                  `Instagram-profiel ${ident.actorId} is alleen als oude actor-ID bekend. ` +
+                  'Meta accepteert voor nieuwe creatives alleen het 1784… Instagram User ID. ' +
+                  `Wijs dit Instagram-profiel toe aan ad account ${rawAdAccountId(adAccount)} in Meta Business, of sla het 1784… Instagram User ID op.`,
+                );
+                console.warn('IG identity skipped: actor-only without Graph Instagram User ID', `actor=${ident.actorId} (${ident.source})`);
+              }
+              continue;
+            }
+            for (const mode of modes) {
               try {
                 creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                   pageId: body.page_id,
