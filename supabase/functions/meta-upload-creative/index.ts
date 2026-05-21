@@ -553,6 +553,10 @@ Deno.serve(async (req) => {
           let acceptedIdentity: IgIdentity | null = null;
           let lastErr: Error | null = null;
           for (const ident of identities) {
+            if (!ident.businessId) {
+              console.warn('IG identity skipped: missing modern instagram_user_id', `actor=${ident.actorId || '-'} (${ident.source})`);
+              continue;
+            }
             try {
               creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                 pageId: body.page_id,
@@ -603,17 +607,26 @@ Deno.serve(async (req) => {
           // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
           try {
             const verify = await getFromMeta(
-              `${creativeJson.id}?fields=object_story_spec,instagram_user_id,effective_instagram_media_id`,
+              `${creativeJson.id}?fields=object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec`,
               token,
             );
+            const expectedIg = acceptedIdentity?.businessId || null;
+            const actualIg = verify?.object_story_spec?.instagram_user_id || verify?.instagram_user_id || null;
             console.log('Creative verify:', JSON.stringify({
               id: creativeJson.id,
               instagram_user_id: verify?.instagram_user_id,
               oss_ig: verify?.object_story_spec?.instagram_user_id,
               oss_page: verify?.object_story_spec?.page_id,
+              actor_id: verify?.actor_id,
+              effective_object_story_id: verify?.effective_object_story_id,
+              expected_ig: expectedIg,
+              matched: !expectedIg || actualIg === expectedIg,
             }));
+            if (expectedIg && actualIg !== expectedIg) {
+              throw new Error(`Meta creative koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            }
           } catch (e) {
-            console.warn('Creative verify failed', e);
+            throw new Error(`Creative Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
           }
 
           // Sla het actor-id op (Ads Manager dropdown), maar alleen als de gebruiker zelf nog niets had gekozen.
@@ -638,18 +651,27 @@ Deno.serve(async (req) => {
           newAdId = adJson.id;
           try {
             const adVerify = await getFromMeta(
-              `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,effective_instagram_media_id}`,
+              `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec}`,
               token,
             );
+            const expectedIg = acceptedIdentity?.businessId || null;
+            const actualIg = adVerify?.creative?.object_story_spec?.instagram_user_id || adVerify?.creative?.instagram_user_id || null;
             console.log('Ad verify:', JSON.stringify({
               id: adVerify?.id,
               creative_id: adVerify?.creative?.id,
               instagram_user_id: adVerify?.creative?.instagram_user_id,
               oss_ig: adVerify?.creative?.object_story_spec?.instagram_user_id,
               oss_page: adVerify?.creative?.object_story_spec?.page_id,
+              actor_id: adVerify?.creative?.actor_id,
+              effective_object_story_id: adVerify?.creative?.effective_object_story_id,
+              expected_ig: expectedIg,
+              matched: !expectedIg || actualIg === expectedIg,
             }));
+            if (expectedIg && actualIg !== expectedIg) {
+              throw new Error(`Meta ad koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            }
           } catch (e) {
-            console.warn('Ad verify failed', e);
+            throw new Error(`Ad Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
         if (!newAdId) {
