@@ -95,6 +95,10 @@ function isVisibleStatus(status?: string | null) {
   return status !== 'DELETED' && status !== 'ARCHIVED';
 }
 
+function isGraphInstagramId(id: string) {
+  return /^1784\d+$/.test(id);
+}
+
 function statusRank(item: { effective_status?: string | null; status?: string | null }) {
   const s = item.effective_status || item.status || '';
   if (s === 'ACTIVE') return 0;

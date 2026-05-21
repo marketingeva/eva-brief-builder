@@ -1,52 +1,57 @@
-## Advies
-Ja, je richting klopt: we moeten niet één ID proberen alsof beide ID-types hetzelfde veld gebruiken. De fout laat precies zien dat Meta ze verschillend valideert:
-
-- `1646842048691596` faalt als `instagram_user_id`
-- `17841404254570727` faalt als `instagram_actor_id`
-
-Dus de fix is: beide waarden gebruiken, maar elk op het juiste Meta-veld.
-
 ## Plan
-1. **Instagram-ID’s als pair behandelen**
-   - Bouw in `meta-upload-creative` een resolver die per Instagram-profiel zowel de `ig_id`/legacy actor ID als de `1784...` Business Account ID bewaart.
-   - Niet meer één platte kandidatenlijst met losse IDs proberen.
 
-2. **Payload aanpassen naar dual-ID payload**
-   - Voor directe creatives met meerdere formaten:
-     - `object_story_spec.instagram_user_id` krijgt het `1784...` Instagram Business Account ID.
-     - top-level `instagram_actor_id` krijgt het legacy actor/user ID `1646...`.
-   - Als één van beide ontbreekt, alleen dan een gecontroleerde fallback proberen.
+De upload werkt nu, maar de Instagram-pagina wordt in Meta niet betrouwbaar als gekozen profiel gezet. Ik ga dit oplossen door de Instagram-identiteit niet meer als één los ID te behandelen, maar als een expliciete combinatie van Page + Instagram Business ID + legacy actor ID, en door na het aanmaken te verifiëren wat Meta daadwerkelijk aan de advertentie heeft gekoppeld.
 
-3. **Resource discovery gelijk trekken met Facebook Page-selectie**
-   - `meta-list-resources` laat per Instagram-account beide IDs zien/teruggeven, niet alleen `id`.
-   - De UI blijft simpel: gebruiker kiest één Instagram-profiel, intern slaan/gebruiken we de juiste ID-combinatie.
+## Wat ik aanpas
 
-4. **Geen verkeerde overschrijvingen meer**
-   - Voorkom dat een succesvolle fallback het opgeslagen client-ID vervangt door het verkeerde ID-type.
-   - Alleen opslaan als we zeker weten dat het bij hetzelfde profiel hoort.
+1. **Instagram-account discovery corrigeren**
+   - `meta-list-resources` moet per Instagram-profiel beide ID’s teruggeven:
+     - `businessId` / Graph ID, bijvoorbeeld `17841404254570727`
+     - `actorId` / legacy ID, bijvoorbeeld `1646842048691596`
+   - De dropdown mag nog steeds één profiel tonen, maar intern moet de selectie beide waarden bewaren.
+   - Nu geeft de lijst voor Rivas alleen `17841404254570727` terug vanuit `page_backed_instagram_accounts`; dat is waarschijnlijk waarom de UI en upload niet dezelfde identiteit blijven gebruiken.
 
-5. **Validatie via logs**
-   - Extra logging toevoegen rond de uiteindelijke payload-identiteit: welke `instagram_actor_id` en welke `instagram_user_id` gebruikt zijn.
-   - Daarna kan een nieuwe testlaunch direct bevestigen of Meta de Instagram-profielselectie accepteert.
+2. **Client-instelling uitbreiden zonder verkeerde overschrijving**
+   - De huidige opgeslagen waarde is `1646842048691596`.
+   - De upload moet die waarde kunnen matchen met het bijbehorende `17841404254570727`, maar mag niet zomaar een fallback-ID opslaan als “gekozen profiel”.
+   - Ik voorkom dat een succesvolle fallback de klantinstelling vervuilt met het verkeerde ID-type.
+
+3. **Creative-payload strakker maken**
+   - Voor directe multi-format creatives zet ik:
+     - `object_story_spec.page_id` = Facebook Page ID
+     - `object_story_spec.instagram_user_id` = `1784...` Business Instagram ID
+   - Ik maak `instagram_actor_id` alleen nog conditioneel: als Meta dit veld accepteert voor deze API-versie gebruiken we het, maar als Meta het als deprecated ziet, wordt de creative opnieuw aangemaakt zonder dat veld in plaats van een verkeerde Instagram-selectie te accepteren.
+
+4. **Ad-level verificatie toevoegen**
+   - Na het aanmaken van de ad haal ik bij Meta de aangemaakte creative/ad terug op.
+   - Ik log/verifieer:
+     - Facebook Page ID
+     - `object_story_spec.instagram_user_id`
+     - eventueel top-level Instagram identity velden die Meta teruggeeft
+   - Daardoor kunnen we zien of Meta echt `17841404254570727` heeft vastgezet, in plaats van alleen dat de upload “succesvol” was.
+
+5. **UI verduidelijken**
+   - In de Meta-instellingen toon ik bij Instagram-profielen beide ID’s waar beschikbaar.
+   - Handmatige invoer accepteert beide typen, maar de tekst moet duidelijk maken dat de app intern de juiste combinatie gebruikt.
 
 ## Technische kern
-De huidige code gebruikt `cand.id` voor beide plekken:
+
+Voor Rivas hoort dit de gewenste koppeling te zijn:
 
 ```ts
-story.instagram_user_id = cand.id;
-payload.instagram_actor_id = cand.id;
+page_id: "179116508833113"
+object_story_spec.instagram_user_id: "17841404254570727"
+instagram_actor_id: "1646842048691596" // alleen gebruiken als Meta dit nog accepteert
 ```
 
-Dat is waarschijnlijk de oorzaak. Dit moet worden:
+Als Meta `instagram_actor_id` blijft afkeuren als deprecated, dan wordt de fallback:
 
 ```ts
-story.instagram_user_id = businessAccountId; // 1784...
-payload.instagram_actor_id = actorId;        // 1646...
+page_id: "179116508833113"
+object_story_spec.instagram_user_id: "17841404254570727"
+// geen instagram_actor_id
 ```
 
-Voor Rivas wordt dat dus:
+## Validatie
 
-```ts
-instagram_user_id: "17841404254570727"
-instagram_actor_id: "1646842048691596"
-```
+Na implementatie test ik met Rivas en controleer ik niet alleen of de advertentie wordt aangemaakt, maar ook welk Instagram-profiel Meta terugrapporteert op de creative/ad.
