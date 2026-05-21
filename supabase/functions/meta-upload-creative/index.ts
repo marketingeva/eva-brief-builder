@@ -292,8 +292,31 @@ interface IgIdentity {
   source: string;
 }
 
+type IgPayloadMode = 'split' | 'actor_only' | 'business_only';
+
 function isGraphId(id: string) {
   return /^1784\d+$/.test(id);
+}
+
+function adLevelInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
+  if (!identity) return null;
+  if (mode === 'business_only') return identity.businessId || identity.actorId;
+  return identity.actorId || identity.businessId;
+}
+
+function storyInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
+  if (!identity) return null;
+  if (mode === 'actor_only') return identity.actorId || identity.businessId;
+  return identity.businessId || identity.actorId;
+}
+
+function payloadModesForIdentity(identity: IgIdentity): IgPayloadMode[] {
+  if (identity.actorId && identity.businessId && identity.actorId !== identity.businessId) {
+    return ['split', 'actor_only'];
+  }
+  if (identity.actorId) return ['actor_only'];
+  if (identity.businessId) return ['business_only'];
+  return [];
 }
 
 async function resolveIgIdentity(
