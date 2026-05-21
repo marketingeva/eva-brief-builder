@@ -63,7 +63,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
     setIgError(null);
     const { data, error } = await supabase.functions.invoke<{ data?: IgAccount[]; error?: string }>(
       'meta-list-resources',
-      { body: { resource: 'instagram_accounts', page_id: pid.trim() } },
+      { body: { resource: 'instagram_accounts', page_id: pid.trim(), instagram_account_id: igId.trim() || null } },
     );
     setIgLoading(false);
     if (error || data?.error) {
