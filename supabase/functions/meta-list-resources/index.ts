@@ -399,16 +399,20 @@ Deno.serve(async (req) => {
       // Ads Manager identity-dropdown, terwijl page_backed accounts alleen
       // een fallback/shadow-profiel kunnen zijn.
       const businessIdsForAccount = new Set<string>();
+      const diagnostics: string[] = [];
       try {
         const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
         const r = await fetch(`${META_API}/${account}?fields=business{id,name},owner_business{id,name}&access_token=${token}`);
         const j = await r.json();
+        if (j.error) diagnostics.push(`Ad account business lookup: ${j.error.message}`);
         for (const businessId of [j.business?.id, j.owner_business?.id].filter(Boolean)) businessIdsForAccount.add(String(businessId));
+        if (businessIdsForAccount.size === 0) diagnostics.push('Meta geeft geen business/owner_business terug voor dit ad account.');
         for (const businessId of businessIdsForAccount) {
           for (const edge of ['instagram_accounts', 'owned_instagram_accounts', 'client_instagram_accounts']) {
             try {
               const br = await fetch(`${META_API}/${businessId}/${edge}?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
               const bj = await br.json();
+              if (bj.error) diagnostics.push(`${edge}: ${bj.error.message}`);
               for (const it of bj.data || []) addPair(it.ig_id, it.id, it.username || it.name, `business.${edge}`);
             } catch (inner) {
               console.warn(`IG business ${edge} lookup failed`, inner);
@@ -435,6 +439,8 @@ Deno.serve(async (req) => {
               addPair(it.ig_id, it.id, it.username || it.name, 'ad_account.instagram_accounts+authorized');
             }
           } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            diagnostics.push(`Instagram-profiel autoriseren voor ad account mislukt: ${msg}`);
             console.warn('IG authorize ad account failed', e);
           }
         }
@@ -492,6 +498,12 @@ Deno.serve(async (req) => {
         };
         return rank(a) - rank(b) || a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' });
       });
+
+      const hasRealIg = data.some((it) => it.businessId && !it.source.includes('page_backed'));
+      if (!hasRealIg && diagnostics.length > 0) {
+        console.warn('IG diagnostics:', diagnostics.join(' | '));
+        data = data.map((it) => ({ ...it, diagnostics }));
+      }
     }
 
     // template_ads / template_ad_detail removed: launcher now auto-copies a source ad.
