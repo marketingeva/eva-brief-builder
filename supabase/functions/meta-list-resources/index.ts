@@ -402,11 +402,11 @@ Deno.serve(async (req) => {
       const diagnostics: string[] = [];
       try {
         const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
-        const r = await fetch(`${META_API}/${account}?fields=business{id,name},owner_business{id,name}&access_token=${token}`);
+        const r = await fetch(`${META_API}/${account}?fields=business{id,name}&access_token=${token}`);
         const j = await r.json();
         if (j.error) diagnostics.push(`Ad account business lookup: ${j.error.message}`);
-        for (const businessId of [j.business?.id, j.owner_business?.id].filter(Boolean)) businessIdsForAccount.add(String(businessId));
-        if (businessIdsForAccount.size === 0) diagnostics.push('Meta geeft geen business/owner_business terug voor dit ad account.');
+        for (const businessId of [j.business?.id].filter(Boolean)) businessIdsForAccount.add(String(businessId));
+        if (businessIdsForAccount.size === 0) diagnostics.push('Meta geeft geen business terug voor dit ad account.');
         for (const businessId of businessIdsForAccount) {
           for (const edge of ['instagram_accounts', 'owned_instagram_accounts', 'client_instagram_accounts']) {
             try {
