@@ -319,6 +319,12 @@ function payloadModesForIdentity(identity: IgIdentity): IgPayloadMode[] {
   return [];
 }
 
+function isPageBackedFallback(identity: IgIdentity) {
+  const source = identity.source || '';
+  const hasRealAssetSource = /instagram_business_account|connected_instagram_account|ad_account\.|business\.|page\.instagram_accounts/.test(source);
+  return Boolean(identity.businessId && !identity.actorId && source.includes('page_backed') && !hasRealAssetSource);
+}
+
 async function resolveIgIdentity(
   token: string,
   adAccount: string,
