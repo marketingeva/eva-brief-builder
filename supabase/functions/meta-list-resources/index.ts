@@ -307,10 +307,20 @@ Deno.serve(async (req) => {
       const byKey = new Map<string, { id: string; actorId: string | null; businessId: string | null; name: string; source: string }>();
       const byAnyId = new Map<string, { id: string; actorId: string | null; businessId: string | null; name: string; source: string }>();
       const addPair = (actor: any, business: any, name: any, source: string) => {
-        const actorId = String(actor ?? '').trim() || null;
-        const businessId = String(business ?? '').trim() || null;
-        const validActor = actorId && /^\d{6,}$/.test(actorId) && !isGraphInstagramId(actorId) ? actorId : null;
-        const validBusiness = businessId && /^\d{6,}$/.test(businessId) ? businessId : null;
+        const actorRaw = String(actor ?? '').trim() || null;
+        const businessRaw = String(business ?? '').trim() || null;
+        const validActor =
+          actorRaw && /^\d{6,}$/.test(actorRaw) && !isGraphInstagramId(actorRaw)
+            ? actorRaw
+            : businessRaw && /^\d{6,}$/.test(businessRaw) && !isGraphInstagramId(businessRaw)
+            ? businessRaw
+            : null;
+        const validBusiness =
+          businessRaw && /^\d{6,}$/.test(businessRaw) && isGraphInstagramId(businessRaw)
+            ? businessRaw
+            : actorRaw && /^\d{6,}$/.test(actorRaw) && isGraphInstagramId(actorRaw)
+            ? actorRaw
+            : null;
         if (!validActor && !validBusiness) return;
 
         const key = validBusiness || validActor!;
@@ -319,6 +329,7 @@ Deno.serve(async (req) => {
         const next = existing
           ? {
               ...existing,
+              id: validBusiness || existing.businessId || existing.id,
               actorId: existing.actorId || validActor,
               businessId: existing.businessId || validBusiness,
               name: existing.name.startsWith('Instagram ') ? displayName : existing.name,
