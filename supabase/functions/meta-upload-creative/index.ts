@@ -405,34 +405,61 @@ async function resolveIgIdentity(
 function buildDirectCreativePayload(opts: {
   pageId: string;
   identity: IgIdentity | null;
-  omitActorId?: boolean;
+  includeStoryLinkData?: boolean;
   name: string;
   text: CreativeText;
   leadFormId: string;
   assets: UploadedAsset[];
 }) {
   const params = buildCreativeParameters({ text: opts.text, leadFormId: opts.leadFormId, assets: opts.assets });
-  if (params.asset_feed_spec) {
-    delete params.body;
-    delete params.title;
-    delete params.link_description;
-    delete params.link_url;
-    delete params.image_hash;
-  }
+  delete params.body;
+  delete params.title;
+  delete params.link_description;
+  delete params.link_url;
+  delete params.image_hash;
+
+  const primaryTexts = cleanVariants(opts.text.primary_texts);
+  const headlines = cleanVariants(opts.text.headlines);
+  const descriptions = cleanVariants(opts.text.descriptions);
+  const primary =
+    RATIO_PRIORITY.map((r) => opts.assets.find((a) => a.ratio === r)).find(Boolean) ??
+    opts.assets[0];
+  const link = opts.text.link_url || 'http://fb.me/';
+  const callToAction = {
+    type: opts.text.cta || 'SIGN_UP',
+    value: { link, lead_gen_form_id: opts.leadFormId },
+  };
+
   const story: any = { page_id: opts.pageId };
   const id = opts.identity;
   // instagram_user_id verwacht het 1784… Graph ID.
   if (id?.businessId) story.instagram_user_id = id.businessId;
+
+  if (opts.includeStoryLinkData !== false) {
+    if (primary?.is_video && primary.video_id && !params.asset_feed_spec) {
+      story.video_data = {
+        video_id: primary.video_id,
+        message: primaryTexts[0] || '',
+        title: headlines[0] || '',
+        call_to_action: callToAction,
+      };
+    } else {
+      story.link_data = {
+        message: primaryTexts[0] || '',
+        name: headlines[0] || '',
+        description: descriptions[0] || '',
+        link,
+        call_to_action: callToAction,
+        ...(primary?.image_hash && !params.asset_feed_spec ? { image_hash: primary.image_hash } : {}),
+      };
+    }
+  }
 
   const payload: Record<string, unknown> = {
     name: opts.name,
     object_story_spec: story,
     ...params,
   };
-  // instagram_actor_id verwacht het legacy actor/user ID (Ads Manager dropdown).
-  // In nieuwere Meta API-versies kan dit veld deprecated zijn; dan retryen we
-  // dezelfde identity zonder actor-id en laten we instagram_user_id leidend zijn.
-  if (id?.actorId && !opts.omitActorId) payload.instagram_actor_id = id.actorId;
   return payload;
 }
 
