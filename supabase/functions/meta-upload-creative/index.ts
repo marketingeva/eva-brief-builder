@@ -530,12 +530,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        const creativeParameters = buildCreativeParameters({
-          text: bundle.texts,
-          leadFormId: body.lead_form_id,
-          assets,
-        });
-
         let newAdId: string | undefined;
         let newCreativeId: string | undefined;
         {
@@ -657,15 +651,6 @@ Deno.serve(async (req) => {
           } catch (e) {
             console.warn('Ad verify failed', e);
           }
-        } else {
-          console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
-          const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
-            adset_id: body.adset_id,
-            status_option: status,
-            rename_options: { rename_strategy: 'NO_RENAME' },
-            creative_parameters: creativeParameters,
-          });
-          newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
         }
         if (!newAdId) {
           throw new Error('Geen nieuw ad_id terug van Meta.');
