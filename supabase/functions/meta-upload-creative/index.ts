@@ -157,23 +157,6 @@ function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-async function pickSourceAd(token: string, adsetId: string): Promise<string | null> {
-  const url = `${META_API}/${adsetId}/ads?fields=id,name,status,effective_status&limit=50&access_token=${token}`;
-  const r = await fetch(url);
-  const j = await r.json();
-  if (j.error) {
-    console.error('pickSourceAd list error', j.error);
-    return null;
-  }
-  const ads: any[] = j.data || [];
-  return (
-    ads.find((a) => a.effective_status === 'ACTIVE')?.id ??
-    ads.find((a) => a.effective_status === 'PAUSED')?.id ??
-    ads[0]?.id ??
-    null
-  );
-}
-
 interface UploadedAsset {
   ratio: AspectRatio | null;
   file_name: string;
@@ -298,10 +281,10 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
-// Meta heeft TWEE Instagram-ID's per profiel:
-//  - Legacy actor/user ID (bv. 1646…)  → hoort op `instagram_actor_id`
-//  - Graph Business Account ID (1784…) → hoort op `instagram_user_id`
-// Beide tegelijk meegeven werkt het meest betrouwbaar in Ads Manager.
+// Meta heeft vaak TWEE Instagram-ID's per profiel:
+//  - Legacy actor/user ID (bv. 1646…)  → alleen nog gebruiken om te matchen
+//  - Graph Business Account ID (1784…) → hoort op het moderne `instagram_user_id`
+// Sinds API v22 is `instagram_actor_id` deprecated, dus dat sturen we niet meer mee.
 
 interface IgIdentity {
   actorId: string | null;    // legacy / ads-manager dropdown ID (niet-1784)
