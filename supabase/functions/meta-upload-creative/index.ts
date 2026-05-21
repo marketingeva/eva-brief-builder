@@ -467,20 +467,25 @@ async function resolveIgIdentity(
       pairs.splice(idx, 1);
       pairs.unshift({ ...matched, source: `${matched.source}+client_setting` });
     } else if (isGraphId(eid)) {
-      const inferredActor = pairs.find((p) => p.actorId && !p.source.includes('page_backed'))?.actorId || null;
       pairs.unshift({
-        actorId: inferredActor,
+        actorId: null,
         businessId: eid,
-        source: inferredActor ? 'client_setting+inferred_actor' : 'client_setting',
+        source: 'client_setting',
       });
     } else {
-      const inferredBusiness = pairs.find((p) => p.businessId && !p.source.includes('page_backed'))?.businessId || null;
       pairs.unshift({
         actorId: eid,
-        businessId: inferredBusiness,
-        source: inferredBusiness ? 'client_setting+inferred_business' : 'client_setting',
+        businessId: null,
+        source: 'client_setting',
       });
     }
+
+    // Nooit zomaar een willekeurig Business Manager Instagram-account gebruiken
+    // als de klant expliciet een ander IG ID heeft ingesteld. Dat voorkwam hier
+    // dat een account zoals wijdezorg_zorg op een Rivas-ad terechtkomt.
+    const pageOrExplicitSources = /client_setting|page\.instagram_business_account|page\.connected_instagram_account|page\.instagram_accounts|page\.page_backed/;
+    const filtered = pairs.filter((p) => p.actorId === eid || p.businessId === eid || pageOrExplicitSources.test(p.source));
+    pairs.splice(0, pairs.length, ...filtered);
   }
 
   if (diagnostics.length > 0) {
