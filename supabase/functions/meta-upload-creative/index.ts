@@ -595,6 +595,14 @@ Deno.serve(async (req) => {
           let acceptedMode: IgPayloadMode | null = null;
           let lastErr: Error | null = null;
           for (const ident of identities) {
+            if (isPageBackedFallback(ident)) {
+              lastErr = new Error(
+                'Alleen een Page-backed Instagram fallback gevonden, niet het echte Instagram-profiel. ' +
+                'Koppel of wijs het Instagram-profiel toe aan dezelfde Facebook Page én hetzelfde ad account in Meta Business.',
+              );
+              console.warn('IG identity skipped: page-backed fallback only', `business=${ident.businessId || '-'} (${ident.source})`);
+              continue;
+            }
             for (const mode of payloadModesForIdentity(ident)) {
               try {
                 creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
