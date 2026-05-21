@@ -49,7 +49,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
       .then(({ data }) => {
         setFilter(data?.meta_name_filter ?? '');
         setPageId(data?.meta_page_id ?? '');
-        setIgId((data as any)?.meta_instagram_account_id ?? '');
+        setIgId(data?.meta_instagram_account_id ?? '');
         setLoading(false);
       });
   }, [open, clientId]);
@@ -91,7 +91,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
         meta_name_filter: filter.trim() || null,
         meta_page_id: pageId.trim() || null,
         meta_instagram_account_id: igId.trim() || null,
-      } as any)
+      })
       .eq('id', clientId);
     setSaving(false);
     if (error) {
