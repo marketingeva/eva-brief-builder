@@ -15,6 +15,7 @@ type RequestBody = {
   ad_id?: unknown;
   name_filter?: unknown;
   page_id?: unknown;
+  instagram_account_id?: unknown;
   query?: unknown;
   country_code?: unknown;
 };
@@ -141,6 +142,7 @@ Deno.serve(async (req) => {
     const adsetId = asTrimmedString(body.adset_id);
     const adId = asTrimmedString(body.ad_id);
     const pageId = asTrimmedString(body.page_id);
+    const explicitInstagramId = asTrimmedString(body.instagram_account_id);
     const searchQuery = asTrimmedString(body.query);
     const countryCode = asTrimmedString(body.country_code) || 'NL';
 
