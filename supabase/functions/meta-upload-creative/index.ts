@@ -153,6 +153,10 @@ async function getFromMeta(pathOrUrl: string, token: string) {
   return await r.json();
 }
 
+function rawAdAccountId(adAccount: string) {
+  return adAccount.replace(/^act_/, '');
+}
+
 function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
@@ -282,8 +286,8 @@ function buildCreativeParameters(opts: {
 }
 
 // Meta heeft vaak TWEE Instagram-ID's per profiel:
-//  - Legacy actor/user ID (bv. 1646…)  → alleen nog gebruiken om te matchen
-//  - Graph Business Account ID (1784…) → hoort op het moderne `instagram_user_id`
+//  - Legacy actor/user ID (bv. 1646…)  → alleen gebruiken om te matchen / koppelen
+//  - Graph Instagram User ID (1784…)   → enige ID die Meta accepteert als `instagram_user_id`
 // Sinds API v22 is `instagram_actor_id` deprecated, dus dat sturen we niet meer mee.
 
 interface IgIdentity {
@@ -292,7 +296,7 @@ interface IgIdentity {
   source: string;
 }
 
-type IgPayloadMode = 'split' | 'actor_only' | 'business_only';
+type IgPayloadMode = 'business_only';
 
 function isGraphId(id: string) {
   return /^1784\d+$/.test(id);
@@ -300,21 +304,15 @@ function isGraphId(id: string) {
 
 function adLevelInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
   if (!identity) return null;
-  if (mode === 'business_only') return identity.businessId || identity.actorId;
-  return identity.actorId || identity.businessId;
+  return identity.businessId;
 }
 
 function storyInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
   if (!identity) return null;
-  if (mode === 'actor_only') return identity.actorId || identity.businessId;
-  return identity.businessId || identity.actorId;
+  return identity.businessId;
 }
 
 function payloadModesForIdentity(identity: IgIdentity): IgPayloadMode[] {
-  if (identity.actorId && identity.businessId && identity.actorId !== identity.businessId) {
-    return ['split', 'actor_only'];
-  }
-  if (identity.actorId) return ['actor_only'];
   if (identity.businessId) return ['business_only'];
   return [];
 }
@@ -334,8 +332,16 @@ async function resolveIgIdentity(
   const pairs: IgIdentity[] = [];
   const seenKey = new Set<string>();
   const push = (actor: string | null, biz: string | null, source: string) => {
-    const a = (actor || '').trim() || null;
-    const b = (biz || '').trim() || null;
+    let a = (actor || '').trim() || null;
+    let b = (biz || '').trim() || null;
+    if (a && isGraphId(a)) {
+      b = b || a;
+      a = null;
+    }
+    if (b && !isGraphId(b)) {
+      a = a || b;
+      b = null;
+    }
     if (!a && !b) return;
     if (a && a === String(pageId).trim()) return; // page-id is nooit een IG-id
     const key = `${a || ''}|${b || ''}`;
@@ -408,6 +414,30 @@ async function resolveIgIdentity(
         }
       } catch (e) {
         console.warn(`IG identity: business ${edge} lookup failed`, e);
+      }
+    }
+  }
+
+  // 2d) Als de gebruiker het echte IG actor-ID heeft opgeslagen maar het ad account
+  // deze asset nog niet ziet, probeer de officiële Business Manager-koppeling:
+  // POST /{IG_USER_ID}/authorized_adaccounts met business + account_id.
+  if (explicitId && !isGraphId(explicitId) && businessIds.size > 0) {
+    for (const businessId of businessIds) {
+      try {
+        await postToMeta(`${explicitId}/authorized_adaccounts`, token, {
+          business: businessId,
+          account_id: rawAdAccountId(adAccount),
+        });
+        console.log('IG identity: authorized ad account for explicit IG actor', `ig=${explicitId} business=${businessId}`);
+        const accountIg = await getFromMeta(
+          `${adAccount}/instagram_accounts?fields=id,ig_id,username&limit=200`,
+          token,
+        );
+        for (const it of accountIg?.data || []) {
+          push(it?.ig_id || null, it?.id || null, 'ad_account.instagram_accounts+authorized');
+        }
+      } catch (e) {
+        console.warn('IG identity: authorize ad account failed', e);
       }
     }
   }
@@ -603,7 +633,19 @@ Deno.serve(async (req) => {
               console.warn('IG identity skipped: page-backed fallback only', `business=${ident.businessId || '-'} (${ident.source})`);
               continue;
             }
-            for (const mode of payloadModesForIdentity(ident)) {
+            const modes = payloadModesForIdentity(ident);
+            if (modes.length === 0) {
+              if (ident.actorId && !ident.businessId) {
+                lastErr = new Error(
+                  `Instagram-profiel ${ident.actorId} is alleen als oude actor-ID bekend. ` +
+                  'Meta accepteert voor nieuwe creatives alleen het 1784… Instagram User ID. ' +
+                  `Wijs dit Instagram-profiel toe aan ad account ${rawAdAccountId(adAccount)} in Meta Business, of sla het 1784… Instagram User ID op.`,
+                );
+                console.warn('IG identity skipped: actor-only without Graph Instagram User ID', `actor=${ident.actorId} (${ident.source})`);
+              }
+              continue;
+            }
+            for (const mode of modes) {
               try {
                 creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                   pageId: body.page_id,

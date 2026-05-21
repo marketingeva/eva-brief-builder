@@ -65,6 +65,27 @@ async function fetchAll(url: string, token: string) {
   return out;
 }
 
+async function postToMeta(path: string, token: string, payload: Record<string, unknown>) {
+  const params = new URLSearchParams();
+  params.set('access_token', token);
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null) continue;
+    params.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+  }
+  const response = await fetch(`${META_API}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+  });
+  const json = await response.json();
+  if (json.error) throw new Error(json.error.message || 'Meta error');
+  return json;
+}
+
+function rawAdAccountId(adAccount: string) {
+  return adAccount.replace(/^act_/, '');
+}
+
 function asTrimmedString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -377,12 +398,13 @@ Deno.serve(async (req) => {
       // c) Business Manager Instagram assets. Dit is vaak de bron van de
       // Ads Manager identity-dropdown, terwijl page_backed accounts alleen
       // een fallback/shadow-profiel kunnen zijn.
+      const businessIdsForAccount = new Set<string>();
       try {
         const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
         const r = await fetch(`${META_API}/${account}?fields=business{id,name},owner_business{id,name}&access_token=${token}`);
         const j = await r.json();
-        const businessIds = Array.from(new Set([j.business?.id, j.owner_business?.id].filter(Boolean)));
-        for (const businessId of businessIds) {
+        for (const businessId of [j.business?.id, j.owner_business?.id].filter(Boolean)) businessIdsForAccount.add(String(businessId));
+        for (const businessId of businessIdsForAccount) {
           for (const edge of ['instagram_accounts', 'owned_instagram_accounts', 'client_instagram_accounts']) {
             try {
               const br = await fetch(`${META_API}/${businessId}/${edge}?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
@@ -395,6 +417,27 @@ Deno.serve(async (req) => {
         }
       } catch (e) {
         console.warn('IG business lookup failed', e);
+      }
+
+      // Als een oud actor-ID is opgeslagen, probeer het eerst officieel aan dit
+      // ad account toe te wijzen. Daarna opnieuw act_<id>/instagram_accounts lezen.
+      if (explicitInstagramId && /^\d{6,}$/.test(explicitInstagramId) && !isGraphInstagramId(explicitInstagramId)) {
+        const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
+        for (const businessId of businessIdsForAccount) {
+          try {
+            await postToMeta(`${explicitInstagramId}/authorized_adaccounts`, token, {
+              business: businessId,
+              account_id: rawAdAccountId(account),
+            });
+            const r = await fetch(`${META_API}/${account}/instagram_accounts?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
+            const j = await r.json();
+            for (const it of j.data || []) {
+              addPair(it.ig_id, it.id, it.username || it.name, 'ad_account.instagram_accounts+authorized');
+            }
+          } catch (e) {
+            console.warn('IG authorize ad account failed', e);
+          }
+        }
       }
 
       // b) instagram_business_account + connected_instagram_account op de page
