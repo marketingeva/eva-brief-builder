@@ -380,6 +380,32 @@ async function resolveIgIdentity(
     console.warn('IG identity: ad account connected lookup failed', e);
   }
 
+  // 2c) Business Manager assets: Ads Manager haalt de identity-dropdown vaak uit
+  // business-level Instagram assets, niet alleen uit page-backed fallbacks.
+  const businessIds = new Set<string>();
+  try {
+    const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name},owner_business{id,name}`, token);
+    if (accountInfo?.business?.id) businessIds.add(accountInfo.business.id);
+    if (accountInfo?.owner_business?.id) businessIds.add(accountInfo.owner_business.id);
+  } catch (e) {
+    console.warn('IG identity: ad account business lookup failed', e);
+  }
+  for (const businessId of businessIds) {
+    for (const edge of ['instagram_accounts', 'owned_instagram_accounts', 'client_instagram_accounts']) {
+      try {
+        const businessIg = await getFromMeta(
+          `${businessId}/${edge}?fields=id,ig_id,username,name&limit=200`,
+          token,
+        );
+        for (const it of businessIg?.data || []) {
+          push(it?.ig_id || null, it?.id || null, `business.${edge}`);
+        }
+      } catch (e) {
+        console.warn(`IG identity: business ${edge} lookup failed`, e);
+      }
+    }
+  }
+
   // 3) Page-token paths (extra info, ook hier krijgen we id/ig_id).
   if (pageAccessToken) {
     try {
@@ -402,14 +428,14 @@ async function resolveIgIdentity(
       pairs.splice(idx, 1);
       pairs.unshift({ ...matched, source: `${matched.source}+client_setting` });
     } else if (isGraphId(eid)) {
-      const inferredActor = pairs.find((p) => p.actorId)?.actorId || null;
+      const inferredActor = pairs.find((p) => p.actorId && !p.source.includes('page_backed'))?.actorId || null;
       pairs.unshift({
         actorId: inferredActor,
         businessId: eid,
         source: inferredActor ? 'client_setting+inferred_actor' : 'client_setting',
       });
     } else {
-      const inferredBusiness = pairs.find((p) => p.businessId)?.businessId || null;
+      const inferredBusiness = pairs.find((p) => p.businessId && !p.source.includes('page_backed'))?.businessId || null;
       pairs.unshift({
         actorId: eid,
         businessId: inferredBusiness,
