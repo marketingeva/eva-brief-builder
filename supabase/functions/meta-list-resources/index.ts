@@ -435,10 +435,7 @@ Deno.serve(async (req) => {
 
       if (explicitInstagramId && /^\d{6,}$/.test(explicitInstagramId)) {
         const existing = byAnyId.get(explicitInstagramId);
-        if (!existing && byAnyId.size === 1) {
-          const only = Array.from(new Set(byAnyId.values()))[0];
-          addPair(explicitInstagramId, only.businessId || only.id, only.name, 'client_setting+paired_single_result');
-        } else if (!existing) {
+        if (!existing) {
           addPair(isGraphInstagramId(explicitInstagramId) ? null : explicitInstagramId, isGraphInstagramId(explicitInstagramId) ? explicitInstagramId : null, null, 'client_setting');
         }
       }
