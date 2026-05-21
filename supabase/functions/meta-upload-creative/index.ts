@@ -153,6 +153,10 @@ async function getFromMeta(pathOrUrl: string, token: string) {
   return await r.json();
 }
 
+function rawAdAccountId(adAccount: string) {
+  return adAccount.replace(/^act_/, '');
+}
+
 function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
@@ -402,6 +406,30 @@ async function resolveIgIdentity(
         }
       } catch (e) {
         console.warn(`IG identity: business ${edge} lookup failed`, e);
+      }
+    }
+  }
+
+  // 2d) Als de gebruiker het echte IG actor-ID heeft opgeslagen maar het ad account
+  // deze asset nog niet ziet, probeer de officiële Business Manager-koppeling:
+  // POST /{IG_USER_ID}/authorized_adaccounts met business + account_id.
+  if (explicitId && !isGraphId(explicitId) && businessIds.size > 0) {
+    for (const businessId of businessIds) {
+      try {
+        await postToMeta(`${explicitId}/authorized_adaccounts`, token, {
+          business: businessId,
+          account_id: rawAdAccountId(adAccount),
+        });
+        console.log('IG identity: authorized ad account for explicit IG actor', `ig=${explicitId} business=${businessId}`);
+        const accountIg = await getFromMeta(
+          `${adAccount}/instagram_accounts?fields=id,ig_id,username&limit=200`,
+          token,
+        );
+        for (const it of accountIg?.data || []) {
+          push(it?.ig_id || null, it?.id || null, 'ad_account.instagram_accounts+authorized');
+        }
+      } catch (e) {
+        console.warn('IG identity: authorize ad account failed', e);
       }
     }
   }
