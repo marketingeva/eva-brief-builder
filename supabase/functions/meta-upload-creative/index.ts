@@ -494,15 +494,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
-    const needsSourceCopy = body.creatives.some((bundle) => bundle.variants.length <= 1);
-    const sourceAdId = needsSourceCopy ? await pickSourceAd(token, body.adset_id) : null;
-    if (needsSourceCopy && !sourceAdId) {
-      throw new Error(
-        'Geen bestaande advertentie gevonden in deze ad set om te dupliceren. ' +
-          'Maak handmatig 1 werkende advertentie aan in deze ad set in Meta Ads Manager, en probeer opnieuw.',
-      );
-    }
-    if (sourceAdId) console.log('Using source ad for copy:', sourceAdId);
+    const sourceAdId: string | null = null;
 
     const results: any[] = [];
 
