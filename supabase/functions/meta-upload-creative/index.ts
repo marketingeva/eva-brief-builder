@@ -157,23 +157,6 @@ function cleanVariants(values: string[]) {
   return (values || []).map((value) => (value ?? '').trim()).filter(Boolean);
 }
 
-async function pickSourceAd(token: string, adsetId: string): Promise<string | null> {
-  const url = `${META_API}/${adsetId}/ads?fields=id,name,status,effective_status&limit=50&access_token=${token}`;
-  const r = await fetch(url);
-  const j = await r.json();
-  if (j.error) {
-    console.error('pickSourceAd list error', j.error);
-    return null;
-  }
-  const ads: any[] = j.data || [];
-  return (
-    ads.find((a) => a.effective_status === 'ACTIVE')?.id ??
-    ads.find((a) => a.effective_status === 'PAUSED')?.id ??
-    ads[0]?.id ??
-    null
-  );
-}
-
 interface UploadedAsset {
   ratio: AspectRatio | null;
   file_name: string;
@@ -298,10 +281,10 @@ function buildCreativeParameters(opts: {
   return params;
 }
 
-// Meta heeft TWEE Instagram-ID's per profiel:
-//  - Legacy actor/user ID (bv. 1646…)  → hoort op `instagram_actor_id`
-//  - Graph Business Account ID (1784…) → hoort op `instagram_user_id`
-// Beide tegelijk meegeven werkt het meest betrouwbaar in Ads Manager.
+// Meta heeft vaak TWEE Instagram-ID's per profiel:
+//  - Legacy actor/user ID (bv. 1646…)  → alleen nog gebruiken om te matchen
+//  - Graph Business Account ID (1784…) → hoort op het moderne `instagram_user_id`
+// Sinds API v22 is `instagram_actor_id` deprecated, dus dat sturen we niet meer mee.
 
 interface IgIdentity {
   actorId: string | null;    // legacy / ads-manager dropdown ID (niet-1784)
@@ -361,6 +344,19 @@ async function resolveIgIdentity(
     console.warn('IG identity: ad account lookup failed', e);
   }
 
+  // 2b) Nieuwe aanbevolen edge voor ads: expliciet aan het ad account gekoppelde IG-profielen.
+  try {
+    const connectedIg = await getFromMeta(
+      `${adAccount}/connected_instagram_accounts?fields=id,ig_id,username&limit=200`,
+      token,
+    );
+    for (const it of connectedIg?.data || []) {
+      push(it?.ig_id || null, it?.id || null, 'ad_account.connected_instagram_accounts');
+    }
+  } catch (e) {
+    console.warn('IG identity: ad account connected lookup failed', e);
+  }
+
   // 3) Page-token paths (extra info, ook hier krijgen we id/ig_id).
   if (pageAccessToken) {
     try {
@@ -405,34 +401,62 @@ async function resolveIgIdentity(
 function buildDirectCreativePayload(opts: {
   pageId: string;
   identity: IgIdentity | null;
-  omitActorId?: boolean;
+  includeStoryLinkData?: boolean;
   name: string;
   text: CreativeText;
   leadFormId: string;
   assets: UploadedAsset[];
 }) {
   const params = buildCreativeParameters({ text: opts.text, leadFormId: opts.leadFormId, assets: opts.assets });
-  if (params.asset_feed_spec) {
-    delete params.body;
-    delete params.title;
-    delete params.link_description;
-    delete params.link_url;
-    delete params.image_hash;
-  }
+  delete params.body;
+  delete params.title;
+  delete params.link_description;
+  delete params.link_url;
+  delete params.image_hash;
+
+  const primaryTexts = cleanVariants(opts.text.primary_texts);
+  const headlines = cleanVariants(opts.text.headlines);
+  const descriptions = cleanVariants(opts.text.descriptions);
+  const primary =
+    RATIO_PRIORITY.map((r) => opts.assets.find((a) => a.ratio === r)).find(Boolean) ??
+    opts.assets[0];
+  const link = opts.text.link_url || 'http://fb.me/';
+  const callToAction = {
+    type: opts.text.cta || 'SIGN_UP',
+    value: { link, lead_gen_form_id: opts.leadFormId },
+  };
+
   const story: any = { page_id: opts.pageId };
   const id = opts.identity;
   // instagram_user_id verwacht het 1784… Graph ID.
   if (id?.businessId) story.instagram_user_id = id.businessId;
+
+  if (opts.includeStoryLinkData !== false) {
+    if (primary?.is_video && primary.video_id && !params.asset_feed_spec) {
+      story.video_data = {
+        video_id: primary.video_id,
+        message: primaryTexts[0] || '',
+        title: headlines[0] || '',
+        call_to_action: callToAction,
+      };
+    } else {
+      story.link_data = {
+        message: primaryTexts[0] || '',
+        name: headlines[0] || '',
+        description: descriptions[0] || '',
+        link,
+        call_to_action: callToAction,
+        ...(primary?.image_hash && !params.asset_feed_spec ? { image_hash: primary.image_hash } : {}),
+      };
+    }
+  }
 
   const payload: Record<string, unknown> = {
     name: opts.name,
     object_story_spec: story,
     ...params,
   };
-  // instagram_actor_id verwacht het legacy actor/user ID (Ads Manager dropdown).
-  // In nieuwere Meta API-versies kan dit veld deprecated zijn; dan retryen we
-  // dezelfde identity zonder actor-id en laten we instagram_user_id leidend zijn.
-  if (id?.actorId && !opts.omitActorId) payload.instagram_actor_id = id.actorId;
+  if (id?.businessId) payload.instagram_user_id = id.businessId;
   return payload;
 }
 
@@ -454,15 +478,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as LaunchBody;
     const status = body.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
 
-    const needsSourceCopy = body.creatives.some((bundle) => bundle.variants.length <= 1);
-    const sourceAdId = needsSourceCopy ? await pickSourceAd(token, body.adset_id) : null;
-    if (needsSourceCopy && !sourceAdId) {
-      throw new Error(
-        'Geen bestaande advertentie gevonden in deze ad set om te dupliceren. ' +
-          'Maak handmatig 1 werkende advertentie aan in deze ad set in Meta Ads Manager, en probeer opnieuw.',
-      );
-    }
-    if (sourceAdId) console.log('Using source ad for copy:', sourceAdId);
+    const sourceAdId: string | null = null;
 
     const results: any[] = [];
 
@@ -497,16 +513,10 @@ Deno.serve(async (req) => {
           }
         }
 
-        const creativeParameters = buildCreativeParameters({
-          text: bundle.texts,
-          leadFormId: body.lead_form_id,
-          assets,
-        });
-
         let newAdId: string | undefined;
         let newCreativeId: string | undefined;
-        if (assets.length > 1) {
-          console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
+        {
+          console.log('Creating explicit Instagram creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const explicitIg = (body.instagram_account_id || '').trim() || null;
           const identities = await resolveIgIdentity(token, adAccount, body.page_id, explicitIg);
           console.log(
@@ -520,45 +530,50 @@ Deno.serve(async (req) => {
             );
           }
 
-          // Probeer ieder paar (actorId + businessId tegelijk) tot Meta er één accepteert.
+          // Probeer ieder profiel met het moderne instagram_user_id veld. Legacy actor IDs
+          // worden alleen gebruikt om het 1784… Business ID te vinden; niet meer in de payload.
           let creativeJson: any = null;
           let acceptedIdentity: IgIdentity | null = null;
           let lastErr: Error | null = null;
           for (const ident of identities) {
+            if (!ident.businessId) {
+              console.warn('IG identity skipped: missing modern instagram_user_id', `actor=${ident.actorId || '-'} (${ident.source})`);
+              continue;
+            }
             try {
               creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                 pageId: body.page_id,
                 identity: ident,
-                omitActorId: false,
+                includeStoryLinkData: true,
                 name: adName,
                 text: bundle.texts,
                 leadFormId: body.lead_form_id,
                 assets,
               }));
               acceptedIdentity = ident;
-              console.log('IG identity accepted:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`);
+              console.log('IG identity accepted via instagram_user_id:', `actor=${ident.actorId || '-'} business=${ident.businessId || '-'} (${ident.source})`);
               break;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               lastErr = err instanceof Error ? err : new Error(msg);
-              if (/instagram_actor_id|Old Instagram ID|deprecated/i.test(msg) && ident.businessId) {
+              if (/object_story_spec|link_data|asset_feed_spec|cannot be used together|Invalid parameter/i.test(msg) && ident.businessId) {
                 try {
                   creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                     pageId: body.page_id,
                     identity: ident,
-                    omitActorId: true,
+                    includeStoryLinkData: false,
                     name: adName,
                     text: bundle.texts,
                     leadFormId: body.lead_form_id,
                     assets,
                   }));
-                  acceptedIdentity = { ...ident, actorId: null, source: `${ident.source}+no_actor_retry` };
-                  console.log('IG identity accepted without actor_id:', `business=${ident.businessId} (${ident.source})`);
+                  acceptedIdentity = { ...ident, source: `${ident.source}+minimal_story_retry` };
+                  console.log('IG identity accepted with minimal story spec:', `business=${ident.businessId} (${ident.source})`);
                   break;
                 } catch (retryErr) {
                   const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
                   lastErr = retryErr instanceof Error ? retryErr : new Error(retryMsg);
-                  console.warn('IG identity no-actor retry rejected:', `business=${ident.businessId} (${ident.source})`, '-', retryMsg);
+                  console.warn('IG identity minimal-story retry rejected:', `business=${ident.businessId} (${ident.source})`, '-', retryMsg);
                 }
               }
               if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|Old Instagram ID|deprecated|1772103|2238281/i.test(msg)) {
@@ -575,17 +590,26 @@ Deno.serve(async (req) => {
           // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
           try {
             const verify = await getFromMeta(
-              `${creativeJson.id}?fields=object_story_spec,instagram_user_id,effective_instagram_media_id`,
+              `${creativeJson.id}?fields=object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec`,
               token,
             );
+            const expectedIg = acceptedIdentity?.businessId || null;
+            const actualIg = verify?.object_story_spec?.instagram_user_id || verify?.instagram_user_id || null;
             console.log('Creative verify:', JSON.stringify({
               id: creativeJson.id,
               instagram_user_id: verify?.instagram_user_id,
               oss_ig: verify?.object_story_spec?.instagram_user_id,
               oss_page: verify?.object_story_spec?.page_id,
+              actor_id: verify?.actor_id,
+              effective_object_story_id: verify?.effective_object_story_id,
+              expected_ig: expectedIg,
+              matched: !expectedIg || actualIg === expectedIg,
             }));
+            if (expectedIg && actualIg !== expectedIg) {
+              throw new Error(`Meta creative koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            }
           } catch (e) {
-            console.warn('Creative verify failed', e);
+            throw new Error(`Creative Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
           }
 
           // Sla het actor-id op (Ads Manager dropdown), maar alleen als de gebruiker zelf nog niets had gekozen.
@@ -610,28 +634,28 @@ Deno.serve(async (req) => {
           newAdId = adJson.id;
           try {
             const adVerify = await getFromMeta(
-              `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,effective_instagram_media_id}`,
+              `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec}`,
               token,
             );
+            const expectedIg = acceptedIdentity?.businessId || null;
+            const actualIg = adVerify?.creative?.object_story_spec?.instagram_user_id || adVerify?.creative?.instagram_user_id || null;
             console.log('Ad verify:', JSON.stringify({
               id: adVerify?.id,
               creative_id: adVerify?.creative?.id,
               instagram_user_id: adVerify?.creative?.instagram_user_id,
               oss_ig: adVerify?.creative?.object_story_spec?.instagram_user_id,
               oss_page: adVerify?.creative?.object_story_spec?.page_id,
+              actor_id: adVerify?.creative?.actor_id,
+              effective_object_story_id: adVerify?.creative?.effective_object_story_id,
+              expected_ig: expectedIg,
+              matched: !expectedIg || actualIg === expectedIg,
             }));
+            if (expectedIg && actualIg !== expectedIg) {
+              throw new Error(`Meta ad koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            }
           } catch (e) {
-            console.warn('Ad verify failed', e);
+            throw new Error(`Ad Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
           }
-        } else {
-          console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
-          const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
-            adset_id: body.adset_id,
-            status_option: status,
-            rename_options: { rename_strategy: 'NO_RENAME' },
-            creative_parameters: creativeParameters,
-          });
-          newAdId = copyJson.copied_ad_id || copyJson.ad_id || copyJson.id;
         }
         if (!newAdId) {
           throw new Error('Geen nieuw ad_id terug van Meta.');

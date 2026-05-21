@@ -363,6 +363,17 @@ Deno.serve(async (req) => {
         console.warn('IG ad account lookup failed', e);
       }
 
+      try {
+        const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
+        const r = await fetch(`${META_API}/${account}/connected_instagram_accounts?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
+        const j = await r.json();
+        for (const it of j.data || []) {
+          addPair(it.ig_id, it.id, it.username || it.name, 'ad_account.connected_instagram_accounts');
+        }
+      } catch (e) {
+        console.warn('IG connected ad account lookup failed', e);
+      }
+
       // b) instagram_business_account + connected_instagram_account op de page
       try {
         const r = await fetch(
