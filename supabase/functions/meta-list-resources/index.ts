@@ -300,15 +300,41 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Stap 2: Verzamel alle Instagram identities die aan deze Page/ad account hangen.
-      // Belangrijk: Ads Manager gebruikt vaak de actor/user ID (niet de 1784… Graph ID),
-      // dus ad-account identities krijgen voorrang.
-      const seen = new Map<string, { id: string; name: string; source: string }>();
-      const add = (id: any, name: any, source: string) => {
-        const sid = String(id ?? '').trim();
-        if (!/^\d{6,}$/.test(sid)) return;
-        if (seen.has(sid)) return;
-        seen.set(sid, { id: sid, name: String(name ?? '') || `Instagram ${sid}`, source });
+      // Stap 2: Verzamel Instagram identities als pair. Meta gebruikt het 1784…
+      // Business ID in object_story_spec.instagram_user_id, en soms het legacy
+      // actor ID in instagram_actor_id. De UI bewaart één voorkeurs-ID, maar krijgt
+      // beide waarden terug zodat upload en selectie dezelfde identiteit gebruiken.
+      const byKey = new Map<string, { id: string; actorId: string | null; businessId: string | null; name: string; source: string }>();
+      const byAnyId = new Map<string, { id: string; actorId: string | null; businessId: string | null; name: string; source: string }>();
+      const addPair = (actor: any, business: any, name: any, source: string) => {
+        const actorId = String(actor ?? '').trim() || null;
+        const businessId = String(business ?? '').trim() || null;
+        const validActor = actorId && /^\d{6,}$/.test(actorId) && !isGraphInstagramId(actorId) ? actorId : null;
+        const validBusiness = businessId && /^\d{6,}$/.test(businessId) ? businessId : null;
+        if (!validActor && !validBusiness) return;
+
+        const key = validBusiness || validActor!;
+        const existing = byKey.get(key) || (validActor ? byAnyId.get(validActor) : null) || (validBusiness ? byAnyId.get(validBusiness) : null);
+        const displayName = String(name ?? '').trim() || `Instagram ${validBusiness || validActor}`;
+        const next = existing
+          ? {
+              ...existing,
+              actorId: existing.actorId || validActor,
+              businessId: existing.businessId || validBusiness,
+              name: existing.name.startsWith('Instagram ') ? displayName : existing.name,
+              source: existing.source.includes(source) ? existing.source : `${existing.source},${source}`,
+            }
+          : {
+              id: validBusiness || validActor!,
+              actorId: validActor,
+              businessId: validBusiness,
+              name: displayName,
+              source,
+            };
+
+        byKey.set(next.businessId || next.actorId!, next);
+        if (next.actorId) byAnyId.set(next.actorId, next);
+        if (next.businessId) byAnyId.set(next.businessId, next);
       };
 
       // a) Ad-account Instagram accounts: dit is dezelfde identity-familie die
@@ -318,8 +344,7 @@ Deno.serve(async (req) => {
         const r = await fetch(`${META_API}/${account}/instagram_accounts?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
         const j = await r.json();
         for (const it of j.data || []) {
-          add(it.ig_id, it.username || it.name, 'ad_account.instagram_accounts.ig_id');
-          add(it.id, it.username || it.name, 'ad_account.instagram_accounts');
+          addPair(it.ig_id, it.id, it.username || it.name, 'ad_account.instagram_accounts');
         }
       } catch (e) {
         console.warn('IG ad account lookup failed', e);
@@ -333,13 +358,11 @@ Deno.serve(async (req) => {
         const j = await r.json();
         if (j.instagram_business_account?.id) {
           const a = j.instagram_business_account;
-          add(a.ig_id, a.username || a.name, 'instagram_business_account.ig_id');
-          add(a.id, a.username || a.name, 'instagram_business_account');
+          addPair(a.ig_id, a.id, a.username || a.name, 'instagram_business_account');
         }
         if (j.connected_instagram_account?.id) {
           const a = j.connected_instagram_account;
-          add(a.ig_id, a.username || a.name, 'connected_instagram_account.ig_id');
-          add(a.id, a.username || a.name, 'connected_instagram_account');
+          addPair(a.ig_id, a.id, a.username || a.name, 'connected_instagram_account');
         }
       } catch (e) {
         console.warn('IG fields lookup failed', e);
@@ -347,28 +370,27 @@ Deno.serve(async (req) => {
 
       // b) /{page}/instagram_accounts
       try {
-        const r = await fetch(`${META_API}/${pageId}/instagram_accounts?fields=id,username,name&limit=50&access_token=${pageToken}`);
+        const r = await fetch(`${META_API}/${pageId}/instagram_accounts?fields=id,ig_id,username,name&limit=50&access_token=${pageToken}`);
         const j = await r.json();
-        for (const it of j.data || []) add(it.id, it.username || it.name, 'instagram_accounts');
+        for (const it of j.data || []) addPair(it.ig_id, it.id, it.username || it.name, 'instagram_accounts');
       } catch (e) {
         console.warn('IG accounts lookup failed', e);
       }
 
       // c) /{page}/page_backed_instagram_accounts (fallback voor pages zonder gekoppeld IG)
       try {
-        const r = await fetch(`${META_API}/${pageId}/page_backed_instagram_accounts?fields=id,username,name&limit=50&access_token=${pageToken}`);
+        const r = await fetch(`${META_API}/${pageId}/page_backed_instagram_accounts?fields=id,ig_id,username,name&limit=50&access_token=${pageToken}`);
         const j = await r.json();
-        for (const it of j.data || []) add(it.id, it.username || it.name, 'page_backed_instagram_accounts');
+        for (const it of j.data || []) addPair(it.ig_id, it.id, it.username || it.name, 'page_backed_instagram_accounts');
       } catch (e) {
         console.warn('IG page_backed lookup failed', e);
       }
 
-      // Sorteer: Ads Manager actor/user IDs eerst; 1784… Graph IDs blijven fallback.
-      data = Array.from(seen.values()).sort((a, b) => {
-        const rank = (it: { id: string; source: string }) => {
-          if (!/^1784\d+$/.test(it.id) && it.source.startsWith('ad_account.')) return 0;
-          if (!/^1784\d+$/.test(it.id)) return 1;
-          if (it.source.startsWith('ad_account.')) return 2;
+      data = Array.from(new Set(byAnyId.values())).sort((a, b) => {
+        const rank = (it: { actorId: string | null; businessId: string | null; source: string }) => {
+          if (it.businessId && it.actorId && it.source.includes('instagram_business_account')) return 0;
+          if (it.businessId && it.actorId) return 1;
+          if (it.businessId) return 2;
           return 3;
         };
         return rank(a) - rank(b) || a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' });
