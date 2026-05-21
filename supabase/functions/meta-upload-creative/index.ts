@@ -528,6 +528,7 @@ Deno.serve(async (req) => {
               creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
                 pageId: body.page_id,
                 identity: ident,
+                omitActorId: false,
                 name: adName,
                 text: bundle.texts,
                 leadFormId: body.lead_form_id,
@@ -539,6 +540,26 @@ Deno.serve(async (req) => {
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               lastErr = err instanceof Error ? err : new Error(msg);
+              if (/instagram_actor_id|Old Instagram ID|deprecated/i.test(msg) && ident.businessId) {
+                try {
+                  creativeJson = await postToMeta(`${adAccount}/adcreatives`, token, buildDirectCreativePayload({
+                    pageId: body.page_id,
+                    identity: ident,
+                    omitActorId: true,
+                    name: adName,
+                    text: bundle.texts,
+                    leadFormId: body.lead_form_id,
+                    assets,
+                  }));
+                  acceptedIdentity = { ...ident, actorId: null, source: `${ident.source}+no_actor_retry` };
+                  console.log('IG identity accepted without actor_id:', `business=${ident.businessId} (${ident.source})`);
+                  break;
+                } catch (retryErr) {
+                  const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+                  lastErr = retryErr instanceof Error ? retryErr : new Error(retryMsg);
+                  console.warn('IG identity no-actor retry rejected:', `business=${ident.businessId} (${ident.source})`, '-', retryMsg);
+                }
+              }
               if (!/instagram_user_id|instagram_actor_id|valid Instagram account|Instagram-account|Old Instagram ID|deprecated|1772103|2238281/i.test(msg)) {
                 throw err;
               }
