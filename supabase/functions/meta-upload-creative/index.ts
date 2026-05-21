@@ -397,11 +397,10 @@ async function resolveIgIdentity(
   const businessIds = new Set<string>();
   const diagnostics: string[] = [];
   try {
-    const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name},owner_business{id,name}`, token);
+    const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name}`, token);
     if (accountInfo?.error) diagnostics.push(`Ad account business lookup: ${accountInfo.error.message}`);
     if (accountInfo?.business?.id) businessIds.add(accountInfo.business.id);
-    if (accountInfo?.owner_business?.id) businessIds.add(accountInfo.owner_business.id);
-    if (businessIds.size === 0) diagnostics.push('Meta geeft geen business/owner_business terug voor dit ad account.');
+    if (businessIds.size === 0) diagnostics.push('Meta geeft geen business terug voor dit ad account.');
   } catch (e) {
     console.warn('IG identity: ad account business lookup failed', e);
   }
