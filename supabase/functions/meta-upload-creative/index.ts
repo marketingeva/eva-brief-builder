@@ -504,6 +504,7 @@ Deno.serve(async (req) => {
         });
 
         let newAdId: string | undefined;
+        let newCreativeId: string | undefined;
         if (assets.length > 1) {
           console.log('Creating placement asset creative for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const explicitIg = (body.instagram_account_id || '').trim() || null;
@@ -569,6 +570,7 @@ Deno.serve(async (req) => {
           if (!creativeJson) {
             throw lastErr || new Error('Meta accepteerde geen enkele Instagram-identiteit.');
           }
+          newCreativeId = creativeJson.id;
 
           // Verifieer welk IG ID Meta daadwerkelijk op de creative heeft gezet.
           try {
@@ -606,6 +608,21 @@ Deno.serve(async (req) => {
             status,
           });
           newAdId = adJson.id;
+          try {
+            const adVerify = await getFromMeta(
+              `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,effective_instagram_media_id}`,
+              token,
+            );
+            console.log('Ad verify:', JSON.stringify({
+              id: adVerify?.id,
+              creative_id: adVerify?.creative?.id,
+              instagram_user_id: adVerify?.creative?.instagram_user_id,
+              oss_ig: adVerify?.creative?.object_story_spec?.instagram_user_id,
+              oss_page: adVerify?.creative?.object_story_spec?.page_id,
+            }));
+          } catch (e) {
+            console.warn('Ad verify failed', e);
+          }
         } else {
           console.log('Copying ad', sourceAdId, 'for bundle', bundle.base_name, 'variants:', bundle.variants.length);
           const copyJson = await postToMeta(`${sourceAdId}/copies`, token, {
@@ -629,6 +646,7 @@ Deno.serve(async (req) => {
         await supabase.from('ad_launches').insert({
           ...launchRowBase,
           ad_id: newAdId,
+          creative_id: newCreativeId,
           status: 'success',
         });
 
