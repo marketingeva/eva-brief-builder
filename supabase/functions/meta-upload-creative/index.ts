@@ -361,6 +361,19 @@ async function resolveIgIdentity(
     console.warn('IG identity: ad account lookup failed', e);
   }
 
+  // 2b) Nieuwe aanbevolen edge voor ads: expliciet aan het ad account gekoppelde IG-profielen.
+  try {
+    const connectedIg = await getFromMeta(
+      `${adAccount}/connected_instagram_accounts?fields=id,ig_id,username&limit=200`,
+      token,
+    );
+    for (const it of connectedIg?.data || []) {
+      push(it?.ig_id || null, it?.id || null, 'ad_account.connected_instagram_accounts');
+    }
+  } catch (e) {
+    console.warn('IG identity: ad account connected lookup failed', e);
+  }
+
   // 3) Page-token paths (extra info, ook hier krijgen we id/ig_id).
   if (pageAccessToken) {
     try {
