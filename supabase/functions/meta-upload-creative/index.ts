@@ -473,6 +473,7 @@ function buildDirectCreativePayload(opts: {
     object_story_spec: story,
     ...params,
   };
+  if (id?.businessId) payload.instagram_user_id = id.businessId;
   return payload;
 }
 
