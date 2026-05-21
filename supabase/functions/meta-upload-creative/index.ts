@@ -332,8 +332,16 @@ async function resolveIgIdentity(
   const pairs: IgIdentity[] = [];
   const seenKey = new Set<string>();
   const push = (actor: string | null, biz: string | null, source: string) => {
-    const a = (actor || '').trim() || null;
-    const b = (biz || '').trim() || null;
+    let a = (actor || '').trim() || null;
+    let b = (biz || '').trim() || null;
+    if (a && isGraphId(a)) {
+      b = b || a;
+      a = null;
+    }
+    if (b && !isGraphId(b)) {
+      a = a || b;
+      b = null;
+    }
     if (!a && !b) return;
     if (a && a === String(pageId).trim()) return; // page-id is nooit een IG-id
     const key = `${a || ''}|${b || ''}`;
