@@ -702,21 +702,29 @@ Deno.serve(async (req) => {
               `${newAdId}?fields=id,name,creative{id,object_story_spec,instagram_user_id,actor_id,effective_object_story_id,effective_instagram_media_id,asset_feed_spec}`,
               token,
             );
-            const expectedIg = acceptedIdentity?.businessId || null;
-            const actualIg = adVerify?.creative?.object_story_spec?.instagram_user_id || adVerify?.creative?.instagram_user_id || null;
+            const expectedAdLevelIg = adLevelInstagramId(acceptedIdentity, acceptedMode);
+            const expectedStoryIg = storyInstagramId(acceptedIdentity, acceptedMode);
+            const actualAdLevelIg = adVerify?.creative?.instagram_user_id || adVerify?.creative?.actor_id || null;
+            const actualStoryIg = adVerify?.creative?.object_story_spec?.instagram_user_id || null;
             console.log('Ad verify:', JSON.stringify({
               id: adVerify?.id,
               creative_id: adVerify?.creative?.id,
+              mode: acceptedMode,
               instagram_user_id: adVerify?.creative?.instagram_user_id,
               oss_ig: adVerify?.creative?.object_story_spec?.instagram_user_id,
               oss_page: adVerify?.creative?.object_story_spec?.page_id,
               actor_id: adVerify?.creative?.actor_id,
               effective_object_story_id: adVerify?.creative?.effective_object_story_id,
-              expected_ig: expectedIg,
-              matched: !expectedIg || actualIg === expectedIg,
+              expected_ad_level_ig: expectedAdLevelIg,
+              expected_story_ig: expectedStoryIg,
+              ad_level_matched: !expectedAdLevelIg || actualAdLevelIg === expectedAdLevelIg,
+              story_matched: !expectedStoryIg || actualStoryIg === expectedStoryIg,
             }));
-            if (expectedIg && actualIg !== expectedIg) {
-              throw new Error(`Meta ad koppelde Instagram ${actualIg || 'niet'} in plaats van ${expectedIg}.`);
+            if (expectedAdLevelIg && actualAdLevelIg !== expectedAdLevelIg) {
+              throw new Error(`Meta ad koppelde ad-level Instagram ${actualAdLevelIg || 'niet'} in plaats van ${expectedAdLevelIg}.`);
+            }
+            if (expectedStoryIg && actualStoryIg !== expectedStoryIg) {
+              throw new Error(`Meta ad koppelde story Instagram ${actualStoryIg || 'niet'} in plaats van ${expectedStoryIg}.`);
             }
           } catch (e) {
             throw new Error(`Ad Instagram-verificatie mislukt: ${e instanceof Error ? e.message : String(e)}`);
