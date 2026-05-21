@@ -395,10 +395,12 @@ async function resolveIgIdentity(
   // 2c) Business Manager assets: Ads Manager haalt de identity-dropdown vaak uit
   // business-level Instagram assets, niet alleen uit page-backed fallbacks.
   const businessIds = new Set<string>();
+  const diagnostics: string[] = [];
   try {
-    const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name},owner_business{id,name}`, token);
+    const accountInfo = await getFromMeta(`${adAccount}?fields=business{id,name}`, token);
+    if (accountInfo?.error) diagnostics.push(`Ad account business lookup: ${accountInfo.error.message}`);
     if (accountInfo?.business?.id) businessIds.add(accountInfo.business.id);
-    if (accountInfo?.owner_business?.id) businessIds.add(accountInfo.owner_business.id);
+    if (businessIds.size === 0) diagnostics.push('Meta geeft geen business terug voor dit ad account.');
   } catch (e) {
     console.warn('IG identity: ad account business lookup failed', e);
   }
@@ -437,6 +439,7 @@ async function resolveIgIdentity(
           push(it?.ig_id || null, it?.id || null, 'ad_account.instagram_accounts+authorized');
         }
       } catch (e) {
+        diagnostics.push(`Instagram-profiel autoriseren voor ad account mislukt: ${e instanceof Error ? e.message : String(e)}`);
         console.warn('IG identity: authorize ad account failed', e);
       }
     }
@@ -464,19 +467,31 @@ async function resolveIgIdentity(
       pairs.splice(idx, 1);
       pairs.unshift({ ...matched, source: `${matched.source}+client_setting` });
     } else if (isGraphId(eid)) {
-      const inferredActor = pairs.find((p) => p.actorId && !p.source.includes('page_backed'))?.actorId || null;
       pairs.unshift({
-        actorId: inferredActor,
+        actorId: null,
         businessId: eid,
-        source: inferredActor ? 'client_setting+inferred_actor' : 'client_setting',
+        source: 'client_setting',
       });
     } else {
-      const inferredBusiness = pairs.find((p) => p.businessId && !p.source.includes('page_backed'))?.businessId || null;
       pairs.unshift({
         actorId: eid,
-        businessId: inferredBusiness,
-        source: inferredBusiness ? 'client_setting+inferred_business' : 'client_setting',
+        businessId: null,
+        source: 'client_setting',
       });
+    }
+
+    // Nooit zomaar een willekeurig Business Manager Instagram-account gebruiken
+    // als de klant expliciet een ander IG ID heeft ingesteld. Dat voorkwam hier
+    // dat een account zoals wijdezorg_zorg op een Rivas-ad terechtkomt.
+    const pageOrExplicitSources = /client_setting|page\.instagram_business_account|page\.connected_instagram_account|page\.instagram_accounts|page\.page_backed/;
+    const filtered = pairs.filter((p) => p.actorId === eid || p.businessId === eid || pageOrExplicitSources.test(p.source));
+    pairs.splice(0, pairs.length, ...filtered);
+  }
+
+  if (diagnostics.length > 0) {
+    console.warn('IG identity diagnostics:', diagnostics.join(' | '));
+    for (const pair of pairs) {
+      pair.source = `${pair.source}+diagnostics:${diagnostics.join(' / ')}`;
     }
   }
 
