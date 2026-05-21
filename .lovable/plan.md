@@ -1,57 +1,42 @@
 ## Diagnose
 
-De huidige upload maakt de advertentie wel aan en de verificatielog laat zien dat `object_story_spec.instagram_user_id` op `17841404254570727` staat. Toch toont Meta Ads Manager bij de ad-level identity nog “Use Facebook Page”. Dat wijst erop dat alleen het veld in de creative niet genoeg is voor de Ads Manager identity-selector, óf dat onze creative-vorm niet volledig volgens Meta’s verwachte lead-ad payload wordt opgebouwd.
+Je hebt gelijk: mijn test was een false positive. De API-verificatie keek alleen of `object_story_spec.instagram_user_id` op de creative stond. Meta accepteert dat veld, maar Ads Manager gebruikt voor de Identity-sectie óók de ad-level Instagram identity. Daardoor kan de creative technisch een IG-id bevatten terwijl de UI alsnog “Use Facebook Page” toont en de advertentie ongeldig blijft voor Instagram.
 
-Belangrijk uit de Meta API-docs:
-- Voor Instagram ads moet de creative zowel `page_id` als `instagram_user_id` bevatten.
-- Sinds API v22 is `instagram_actor_id` deprecated; we moeten dus niet meer bouwen op het legacy actor field.
-- Voor lead ads hoort de lead form CTA in `object_story_spec.link_data.call_to_action`, niet alleen los in `asset_feed_spec`/creative parameters.
-- Voor ad account discovery bestaat ook `/{ad_account_id}/connected_instagram_accounts`, naast `/{ad_account_id}/instagram_accounts` en page endpoints.
+Wat ik nu in de data zie:
 
-## Plan
+- Voor Rivas staat opgeslagen: `meta_instagram_account_id = 1646842048691596`.
+- De discovery vindt momenteel maar één profiel, met bron `page_backed_instagram_accounts` en business ID `17841404254570727`.
+- Dat is waarschijnlijk een Page-backed Instagram Account: een soort shadow/proxy account, niet per se het echte gekoppelde Instagram-profiel dat Ads Manager in de dropdown wil selecteren.
+- De huidige code paart de handmatige actor ID `1646842048691596` met die PBIA `17841404254570727` zonder hard bewijs dat dit hetzelfde profiel is.
+- Vervolgens zet de upload vooral de `1784...` ID op de creative. Meta’s API accepteert dat, maar Ads Manager zet de echte Instagram profile selector niet automatisch goed.
 
-1. **Instagram discovery uitbreiden**
-   - Voeg `/{ad_account_id}/connected_instagram_accounts` toe aan `meta-list-resources` en `resolveIgIdentity`.
-   - Blijf `/{page_id}/instagram_accounts`, `/{page_id}/page_backed_instagram_accounts`, `instagram_business_account` en `connected_instagram_account` gebruiken.
-   - Normaliseer de selectie naar het nieuwe Meta-veld: `instagram_user_id`, met `1784...` als voorkeurs-ID en legacy actor alleen nog als referentie/matching.
+Kort gezegd: Facebook Page koppelen lukt omdat we page access hebben. Instagram lukt niet automatisch omdat we óf de verkeerde Instagram asset gebruiken, óf niet de ad-level identity-ID meesturen die Ads Manager nodig heeft.
 
-2. **Deprecated actor-id uit de upload halen**
-   - Stop met het meesturen van `instagram_actor_id` bij nieuwe creatives.
-   - Gebruik uitsluitend `object_story_spec.instagram_user_id` voor API v21+ / v22+ gedrag.
-   - Legacy `1646...` blijft alleen bruikbaar om het juiste `1784...` profiel te vinden.
+## Oplossingsplan
 
-3. **Creative-payload corrigeren naar Meta lead-ad structuur**
-   - Bouw `object_story_spec` niet meer alleen als `{ page_id, instagram_user_id }`.
-   - Voeg expliciet `link_data` toe met:
-     - `message`
-     - `name`
-     - `description`
-     - `link`
-     - `call_to_action: { type, value: { lead_gen_form_id, link } }`
-     - bij single image/video ook het juiste media field.
-   - Voor multi-asset `asset_feed_spec` houden we de plaatsingsregels, maar zorgen we dat de story spec óók de lead-ad CTA en Instagram identity bevat zodat Meta Ads Manager de identity niet als “Facebook Page fallback” interpreteert.
+1. **Stop met valse ID-pairing**
+   - Geen handmatige actor ID meer koppelen aan de enige gevonden PBIA alsof het bewezen hetzelfde profiel is.
+   - Als alleen `page_backed_instagram_accounts` wordt gevonden, tonen/loggen we dat expliciet als fallback, niet als “echt gekoppeld profiel”.
 
-4. **Ad-level verificatie aanscherpen**
-   - Na creatie halen we de ad/creative terug met extra velden:
-     - `object_story_spec`
-     - `instagram_user_id`
-     - `actor_id`
-     - `effective_object_story_id`
-     - `asset_feed_spec`
-   - Log expliciet of de gekozen Instagram ID overeenkomt met het verwachte `17841404254570727`.
-   - Als Meta geen IG identity teruggeeft of een andere ID koppelt, laat de launch falen in plaats van “succes” te tonen.
+2. **Instagram discovery uitbreiden naar Business Manager assets**
+   - Haal business/ad-account context op via het ad account.
+   - Zoek Instagram-profielen via business-level endpoints zoals business Instagram accounts, client Instagram accounts en owned Instagram assets waar beschikbaar.
+   - Gebruik page-connected endpoints alleen als harde match wanneer Meta zelf `instagram_business_account`, `connected_instagram_account` of `/page/instagram_accounts` teruggeeft.
 
-5. **Single-ad copy route repareren**
-   - De huidige route voor één bestand dupliceert een bestaande advertentie via `/copies`; daarbij kan de oude identity van de bronadvertentie meekomen.
-   - Ik trek single creative uploads gelijk met multi-format uploads: altijd een nieuwe creative maken met expliciete `page_id + instagram_user_id` en daarna een nieuwe ad maken.
-   - Daardoor is de Instagram-koppeling niet langer afhankelijk van de bronadvertentie.
+3. **Ad-level identity correct opbouwen**
+   - Splits de IDs bewust:
+     - de echte Ads Manager identity / actor ID voor het ad-level veld;
+     - de moderne IG account ID voor `object_story_spec.instagram_user_id` waar Meta dat vereist.
+   - Niet alleen `object_story_spec` verifiëren, maar ook het creatieve top-level identity field dat Ads Manager gebruikt.
 
-## Validatie
+4. **Creatie laten falen als Meta geen echte Instagram identity heeft**
+   - Als we alleen een PBIA/shadow account vinden en geen echt gekoppeld/assigned Instagram-profiel, dan geen “success” meer tonen.
+   - De foutmelding moet dan zeggen dat het Instagram-profiel in Meta Business aan hetzelfde ad account en dezelfde Page moet zijn toegewezen.
 
-- Test `meta-list-resources` voor Rivas en controleer dat het profiel als `businessId: 17841404254570727` beschikbaar is.
-- Test `meta-upload-creative` met Rivas.
-- Controleer de logs op:
-  - creative `object_story_spec.page_id = 179116508833113`
-  - creative `object_story_spec.instagram_user_id = 17841404254570727`
-  - ad verification matched = true
-- Pas daarna is de upload “geslaagd” voor de UI.
+5. **Verificatie aanscherpen met Ads Manager-realiteit**
+   - Na creatie de ad creative teruglezen met zowel `object_story_spec.instagram_user_id` als top-level `instagram_user_id`/identity fields.
+   - Alleen success opslaan wanneer de ad-level identity overeenkomt met het gekozen profiel.
+
+## Verwachte uitkomst
+
+Na deze wijziging is er geen schijnsucces meer. Of de advertentie wordt aangemaakt met het profiel dat Ads Manager ook echt selecteert, of de app geeft direct aan dat Meta het echte Instagram-profiel niet beschikbaar maakt voor dit ad account/page-paar.
