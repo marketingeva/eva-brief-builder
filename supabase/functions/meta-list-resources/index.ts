@@ -374,6 +374,29 @@ Deno.serve(async (req) => {
         console.warn('IG connected ad account lookup failed', e);
       }
 
+      // c) Business Manager Instagram assets. Dit is vaak de bron van de
+      // Ads Manager identity-dropdown, terwijl page_backed accounts alleen
+      // een fallback/shadow-profiel kunnen zijn.
+      try {
+        const account = adAccount.startsWith('act_') ? adAccount : `act_${adAccount}`;
+        const r = await fetch(`${META_API}/${account}?fields=business{id,name},owner_business{id,name}&access_token=${token}`);
+        const j = await r.json();
+        const businessIds = Array.from(new Set([j.business?.id, j.owner_business?.id].filter(Boolean)));
+        for (const businessId of businessIds) {
+          for (const edge of ['instagram_accounts', 'owned_instagram_accounts', 'client_instagram_accounts']) {
+            try {
+              const br = await fetch(`${META_API}/${businessId}/${edge}?fields=id,ig_id,username,name&limit=200&access_token=${token}`);
+              const bj = await br.json();
+              for (const it of bj.data || []) addPair(it.ig_id, it.id, it.username || it.name, `business.${edge}`);
+            } catch (inner) {
+              console.warn(`IG business ${edge} lookup failed`, inner);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('IG business lookup failed', e);
+      }
+
       // b) instagram_business_account + connected_instagram_account op de page
       try {
         const r = await fetch(
