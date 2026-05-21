@@ -399,6 +399,16 @@ Deno.serve(async (req) => {
         console.warn('IG page_backed lookup failed', e);
       }
 
+      if (explicitInstagramId && /^\d{6,}$/.test(explicitInstagramId)) {
+        const existing = byAnyId.get(explicitInstagramId);
+        if (!existing && byAnyId.size === 1) {
+          const only = Array.from(new Set(byAnyId.values()))[0];
+          addPair(explicitInstagramId, only.businessId || only.id, only.name, 'client_setting+paired_single_result');
+        } else if (!existing) {
+          addPair(isGraphInstagramId(explicitInstagramId) ? null : explicitInstagramId, isGraphInstagramId(explicitInstagramId) ? explicitInstagramId : null, null, 'client_setting');
+        }
+      }
+
       data = Array.from(new Set(byAnyId.values())).sort((a, b) => {
         const rank = (it: { actorId: string | null; businessId: string | null; source: string }) => {
           if (it.businessId && it.actorId && it.source.includes('instagram_business_account')) return 0;
