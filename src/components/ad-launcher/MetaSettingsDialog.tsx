@@ -20,6 +20,8 @@ interface Props {
 
 interface IgAccount {
   id: string;
+  actorId?: string | null;
+  businessId?: string | null;
   name: string;
   source?: string;
 }
@@ -47,7 +49,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
       .then(({ data }) => {
         setFilter(data?.meta_name_filter ?? '');
         setPageId(data?.meta_page_id ?? '');
-        setIgId((data as any)?.meta_instagram_account_id ?? '');
+        setIgId(data?.meta_instagram_account_id ?? '');
         setLoading(false);
       });
   }, [open, clientId]);
@@ -61,7 +63,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
     setIgError(null);
     const { data, error } = await supabase.functions.invoke<{ data?: IgAccount[]; error?: string }>(
       'meta-list-resources',
-      { body: { resource: 'instagram_accounts', page_id: pid.trim() } },
+      { body: { resource: 'instagram_accounts', page_id: pid.trim(), instagram_account_id: igId.trim() || null } },
     );
     setIgLoading(false);
     if (error || data?.error) {
@@ -89,7 +91,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
         meta_name_filter: filter.trim() || null,
         meta_page_id: pageId.trim() || null,
         meta_instagram_account_id: igId.trim() || null,
-      } as any)
+      })
       .eq('id', clientId);
     setSaving(false);
     if (error) {
@@ -101,7 +103,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
     onOpenChange(false);
   };
 
-  const selectedIg = igAccounts.find((a) => a.id === igId);
+  const selectedIg = igAccounts.find((a) => a.id === igId || a.actorId === igId || a.businessId === igId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,7 +171,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
                     >
                       <span className="truncate">
                         {selectedIg
-                          ? `@${selectedIg.name} (${selectedIg.id})`
+                          ? `@${selectedIg.name} (${selectedIg.businessId || selectedIg.id})`
                           : igId
                           ? `ID ${igId}`
                           : pageId
@@ -194,7 +196,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
                           {igAccounts.map((a) => (
                             <CommandItem
                               key={a.id}
-                              value={`${a.name} ${a.id}`}
+                              value={`${a.name} ${a.id} ${a.actorId || ''} ${a.businessId || ''}`}
                               onSelect={() => {
                                 setIgId(a.id);
                                 setIgOpen(false);
@@ -203,9 +205,11 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
                             >
                               <span className="flex-1 truncate">
                                 @{a.name}
-                                <span className="text-muted-foreground"> · {a.id}</span>
+                                <span className="text-muted-foreground">
+                                  {' '}· IG {a.businessId || a.id}{a.actorId ? ` · actor ${a.actorId}` : ''}
+                                </span>
                               </span>
-                              {igId === a.id && <Check className="h-4 w-4" />}
+                              {(igId === a.id || igId === a.actorId || igId === a.businessId) && <Check className="h-4 w-4" />}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -215,7 +219,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
                 </Popover>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    Het Instagram-profiel dat aan de Page is gekoppeld in Meta Business Settings.
+                    Het Instagram-profiel dat aan de Page is gekoppeld; de app gebruikt intern zowel Business ID als actor ID.
                   </p>
                   <button
                     type="button"
@@ -236,7 +240,7 @@ export default function MetaSettingsDialog({ open, onOpenChange, clientId, clien
                 />
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    Handmatige fallback. Gebruik de Instagram User ID (begint meestal met <code>1784…</code>).
+                    Handmatige fallback. Zowel de Instagram Business ID (<code>1784…</code>) als actor ID wordt automatisch gematcht.
                   </p>
                   <button
                     type="button"
