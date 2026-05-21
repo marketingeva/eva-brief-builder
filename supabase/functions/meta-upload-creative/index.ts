@@ -282,8 +282,8 @@ function buildCreativeParameters(opts: {
 }
 
 // Meta heeft vaak TWEE Instagram-ID's per profiel:
-//  - Legacy actor/user ID (bv. 1646…)  → alleen nog gebruiken om te matchen
-//  - Graph Business Account ID (1784…) → hoort op het moderne `instagram_user_id`
+//  - Legacy actor/user ID (bv. 1646…)  → alleen gebruiken om te matchen / koppelen
+//  - Graph Instagram User ID (1784…)   → enige ID die Meta accepteert als `instagram_user_id`
 // Sinds API v22 is `instagram_actor_id` deprecated, dus dat sturen we niet meer mee.
 
 interface IgIdentity {
@@ -292,7 +292,7 @@ interface IgIdentity {
   source: string;
 }
 
-type IgPayloadMode = 'split' | 'actor_only' | 'business_only';
+type IgPayloadMode = 'business_only';
 
 function isGraphId(id: string) {
   return /^1784\d+$/.test(id);
@@ -300,21 +300,15 @@ function isGraphId(id: string) {
 
 function adLevelInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
   if (!identity) return null;
-  if (mode === 'business_only') return identity.businessId || identity.actorId;
-  return identity.actorId || identity.businessId;
+  return identity.businessId;
 }
 
 function storyInstagramId(identity: IgIdentity | null, mode: IgPayloadMode) {
   if (!identity) return null;
-  if (mode === 'actor_only') return identity.actorId || identity.businessId;
-  return identity.businessId || identity.actorId;
+  return identity.businessId;
 }
 
 function payloadModesForIdentity(identity: IgIdentity): IgPayloadMode[] {
-  if (identity.actorId && identity.businessId && identity.actorId !== identity.businessId) {
-    return ['split', 'actor_only'];
-  }
-  if (identity.actorId) return ['actor_only'];
   if (identity.businessId) return ['business_only'];
   return [];
 }
