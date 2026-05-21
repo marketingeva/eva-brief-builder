@@ -405,6 +405,7 @@ async function resolveIgIdentity(
 function buildDirectCreativePayload(opts: {
   pageId: string;
   identity: IgIdentity | null;
+  omitActorId?: boolean;
   name: string;
   text: CreativeText;
   leadFormId: string;
@@ -429,7 +430,9 @@ function buildDirectCreativePayload(opts: {
     ...params,
   };
   // instagram_actor_id verwacht het legacy actor/user ID (Ads Manager dropdown).
-  if (id?.actorId) payload.instagram_actor_id = id.actorId;
+  // In nieuwere Meta API-versies kan dit veld deprecated zijn; dan retryen we
+  // dezelfde identity zonder actor-id en laten we instagram_user_id leidend zijn.
+  if (id?.actorId && !opts.omitActorId) payload.instagram_actor_id = id.actorId;
   return payload;
 }
 
