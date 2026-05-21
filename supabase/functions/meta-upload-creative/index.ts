@@ -424,6 +424,7 @@ async function resolveIgIdentity(
 function buildDirectCreativePayload(opts: {
   pageId: string;
   identity: IgIdentity | null;
+  mode: IgPayloadMode;
   includeStoryLinkData?: boolean;
   name: string;
   text: CreativeText;
@@ -451,8 +452,9 @@ function buildDirectCreativePayload(opts: {
 
   const story: any = { page_id: opts.pageId };
   const id = opts.identity;
-  // instagram_user_id verwacht het 1784… Graph ID.
-  if (id?.businessId) story.instagram_user_id = id.businessId;
+  const storyIg = storyInstagramId(id, opts.mode);
+  const adLevelIg = adLevelInstagramId(id, opts.mode);
+  if (storyIg) story.instagram_user_id = storyIg;
 
   if (opts.includeStoryLinkData !== false) {
     if (primary?.is_video && primary.video_id && !params.asset_feed_spec) {
@@ -479,7 +481,7 @@ function buildDirectCreativePayload(opts: {
     object_story_spec: story,
     ...params,
   };
-  if (id?.businessId) payload.instagram_user_id = id.businessId;
+  if (adLevelIg) payload.instagram_user_id = adLevelIg;
   return payload;
 }
 
